@@ -9,7 +9,9 @@ then **build** it — one verified todo at a time.
 
 Runes is a **sandboxed, auditable agent-execution fabric for local-first
 fleets**: the moat is fail-closed verification with evidence + resume, WASM
-isolation and the observatory — not "another agent framework". The "why"
+isolation and the observatory — not "another agent framework". The 5-page pitch PDF is
+[`docs/WHY_RUNES.pdf`](docs/WHY_RUNES.pdf) (generated from the markdown it
+describes, so the two cannot drift). The "why"
 (what we are *not* competing on, the moat, honest risks) is
 [`STRATEGY.md`](STRATEGY.md); the longer pitch — why this is fun to build
 and why it matters — is [`docs/WHY_RUNES.md`](docs/WHY_RUNES.md).
@@ -515,6 +517,15 @@ fabric and answers "what is the fleet doing right now?":
 
 - **Fleet** — running agents, stale agents (online but silent) and ended
   agents (Last Will), with tools, workspace and last-seen age.
+- **Workflow runs** — `/runs` lists every run with a duration bar; `/runs/:id`
+  draws it as a timeline (one bar per step, placed by its offset and scaled to
+  the run) with per-step output, error, scope and cost. Fed by the engine's
+  `Runes::Telemetry` (`RUNES_TELEMETRY=mqtt bin/runes-workflow execute …`).
+- **Fleet topology** — `/topology` draws delegation edges (width = task volume,
+  colour = failure rate) from data the observer already has; an edge exists only
+  where the harness states both ends.
+- **Trace waterfall** — the interaction page draws the *gaps* between packets,
+  so a 30-second planner call looks like 30 seconds.
 - **Live packet feed** — every PUBLISH on `runes/#`, newest first,
   expandable to the raw JSON payload.
 - **Click an agent** — its card, its **interactions** grouped by

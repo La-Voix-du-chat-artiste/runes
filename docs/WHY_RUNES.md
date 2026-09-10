@@ -60,7 +60,7 @@ discoverable, addressable, and auditable:
 ```
 runes/agents/<id>/card | status | tasks/<req>/response
 runes/prompts                     ← broadcast work
-runes/prompts/<req>/claim → started → progress → response
+runes/prompts/<req>/progress → response   ← one shared group, no claim race
 runes/tools/<tool>/request | response | error
 runes/_log/prompts                ← durable journal
 $a2a/v1/discovery/<org>/<unit>/<agent_id>
@@ -69,7 +69,7 @@ $a2a/v1/tasks/<org>/<unit>/<agent_id>
 
 ---
 
-## Nine things that make this genuinely fun to build
+## Ten things that make this genuinely fun to build
 
 **1. Deleting the clever part made it stronger.** 0.3 removed the entire
 claim/lease consensus protocol — about 250 lines of "who gets this work?"
@@ -149,6 +149,15 @@ command string; that's in the docs *and* in a test. Known gaps are first
 class in `STATE.md`. Nothing builds trust faster than a project that tells
 you where it's weak.
 
+**10. The fleet got a face.** The observatory started as a packet list and is
+now a console: **workflow runs drawn as timelines** (one bar per step, placed by
+its offset and scaled to the run, because a 24 ms `cmd` next to a 0.2 ms `ruby`
+should *look* like that), a **fleet topology** with delegation edges whose width
+is task volume and colour is failure rate, an **interaction waterfall** where
+the bars are the *gaps* — so a 30-second planner call looks like 30 seconds
+instead of hiding in a list of timestamps — and a dashboard with a traffic
+sparkline. All of it from telemetry, none of it guessed.
+
 ---
 
 ## Why this is more important than it looks
@@ -216,17 +225,18 @@ today:
 
 | | |
 | --- | --- |
-| `lib/` | **12 146 lines** across 55 files |
-| `test/` | **8 171 lines** across 34 files |
-| Suite | **455 runs, 2 082-2 083 assertions, 0 failures** — no keys, no provider calls (one file dials a local broker: `doc5.md` D5-1) |
-| Observatory | **61 runs, 348 assertions**, Rails 8.1.3.1 |
+| `lib/` | **14 145 lines** across 59 files |
+| `test/` | **10 449 lines** across 41 files |
+| Suite | **555 runs, 2 551 assertions, 0 failures** — no keys, no provider calls, no broker required |
+| Observatory | **124 runs, 629 assertions**, ~3 700 lines of Rails 8.1 — fleet, runs, topology, traces |
 | Executables | **7**: `runes` (TUI), `runes-daemon`, `runes-client`, `runes-mcp`, `runes-replay`, `runes-acl`, `runes-workflow` |
-| Workflow engine | **1 658 lines**, stdlib only — no `async`, no `ruby_llm` |
-| The seven runes | **1 679 lines**: `agent` 693, `chat` 402, `map` 176, `cmd` 157, `repeat` 97, `ruby` 86, `call` 68 |
-| MQTT 5 adapter | **899 lines**, hand-rolled, live-verified against mosquitto 2.1.2 |
-| Dispatcher | **1 545 lines**, down from 1 968 after the fabric/journal/session split |
-| Gem | builds clean — no secrets, no local state, all seven binstubs installed, MIT `LICENSE` shipped |
-| Live proof | 200 messages, one MQTT 5 shared group, exactly-once, **ALL CHECKS PASSED** |
+| Workflow engine | **4 491 lines** total (engine + the seven runes + command runner), stdlib only — no `async`, no `ruby_llm` |
+| The seven runes | `agent` 719, `chat` 503, `repeat` 202, `cmd` 199, `map` 183, `ruby` 86, `call` 68 |
+| MQTT 5 adapter | **1 149 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects and re-subscribes* |
+| Security | **462 lines** of command policy, RPC freshness and a shared nonce cache |
+| Dispatcher | **1 565 lines**, down from 1 968 after the fabric/journal/session split |
+| Gem | builds clean — no secrets, no local state, seven binstubs, MIT `LICENSE` shipped |
+| Live proof | 200 messages, one MQTT 5 shared group, **exactly-once distribution**; plus a dropped-socket proof that the adapter heals and keeps its subscriptions |
 
 Run it yourself: `bundle exec rake test`, then
 `bundle exec ruby demo/smoke.rb` (offline, no key), then
@@ -238,19 +248,29 @@ Run it yourself: `bundle exec rake test`, then
 
 A pitch that hides the seams is a pitch you'll resent in a month. So:
 
-- **Workflow runes don't consult the guard yet.** `cmd`/`agent` run
-  directly, and a single-string `cmd` is shell-interpreted exactly as Roast
-  does. That's documented in `docs/WORKFLOWS.md`, tracked as gap #1 in
-  `STATE.md`, and queued: guard-aware runes, opt-in, because default-deny
-  would break every unmodified Roast file.
-- **`parallel` is threads, not `async`.** So there's no cooperative
-  cancellation of a running iteration. We traded that for one fewer
-  dependency and said so.
-- **MQTT 3.1.1 is compatibility-only** — no shared groups, no properties.
-  It refuses loudly rather than degrading silently.
-- **The observatory has no auth**, so read access is a disclosure surface.
-  It's fine on localhost today; it is a prerequisite for the "launch
-  workflows from the browser" feature, not an afterthought.
+- **Distribution is exactly-once; execution is at-least-once.** MQTT 5 shared
+  subscriptions put a prompt in front of exactly one group member, but QoS 1 is
+  at-least-once and a reconnect can redeliver work in flight. Handlers are not
+  idempotent yet: a duplicate prompt or task can repeat its side effects. It is
+  written down as the next security-correctness task (a bounded request ledger),
+  not glossed over.
+- **Workflow runes don't consult the guard yet.** `cmd`/`agent` execute
+  directly. The *injection* half is closed — a String command is
+  `Shellwords.split` into argv, a one-element argv never reaches `/bin/sh`, and a
+  metacharacter token raises unless `shell: true` is explicit — but a rune is
+  still not asked for permission. Opt-in, because default-deny would break every
+  unmodified Roast file.
+- **Token scanning is not a sandbox.** `run_command` refuses interpreters and
+  paths that leave the workspace, but an explicitly allowlisted binary can still
+  escape. Real confinement needs `sandbox-exec`/`bwrap`.
+- **A2A peer cards are unauthenticated** (discovery-only): the agent id is
+  validated, but a retained card from any publisher is accepted.
+- **`parallel` is threads, not `async`.** So there is no cooperative
+  cancellation of a running iteration. We traded that for one fewer dependency.
+- **MQTT 3.1.1 is compatibility-only** — no shared groups, no properties. It
+  refuses loudly, and it now reconnects like MQTT 5 does.
+- **The observatory has no auth**, so read access is a disclosure surface. Fine
+  on localhost; a prerequisite for the "launch workflows from the browser" idea.
 - **One-shot tool feedback**: a single build plan does not yet loop
   plan→execute→feed-back. Missions compensate with verify-and-resume.
 
@@ -292,19 +312,21 @@ observatory's plugin catalogue as soon as that lands.
 
 ## Where this goes next
 
-The next big unlock is making the observatory the fleet's **memory,
-participant and oracle** rather than just a viewer:
+The console's first half shipped (runs, topology, traces, dashboard). The rest
+of the plan is to finish making the observatory the fleet's **memory,
+participant and oracle**:
 
-- **A run console** — workflows become objects you can watch step by step,
-  diff between runs, and re-run one failed scope of.
-- **Identity badges and impersonation alerts** — the observatory can prove
-  who published what, and shout when one `agent_id` shows up with two keys.
-- **An observatory that is an agent** — its own A2A card and an MCP server,
-  so any agent can ask *"what happened on the bus?"* mid-task.
-- **Guard-decision telemetry** — see what the guard *refused*, not just what
-  was published.
-- **Record → replay → test** — capture a fleet conversation and replay it
-  offline on the in-process hub, then turn it into a fixture.
+- **Workflow runs, diffed and replayed** — two runs of the same file side by
+  side, and "re-run just the step that failed".
+- **Identity badges and impersonation alerts** — signed envelopes already exist;
+  the observatory should prove who published what and shout when one `agent_id`
+  shows up with two keys.
+- **An observatory that is an agent** — its own A2A card and an MCP server, so
+  any agent can ask *"what happened on the bus?"* mid-task.
+- **Guard-decision telemetry** — see what the guard *refused*, not just what was
+  published.
+- **A broker-free mode** — ingest through the same `Runes::Transport` seam the
+  fleet uses, which also makes MQTT 5 properties visible to the UI.
 
 The full proposal, with costs and risks, is in
 [`docs/OBSERVATORY_ROADMAP.md`](OBSERVATORY_ROADMAP.md).

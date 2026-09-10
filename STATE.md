@@ -12,11 +12,32 @@
 > `STRATEGY.md`; the workflow contract is `docs/WORKFLOWS.md`; the history
 > is `DEVELOPMENT_LOG.md` (Phases 16–17).
 
+## Hands off to the next session
+
+Where the current goal stands (it stays **active**):
+
+- **Done:** round-5 audit implemented (Phase 18); audit leftovers — mqtt311
+  reconnect, envelope freshness + forgery test, W5-6..W5-9, retention backstop
+  (Phase 19); the observatory became a console — workflow telemetry + runs
+  timeline (Phase 20), topology + interaction waterfall + traffic dashboard
+  (Phase 21), and the publisher/observer topic contract (Phase 22).
+- **Next, in order:** `O0.1` observatory ingest through `Runes::Transport`
+  (MQTT 5 properties visible, the `mqtt` gem dropped, a broker-free `inproc`
+  mode) and `E5-6` guard-aware runes (opt-in policy for `bin/runes-workflow`).
+- **Known open items:** at-least-once *execution* (handlers are not idempotent;
+  a bounded request ledger is the fix), envelope replay is closed but **A2A peer
+  cards are still unauthenticated**, token scanning is not a sandbox, the
+  observatory has no auth, and one-shot tool feedback. All are in the "What
+  we're honest about" list in `docs/WHY_RUNES.md` and in `doc5.md`.
+- **Regenerate the pitch PDF:** `ruby tmp/md_to_pdf.rb docs/WHY_RUNES.md
+  docs/WHY_RUNES.pdf` (plain `ruby`, not `bundle exec`: prawn is a system gem).
+- Working tree is a git repo with one commit per batch; `git log --oneline`.
+
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 527 runs / 2419 assertions / 0 failures
-cd runes_observer && bin/rails test   # observatory: 89 runs / 454 assertions / 0 failures
+bundle exec rake test                 # parent harness: 555 runs / 2551 assertions / 0 failures
+cd runes_observer && bin/rails test   # observatory: 124 runs / 629 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
 
@@ -26,7 +47,7 @@ dupes, no losses), Response Topic/Correlation Data/User Property round-tripped,
 a retained message reached a late subscriber, and keepalive held an idle
 session open.
 
-Current counts (2026-09-10, after Phase 18 — the round-5 audit fixes):
+Current counts (2026-09-10, after Phase 22):
 parent **527 runs / 2419 assertions / 0 failures / 0 errors / 0 skips**,
 observatory **89 / 454 / 0** (the observatory suite was also re-run against a
 database built from `db/schema.rb` alone, i.e. what a clean clone gets).

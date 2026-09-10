@@ -1428,3 +1428,43 @@ pattern to use instead.
 Still open from the goal: `O0.1` (ingest through `Runes::Transport` — MQTT 5
 properties visible, the `mqtt` gem dropped, a broker-free `inproc` mode) and
 `E5-6` (guard-aware runes).
+
+---
+
+## Phase 23 — the pitch, as a PDF, generated from its own source
+
+Driver: keep the marketing document honest and make it something you can hand
+to someone. `docs/WHY_RUNES.md` was refreshed to match what actually shipped —
+the receipts table now carries the real numbers (14 145 lines of `lib`, 10 449
+of `test`, 555 runs / 2 551 assertions, observatory 124 / 629, the MQTT 5
+adapter's 1 149 lines), the topic map no longer shows the claim/started phase
+deleted in Phase 16, a **tenth** thing was added (the console: run timelines,
+topology, waterfall, traffic sparkline), and the "what we're honest about" list
+was rewritten to lead with the one thing the round-5 research surfaced:
+**distribution is exactly-once, execution is at-least-once** and handlers are
+not yet idempotent.
+
+`tmp/md_to_pdf.rb` renders a markdown file to a designed PDF (cover band,
+section rules, zebra tables, mono code panels, amber callouts, page footers).
+It exists so the PDF is the *same text* as the markdown rather than a second
+copy that rots: `ruby tmp/md_to_pdf.rb docs/WHY_RUNES.md docs/WHY_RUNES.pdf`
+(prawn is a system gem, so this runs outside bundler).
+
+Three bugs of my own, all caught by running it:
+
+- `arr << lines[i] while …` never advances the index — two such one-liners in
+  the parser made it hang forever instead of failing. The parser now raises
+  "markdown parser stalled at line N" rather than spinning, which is how the
+  second occurrence was found.
+- `#{1,6}` inside a regex literal is interpolation, not a quantifier: the
+  heading pattern had to be escaped.
+- Prawn's inline parser decodes `&lt;`, `&gt;` and `&amp;` but **not** `&quot;`,
+  so escaping the text HTML-style rendered quotes literally (`&quot;trust
+  me&quot;`). Quotes need no escaping in its markup.
+
+**Verification:** the PDF is 5 pages, 202 KB, and reading it back with
+`pdf-reader` confirms the tables, code blocks and quotes rendered (no leaked
+entities) while `<id>` placeholders survived. Both suites stayed green
+throughout: parent **555 / 2551 / 0**, observatory **124 / 629 / 0**. README
+and STATE were aligned (the PDF is linked from the intro, the observatory
+section names the new views, STATE carries the counts and a handoff block).
