@@ -34,6 +34,30 @@ class TransportLifecycleTest < Minitest::Test
                                 **options).tap { |a| @adapters << a }
   end
 
+  # A free port for an embedded broker (close then reuse: the same small race
+  # the rest of the suite accepts).
+  def find_free_port
+    server = TCPServer.new("127.0.0.1", 0)
+    port = server.addr[1]
+    server.close
+    port
+  end
+
+  def wait_for_port(port, timeout: 5)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      begin
+        probe = TCPSocket.new("127.0.0.1", port)
+        probe.close
+        return true
+      rescue StandardError
+        raise "port #{port} never opened" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+        sleep 0.02
+      end
+    end
+  end
+
   # Wait for a condition without a fixed sleep, so fast machines stay fast
   # and slow ones still pass.
   def wait_until(timeout: 5.0, interval: 0.02, message: "condition")
@@ -188,6 +212,51 @@ class TransportLifecycleTest < Minitest::Test
 
     wait_until(timeout: 6, message: "the malformed connection to be dropped") { !a.connected? }
     assert_empty delivered, "a QoS 3 PUBLISH is malformed and must never be delivered"
+  end
+
+  # --- T5-1, the 3.1.1 half: same disease, same cure ----------------------
+
+  # The 3.1.1 adapter's drop detection is "the gem's own read thread died".
+  # We simulate that by killing the thread rather than closing the socket
+  # under it: `mqtt` 0.7 raises MQTT::ProtocolException from that thread when
+  # its socket closes, and `MQTT::Client#disconnect` then kills it mid-raise,
+  # which surfaces as an exception attributed to whatever test is running.
+  # Killing it is silent and is precisely the condition the adapter polls for.
+  def test_mqtt311_reconnects_and_resubscribes_when_its_reader_dies
+    port = find_free_port
+    broker = Runes::MQTT::Broker.new("127.0.0.1", port)
+    thread = Thread.new { broker.run }
+    @brokers << broker
+    wait_for_port(port)
+
+    adapter = Runes::Transport::MQTT311.new(host: "127.0.0.1", port: port,
+                                            client_id: "t311-#{rand(10_000)}",
+                                            reconnect_initial: 0.05, reconnect_max: 0.2)
+    @adapters << adapter
+    adapter.connect
+    received = Queue.new
+    adapter.subscribe("runes/t311/topic", qos: 1) { |m| received << m.payload }
+    sleep 0.3
+
+    # Before the fix the adapter kept reporting connected while nothing was
+    # reading: `MQTT::Client#get` blocks forever on a queue nobody feeds.
+    gem_client = adapter.instance_variable_get(:@client)
+    gem_client.instance_variable_get(:@read_thread).kill
+
+    wait_until(timeout: 10, message: "mqtt311 reconnect") do
+      adapter.reconnects.positive? && adapter.connected?
+    end
+
+    publisher = MQTT::Client.new(host: "127.0.0.1", port: port, client_id: "t311-pub-#{rand(10_000)}")
+    publisher.connect
+    publisher.publish("runes/t311/topic", "after-reconnect")
+    publisher.disconnect
+
+    assert_equal "after-reconnect", Timeout.timeout(8) { received.pop },
+                 "the 3.1.1 adapter must re-subscribe and keep receiving after its reader dies"
+  ensure
+    thread&.kill
+    broker&.stop
   end
 
   # --- connection refused is still loud at startup ------------------------

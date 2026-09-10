@@ -60,6 +60,10 @@ module Runes
         # client => name (parsed client id, for logs)
         @client_names = {}
         @conn_count = 0
+        @server = nil
+        @stopping = false
+        # `@clients` (a Hash used as a set of live sockets) already exists
+        # above; #stop closes its keys so a client sees the broker vanish.
         @mutex = Mutex.new
         # client => Mutex — serializes writes to one socket so concurrent
         # fan-out threads cannot interleave packet bytes.
@@ -74,6 +78,7 @@ module Runes
       def run
         puts "[Broker] Attempting to bind to #{@host}:#{@port}..."
         server = TCPServer.new(@host, @port)
+        @server = server
         puts "[Broker] Listening on #{@host}:#{@port}"
         loop do
           client = server.accept
@@ -89,8 +94,44 @@ module Runes
           end
           Thread.new(client) { |c| handle_client(c) }
         end
+      rescue IOError, Errno::EBADF
+        puts "[Broker] stopped" if @stopping
       rescue => e
         puts "[Broker] FATAL ERROR: #{e.message}\n#{e.backtrace.join("\n")}"
+      end
+
+      # Drop every connected client but keep listening. To a client this is
+      # indistinguishable from the broker (or the network) going away, which
+      # is exactly what a reconnect test needs — and unlike closing the
+      # listener it cannot race a rebind.
+      def disconnect_clients!
+        @mutex.synchronize do
+          @clients.each_key do |socket|
+            socket.close
+          rescue StandardError
+            nil
+          end
+          @clients.clear
+        end
+        nil
+      end
+
+      # Release the port and drop every client. Idempotent; an embedder can
+      # restart on the same port afterwards (Ruby's TCPServer sets
+      # SO_REUSEADDR, so TIME_WAIT peers do not block the rebind).
+      def stop
+        @stopping = true
+        begin
+          @server&.close
+        rescue StandardError
+          nil
+        end
+        disconnect_clients!
+        nil
+      end
+
+      def stopped?
+        @stopping
       end
 
       # Programmatic API used by hosts that embed the broker in-process:
