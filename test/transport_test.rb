@@ -2,6 +2,9 @@ require "timeout"
 require "socket"
 require_relative "test_helper"
 require_relative "../lib/runes/transport"
+# This file drives the 3.1.1 adapter directly, and `runes/transport` now loads
+# it on demand (see the guard test below), so ask for it explicitly.
+require_relative "../lib/runes/transport/mqtt311"
 
 # The transport contract: every adapter must behave the same for topic
 # matching, retained messages, fan-out and — the point of the abstraction —
@@ -179,6 +182,36 @@ class TransportContractTest < Minitest::Test
   def test_in_process_exposes_group_and_property_support
     assert inproc.supports_groups?
     assert inproc.supports_properties?
+  end
+
+  # "MQTT is a choice, not a requirement" has to survive the client library
+  # being absent. `require "runes/transport"` used to eagerly require the
+  # 3.1.1 adapter, whose own `require "mqtt"` then blew up — leaving a
+  # HALF-DEFINED module (base and inproc present, `Transport.build` missing)
+  # that an embed only discovered as "undefined method 'build' for module"
+  # much later. Simulated by shadowing `mqtt` with a file that refuses to
+  # load, in a subprocess so this suite's own load path is untouched.
+  def test_the_seam_loads_without_the_optional_mqtt_gem
+    Dir.mktmpdir("runes-no-mqtt-") do |dir|
+      File.write(File.join(dir, "mqtt.rb"), "raise LoadError, 'cannot load such file -- mqtt'\n")
+      lib = File.expand_path("../lib", __dir__)
+      script = 'require "runes/transport"; ' \
+               'print Runes::Transport.respond_to?(:build) && ' \
+               'Runes::Transport.const_defined?(:InProcess)'
+      out = IO.popen([RbConfig.ruby, "-I#{dir}", "-I#{lib}", "-e", script], &:read)
+      assert_equal "true", out, "the transport seam must be whole without the mqtt gem"
+    end
+  end
+
+  def test_asking_for_mqtt311_without_the_gem_names_the_gem
+    Dir.mktmpdir("runes-no-mqtt311-") do |dir|
+      File.write(File.join(dir, "mqtt.rb"), "raise LoadError, 'cannot load such file -- mqtt'\n")
+      lib = File.expand_path("../lib", __dir__)
+      script = 'require "runes/transport"; ' \
+               'begin; Runes::Transport.build(kind: "mqtt311"); rescue LoadError => e; print e.message; end'
+      out = IO.popen([RbConfig.ruby, "-I#{dir}", "-I#{lib}", "-e", script], &:read)
+      assert_match "mqtt", out
+    end
   end
 
   # --- helpers -----------------------------------------------------------

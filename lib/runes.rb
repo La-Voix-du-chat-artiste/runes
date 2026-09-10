@@ -8,6 +8,15 @@
 # requires that transitively pull it in are guarded (see GEM_PACKAGING.md).
 require_relative 'runes/telemetry'
 require_relative 'runes/transport'
+# The `mqtt` gem is a gemspec runtime dependency, so for a gem install this
+# always resolves. It is guarded anyway for the embed case (a checkout put on
+# the load path without the gem), where `Runes::Transport` must still be a
+# *whole* module: mqtt5 and inproc need no client library at all.
+begin
+  require_relative 'runes/transport/mqtt311'
+rescue LoadError
+  nil
+end
 require_relative 'runes/a2a'
 require_relative 'runes/core/settings'
 require_relative 'runes/core/llm_client'

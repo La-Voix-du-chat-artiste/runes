@@ -63,7 +63,10 @@ and why it matters — is [`docs/WHY_RUNES.md`](docs/WHY_RUNES.md).
   native shared groups), an **MQTT 3.1.1** adapter (the classic `mqtt` gem,
   maximum compatibility) and a hand-rolled **MQTT 5** adapter (shared
   subscriptions + PUBLISH properties). `RUNES_TRANSPORT=auto` probes MQTT 5
-  → 3.1.1 → inproc, so the bus is a choice, not a requirement.
+  → 3.1.1 → inproc, so the bus is a choice, not a requirement. The seam
+  itself needs no client library: `require "runes/transport"` always defines
+  `Transport.build`, and the legacy `mqtt`-gem adapter is loaded on demand
+  (a missing gem is a clear error, not a half-loaded module).
 - **Embedded MQTT broker (dev convenience)** — QoS 0 inbound (QoS 1/2
   accepted with PUBACK/PUBREC; QoS 2 retransmissions de-duplicated),
   UNSUBSCRIBE, retained messages, Last Will & Testament, wildcards (`+`,

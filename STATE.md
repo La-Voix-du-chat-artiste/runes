@@ -23,7 +23,12 @@ Where the current goal stands (it stays **active**):
   (Phase 21), the publisher/observer topic contract (Phase 22), the guard is
   opt-in for runes (Phase 24), and the observatory now ingests through
   `Runes::Transport` — MQTT 5 properties visible, broker-free `inproc` mode,
-  no direct `mqtt` dependency (Phase 25, doc5.md O0.1 + most of O0.2).
+  and **no MQTT client of its own** (Phase 25, doc5.md O0.1 + most of O0.2).
+  Doing that exposed a harness bug worth knowing: `require "runes/transport"`
+  used to load the `mqtt`-gem adapter eagerly, so without the gem it defined
+  half a module and `Transport.build` was missing. The 3.1.1 adapter is now
+  loaded on demand (guarded in `lib/runes.rb`), pinned by two subprocess tests
+  in `test/transport_test.rb`.
 - **Next, in order:** `O0.2` leftovers (`signature_state`, `key_fingerprint` —
   both need `O0.3`) and `O0.3` signature verification / impersonation
   detection in the observer; then the P1/P2 roadmap in
@@ -33,15 +38,15 @@ Where the current goal stands (it stays **active**):
   cards are still unauthenticated**, token scanning is not a sandbox, the
   observatory has no auth, and one-shot tool feedback. All are in the "What
   we're honest about" list in `docs/WHY_RUNES.md` and in `doc5.md`.
-- **Regenerate the pitch PDF:** `ruby tmp/md_to_pdf.rb docs/WHY_RUNES.md
+- **Regenerate the pitch PDF:** `ruby scripts/md_to_pdf.rb docs/WHY_RUNES.md
   docs/WHY_RUNES.pdf` (plain `ruby`, not `bundle exec`: prawn is a system gem).
 - Working tree is a git repo with one commit per batch; `git log --oneline`.
 
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 565 runs / 2589 assertions / 0 failures
-cd runes_observer && bin/rails test   # observatory: 129 runs / 649 assertions / 0 failures
+bundle exec rake test                 # parent harness: 567 runs / 2593 assertions / 0 failures
+cd runes_observer && bin/rails test   # observatory: 131 runs / 658 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
 
@@ -52,13 +57,14 @@ a retained message reached a late subscriber, and keepalive held an idle
 session open.
 
 Observer ingest proof (Phase 25, doc5.md O0.1): with
-`RUNES_TRANSPORT=mqtt5 bin/runes-ingest` running, `ruby tmp/mqtt5_observer_probe.rb`
+`RUNES_TRANSPORT=mqtt5 bin/runes-ingest` running, `ruby scripts/mqtt5_observer_probe.rb`
 published one A2A-shaped message and the stored row carried `correlation_id`,
 `response_topic`, `user_properties` and `ingest_statuses.transport = "MQTT5"`.
 `RUNES_TRANSPORT=inproc bin/runes-ingest` does the same with no broker at all
 (and is how `test/services/fabric_ingest_test.rb` drives the real recorder).
-Remember `bin/rails db:migrate` in `runes_observer/` after pulling: the ingest
-now writes `packets.qos/retain/correlation_id/response_topic/user_properties`.
+After pulling, run `bundle install` and `bin/rails db:migrate` in
+`runes_observer/`: the lockfile no longer includes `mqtt`, and the ingest
+writes `packets.qos/retain/correlation_id/response_topic/user_properties`.
 
 Current counts (2026-09-10, after Phase 22):
 parent **527 runs / 2419 assertions / 0 failures / 0 errors / 0 skips**,

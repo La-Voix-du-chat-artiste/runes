@@ -114,7 +114,7 @@ Two deliberate details beyond the sketch:
 transport and a real recorder, no fake client.
 
 **Acceptance, verified live** (mosquitto 2.1.2, `RUNES_TRANSPORT=mqtt5`):
-`tmp/mqtt5_observer_probe.rb` published one A2A-shaped message and the row
+`scripts/mqtt5_observer_probe.rb` published one A2A-shaped message and the row
 came back with `correlation_id`, `response_topic`,
 `user_properties = {"a2a-status":"working","probe-tag":…}` and
 `ingest_statuses.transport = "MQTT5"`. The `qos` column stores the **delivery**

@@ -77,9 +77,14 @@ class FabricIngest
         delay = @backoff
       rescue Interrupt
         break
-      rescue StandardError => e
+      rescue StandardError, LoadError => e
+        # LoadError is a ScriptError, not a StandardError: `mqtt311`'s lazy
+        # `require "mqtt"` (a gem this app deliberately does not declare)
+        # would otherwise kill the process instead of being retried and said
+        # out loud.
         IngestStatus.mark_disconnected!("#{e.class}: #{e.message}")
         log "ingest error: #{e.class}: #{e.message}"
+        log missing_dependency_hint(e)
       end
       break if @stopping
 
@@ -136,6 +141,16 @@ class FabricIngest
   end
 
   private
+
+  # The one dependency this app leaves to the user's judgement: the mqtt311
+  # adapter needs the `mqtt` gem, which the observer does not declare because
+  # mqtt5 (hand-rolled, properties) and inproc (no broker) need no gem at all.
+  def missing_dependency_hint(error)
+    return nil unless error.is_a?(LoadError) && error.message.to_s.include?("mqtt")
+
+    "the mqtt311 adapter needs the mqtt gem: add `gem \"mqtt\", \"~> 0.7\"` to " \
+      "runes_observer/Gemfile (or use RUNES_TRANSPORT=mqtt5 / inproc, which need nothing)"
+  end
 
   def default_transport(kind:, host:, port:, client_id:)
     unless defined?(Runes::Transport)

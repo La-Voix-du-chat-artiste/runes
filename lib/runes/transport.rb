@@ -1,6 +1,13 @@
 require_relative "transport/base"
 require_relative "transport/in_process"
-require_relative "transport/mqtt311"
+# The classic 3.1.1 adapter is loaded on demand, like the MQTT 5 one: it
+# needs the `mqtt` gem, and this file's whole promise is that MQTT is a
+# choice. Eagerly requiring it made `require "runes/transport"` raise
+# LoadError in any embed without that gem — half the module got defined and
+# `Transport.build` never did, which is a spectacularly confusing failure.
+# `lib/runes.rb` still loads it up front for the harness itself (guarded),
+# so `Runes::Transport::MQTT311` keeps working for anything that requires
+# the harness as a whole.
 
 module Runes
   # Pluggable messaging. The harness talks to Runes::Transport::Base only,
@@ -23,6 +30,7 @@ module Runes
         when "inproc", "in_process", "memory", "null"
           InProcess.new(**options)
         when "mqtt311", "mqtt", "mqtt3"
+          require_relative "transport/mqtt311"
           MQTT311.new(**mqtt_options(settings, options))
         when "mqtt5"
           require_relative "transport/mqtt5"
@@ -50,11 +58,12 @@ module Runes
         end
 
         begin
+          require_relative "transport/mqtt311"
           transport = MQTT311.new(**mqtt_options(settings, options))
           transport.connect
           logger&.info("transport: mqtt311 (#{transport.host}:#{transport.port}, no shared subscriptions)")
           return transport
-        rescue Error, StandardError => e
+        rescue Error, LoadError, StandardError => e
           errors << "mqtt311: #{e.message}"
         end
 

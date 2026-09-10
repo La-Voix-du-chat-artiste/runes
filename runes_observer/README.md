@@ -31,14 +31,20 @@ mosquitto -p 1883 &
 #   or: (cd .. && bundle exec ruby demo/broker.rb 1883)
 
 # 2) the ingest process (long-running)
-bin/runes-ingest
+bin/runes-ingest                  # RUNES_TRANSPORT=auto: mqtt5 → mqtt311 → inproc
 
 # 3) the web UI
 bin/rails server -p 3100
 # → http://127.0.0.1:3100
 ```
 
-No broker handy? Seed a realistic session through the same code path the
+`RUNES_TRANSPORT` chooses the ingest's adapter. `mqtt5` (the default choice on
+a modern broker) and `inproc` need no client gem at all; `mqtt311` is the one
+adapter that needs `gem "mqtt"` in this app's Gemfile — the ingest says so
+explicitly and keeps retrying rather than dying if it is missing.
+
+No broker handy? Either watch only this process — `RUNES_TRANSPORT=inproc
+bin/runes-ingest` — or seed a realistic session through the same code path the
 live ingest uses and browse it immediately:
 
 ```bash

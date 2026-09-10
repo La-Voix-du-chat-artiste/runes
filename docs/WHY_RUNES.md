@@ -20,7 +20,7 @@ building right now.*
 - **It treats the boring parts as the product**: capability guard, signed
   envelopes, a durable journal, verify-and-resume, and a Rails observatory
   that watches the whole fleet.
-- **12 146 lines of `lib`, 8 171 lines of tests, 455 tests, zero network in
+- **14 265 lines of `lib`, 10 646 lines of tests, 567 tests, zero network in
   the suite.** Ruby 4.0.4, Rails 8.1.3.1, SQLite, mosquitto on localhost.
 
 ---
@@ -128,7 +128,7 @@ you built.
 HTTP is faked with a real `Net::HTTPResponse` over a dup transport; the
 agent CLI is replaced at a factory seam; the chat backend is injected; the
 whole workflow suite runs with `command_runner=`, `provider_factory=` and
-`backend=`. Consequence: **455 tests, 2 083 assertions, no API key, no
+`backend=`. Consequence: **567 tests, 2 593 assertions, no API key, no
 network, no broker required** — you can run the entire harness on a plane.
 *(Round-5 audit found this was false: `test/second_audit_test.rb` dialled the
 default MQTT port 1883. Fixed — it now spawns its own broker on a free port,
@@ -225,10 +225,10 @@ today:
 
 | | |
 | --- | --- |
-| `lib/` | **14 145 lines** across 59 files |
-| `test/` | **10 449 lines** across 41 files |
-| Suite | **565 runs, 2 589 assertions, 0 failures** — no keys, no provider calls, no broker required |
-| Observatory | **129 runs, 649 assertions**, **3 334 lines** of Rails 8.1 app code — fleet, runs, topology, traces, and it ingests through the fleet's own `Runes::Transport` |
+| `lib/` | **14 265 lines** across 60 files |
+| `test/` | **10 646 lines** across 42 files |
+| Suite | **567 runs, 2 593 assertions, 0 failures** — no keys, no provider calls, no broker required |
+| Observatory | **131 runs, 658 assertions**, **3 334 lines** of Rails 8.1 app code — fleet, runs, topology, traces, and it ingests through the fleet's own `Runes::Transport` |
 | Executables | **7**: `runes` (TUI), `runes-daemon`, `runes-client`, `runes-mcp`, `runes-replay`, `runes-acl`, `runes-workflow` |
 | Workflow engine | **4 491 lines** total (engine + the seven runes + command runner), stdlib only — no `async`, no `ruby_llm` |
 | The seven runes | `agent` 719, `chat` 503, `repeat` 202, `cmd` 199, `map` 183, `ruby` 86, `call` 68 |

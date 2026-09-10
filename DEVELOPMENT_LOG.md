@@ -1444,10 +1444,10 @@ was rewritten to lead with the one thing the round-5 research surfaced:
 **distribution is exactly-once, execution is at-least-once** and handlers are
 not yet idempotent.
 
-`tmp/md_to_pdf.rb` renders a markdown file to a designed PDF (cover band,
+`scripts/md_to_pdf.rb` renders a markdown file to a designed PDF (cover band,
 section rules, zebra tables, mono code panels, amber callouts, page footers).
 It exists so the PDF is the *same text* as the markdown rather than a second
-copy that rots: `ruby tmp/md_to_pdf.rb docs/WHY_RUNES.md docs/WHY_RUNES.pdf`
+copy that rots: `ruby scripts/md_to_pdf.rb docs/WHY_RUNES.md docs/WHY_RUNES.pdf`
 (prawn is a system gem, so this runs outside bundler).
 
 Three bugs of my own, all caught by running it:
@@ -1577,7 +1577,7 @@ every page test depends on and turned a green suite into 9 failures and 5
 errors.
 
 **Verified live** against mosquitto 2.1.2 with `RUNES_TRANSPORT=mqtt5`:
-`tmp/mqtt5_observer_probe.rb` published one A2A-shaped message, and the row came
+`scripts/mqtt5_observer_probe.rb` published one A2A-shaped message, and the row came
 back with `correlation_id`, `response_topic`,
 `user_properties = {"a2a-status":"working","probe-tag":…}` and
 `ingest_statuses.transport = "MQTT5"`. The `qos` column stores the **delivery**
@@ -1588,6 +1588,50 @@ The live probe also surfaced a real gap, recorded in the roadmap rather than
 papered over: `runes/a2a/tasks/…` classifies as `other`. The observer recognises
 `$a2a/#`, not the `runes/a2a/…` spelling; one of the two should change.
 
-Suites: parent **565 / 2589 / 0** (the previous run measured 2 590 — the total
-moves by a few across runs, so treat the failure count as the contract and the
-assertion total as approximate), observatory **129 / 649 / 0**.
+### The gem that was not optional after all
+
+Dropping `gem "mqtt"` from this app's Gemfile exposed a bug in the seam it was
+supposed to make optional. `lib/runes/transport.rb` eagerly required the 3.1.1
+adapter, and *that* file requires `mqtt` at the top — so in an app without the
+gem, `require "runes/transport"` raised after base and inproc had loaded. The
+result was a **half-defined module**: `Runes::Transport::InProcess` existed,
+`Runes::Transport.build` did not. The observer's initializer logged the
+LoadError as a warning, and the ingest then failed with the gloriously
+unhelpful `undefined method 'build' for module Runes::Transport` — eight times,
+with backoff, before I read the log.
+
+"MQTT is a choice, not a requirement" is that file's own first sentence, so the
+fix belongs in the harness rather than in a Gemfile:
+
+- `lib/runes/transport.rb` loads the 3.1.1 adapter **on demand**, exactly like
+  the MQTT 5 one, so the seam is whole without a client library.
+- `lib/runes.rb` still requires it up front, guarded — a gem install gets
+  `Runes::Transport::MQTT311` as before, and `test/transport_test.rb` (which
+  drives that adapter directly) now asks for it explicitly.
+- `test/transport_test.rb` gains two subprocess tests that shadow `mqtt` with a
+  file that refuses to load: the seam must define `Transport.build` anyway, and
+  asking for `mqtt311` must raise a LoadError that *names the gem*. That is the
+  regression test for the whole episode; it would have caught it in the parent
+  suite, where it belonged.
+- `FabricIngest` rescues `LoadError` alongside `StandardError` (LoadError is a
+  `ScriptError`, so a missing gem would otherwise have killed the process
+  outright) and, for this one case, logs what to do: add `gem "mqtt", "~> 0.7"`
+  to the observer's Gemfile, or use `mqtt5`/`inproc`, which need nothing.
+
+Live check with the gem gone: the observer's default `auto` mode still attached
+as `MQTT5` and stored `correlation_id`, `response_topic` and `user_properties`;
+`RUNES_TRANSPORT=mqtt311` logged the hint and kept retrying instead of dying.
+
+Suites: parent **567 / 2593 / 0**, observatory **131 / 658 / 0**.
+
+That same audit of "does the PDF actually say what the markdown says?" found a
+worse bug, in the renderer rather than the prose: `split("|")[1..-2]` dropped
+Ruby's trailing empty field, so every table row parsed as **one** cell and the
+PDF silently lost the value column of every table it ever rendered — including
+the receipts table it was built to keep honest. The fix is `split("|", -1)`,
+plus a parser guard that raises on ragged rows so a malformed table is loud
+instead of half-drawn. The renderer and the live observer probe now live in
+`scripts/` (tracked) rather than gitignored `tmp/`: the "the PDF is the same
+text as the markdown" invariant is only reproducible if the tool that enforces
+it is in the repository. `docs/WHY_RUNES.pdf` is 7 pages with all table values
+present.

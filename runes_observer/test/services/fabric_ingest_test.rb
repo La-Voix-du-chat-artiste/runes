@@ -137,6 +137,27 @@ class FabricIngestTest < ActiveSupport::TestCase
     thread&.join(5)
   end
 
+  # The bug this test would have caught: `require "runes/transport"` eagerly
+  # required the mqtt311 adapter, whose own `require "mqtt"` fails in an app
+  # that deliberately does not declare that gem — so the require raised after
+  # loading base and inproc, the initializer logged it as a warning, and the
+  # ingest died with "undefined method 'build' for module Runes::Transport".
+  test "the transport seam is whole even without the optional mqtt gem" do
+    assert_respond_to Runes::Transport, :build
+    assert Runes::Transport.const_defined?(:InProcess)
+    assert Runes::Transport.const_defined?(:Message)
+  end
+
+  test "a missing adapter gem is explained instead of retried in the dark" do
+    ingest = FabricIngest.new(logger: Logger.new(IO::NULL))
+
+    hint = ingest.send(:missing_dependency_hint, LoadError.new("cannot load such file -- mqtt"))
+    assert_match "mqtt gem", hint
+    assert_match "RUNES_TRANSPORT=mqtt5", hint
+    assert_nil ingest.send(:missing_dependency_hint, LoadError.new("cannot load such file -- other"))
+    assert_nil ingest.send(:missing_dependency_hint, RuntimeError.new("boom"))
+  end
+
   private
 
   def start_publisher

@@ -17,11 +17,12 @@ gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 gem "jbuilder"
 
-# NOT the observatory's own client: the ingest subscribes through
-# Runes::Transport. This is here for `Runes::Transport::MQTT311`, the adapter
-# `RUNES_TRANSPORT=auto` falls back to on a broker that refuses MQTT 5 — the
-# adapter requires it lazily, so mqtt5 and inproc never load it.
-gem "mqtt", "~> 0.7"
+# Deliberately NO MQTT client here: the ingest subscribes through
+# Runes::Transport, and the two adapters worth using in this app need no gem —
+# mqtt5 is hand-rolled and carries the MQTT 5 properties, inproc needs no
+# broker at all. Only the legacy `RUNES_TRANSPORT=mqtt311` adapter needs the
+# `mqtt` gem; if your broker refuses MQTT 5, add `gem "mqtt", "~> 0.7"` here
+# (the adapter requires it lazily and the ingest names it if it is missing).
 
 # Pin json to the 2.x series. The 3.0.0 gem available here changes
 # JSON.parse's signature (options became keyword-only), and Rails 8.1's
