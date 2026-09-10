@@ -1,0 +1,290 @@
+# Turns one observed MQTT PUBLISH into a Packet row plus the agent
+# bookkeeping the UI needs. This is the single write path: live ingest and
+# the demo seeder both go through it, so what the UI shows is exactly what
+# the recorder stored.
+class PacketRecorder
+  MAX_PAYLOAD_BYTES = Packet::MAX_PAYLOAD_BYTES
+  HEARTBEAT_INTERVAL = 2.0
+  PRUNE_EVERY = 1_000
+  EXECUTOR_CACHE_MAX = 512
+  # The broker re-delivers retained messages (agent cards, `…/latest`
+  # snapshots, retained status) immediately after every SUBSCRIBE. Four
+  # reconnects must not store one retained card four times, so an identical
+  # (topic, payload) seen inside this window after a SUBSCRIBE is treated as
+  # the same retained replay and dropped.
+  DEDUPE_WINDOW = 10.0
+  DEFAULT_RETENTION_DAYS = 7
+  DEFAULT_MAX_PACKETS = 200_000
+
+  @executors = {}
+  @executors_mutex = Mutex.new
+  @pending_heartbeats = 0
+  @last_heartbeat = nil
+  @since_prune = 0
+  @seen_digests = {}
+  @dedupe_until = 0.0
+  @dedupe_mutex = Mutex.new
+
+  class << self
+    def record(topic:, payload:, occurred_at: nil, received_at: Time.current, retained: false)
+      return nil if retained_replay?(topic, payload)
+
+      new(topic: topic, payload: payload, occurred_at: occurred_at,
+          received_at: received_at, retained: retained).record
+    end
+
+    def record_packet!(packet_hash)
+      record(**packet_hash)
+    end
+
+    # Called by the ingest right after SUBSCRIBE, before the broker starts
+    # replaying retained messages: opens the dedupe window.
+    def begin_session!
+      now = monotonic
+      @dedupe_mutex.synchronize do
+        @seen_digests.delete_if { |_key, seen_at| now - seen_at > DEDUPE_WINDOW }
+        @dedupe_until = now + DEDUPE_WINDOW
+      end
+    end
+
+    # True when this exact (topic, payload) already arrived inside the
+    # post-SUBSCRIBE window. The first occurrence is remembered and kept.
+    def retained_replay?(topic, payload)
+      now = monotonic
+      @dedupe_mutex.synchronize do
+        return false if now > @dedupe_until
+
+        key = "#{topic}\u0000#{Digest::SHA256.hexdigest(payload.to_s)}"
+        return true if @seen_digests.key?(key)
+
+        @seen_digests[key] = now
+        false
+      end
+    end
+
+    # Who executed a request, remembered in-process so a burst of
+    # progress events does not re-query the DB for every packet.
+    def remember_executor(key, agent_id)
+      return if key.blank? || agent_id.blank?
+
+      @executors_mutex.synchronize do
+        @executors.delete(key)
+        @executors[key] = agent_id
+        @executors.shift while @executors.size > EXECUTOR_CACHE_MAX
+      end
+    end
+
+    def cached_executor(key)
+      @executors_mutex.synchronize { @executors[key] }
+    end
+
+    def heartbeat!(at:)
+      @pending_heartbeats = @pending_heartbeats.to_i + 1
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return if @last_heartbeat && (now - @last_heartbeat) < HEARTBEAT_INTERVAL
+
+      @last_heartbeat = now
+      pending = @pending_heartbeats
+      @pending_heartbeats = 0
+      IngestStatus.bump!(at: at, by: pending)
+    rescue ActiveRecord::ActiveRecordError => e
+      Rails.logger.warn("[observer] heartbeat failed: #{e.class}: #{e.message}")
+    end
+
+    def reset_heartbeat!
+      @last_heartbeat = nil
+      @pending_heartbeats = 0
+    end
+
+    # Clears every piece of in-process state (tests, mainly).
+    def reset_cache!
+      @executors_mutex.synchronize { @executors.clear }
+      @dedupe_mutex.synchronize do
+        @seen_digests.clear
+        @dedupe_until = 0.0
+      end
+      reset_heartbeat!
+      @since_prune = 0
+    end
+
+    def prune_if_due!
+      @since_prune = @since_prune.to_i + 1
+      return if @since_prune < PRUNE_EVERY
+
+      @since_prune = 0
+      prune!
+    end
+
+    # Keep the observatory bounded: drop packets older than `days` and, if
+    # still over `max`, the oldest rows. A nil or non-positive `max` means
+    # "no cap" — never `max <= 0` becoming "delete everything".
+    def prune!(days: retention_days, max: max_packets)
+      deleted = 0
+      if days.to_i.positive?
+        deleted += Packet.where("occurred_at < ?", days.to_i.days.ago).delete_all
+      end
+
+      cap = max.nil? ? nil : max.to_i
+      if cap&.positive?
+        excess = Packet.count - cap
+        if excess.positive?
+          ids = Packet.order(id: :asc).limit(excess).pluck(:id)
+          deleted += Packet.where(id: ids).delete_all
+        end
+      end
+
+      if deleted.positive?
+        refresh_agent_counts!
+        Rails.logger.info("[observer] pruned #{deleted} packet(s)")
+      end
+      deleted
+    end
+
+    # The packet_count column is a cached count of attributed packets; a
+    # prune can delete rows behind its back, so rebuild it afterwards.
+    def refresh_agent_counts!
+      Agent.find_each do |agent|
+        agent.update_columns(packet_count: Packet.for_agent(agent.agent_id).count)
+      end
+    end
+
+    def retention_days
+      parse_positive_env("RUNES_OBSERVER_RETENTION_DAYS", DEFAULT_RETENTION_DAYS)
+    end
+
+    def max_packets
+      value = ENV["RUNES_OBSERVER_MAX_PACKETS"]
+      return DEFAULT_MAX_PACKETS if value.blank?
+
+      parsed = Integer(value, exception: false)
+      if parsed.nil?
+        Rails.logger.warn("[observer] RUNES_OBSERVER_MAX_PACKETS=#{value.inspect} is not a number; " \
+                          "running with no packet cap")
+        return nil
+      end
+
+      # <= 0 means "no cap" (the old code turned 0 into `prune!(days: 0)`,
+      # which deleted the whole table).
+      parsed.positive? ? parsed : nil
+    end
+
+    private
+
+    def parse_positive_env(name, fallback)
+      value = ENV[name]
+      return fallback if value.blank?
+
+      parsed = Integer(value, exception: false)
+      return parsed if parsed
+
+      Rails.logger.warn("[observer] #{name}=#{value.inspect} is not a number; using #{fallback}")
+      fallback
+    end
+
+    def monotonic
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+  end
+
+  def initialize(topic:, payload:, occurred_at: nil, received_at: Time.current, retained: false)
+    @topic = topic.to_s
+    raw = payload.to_s
+    # MQTT payloads are arbitrary bytes: sqlite3 raises
+    # Encoding::UndefinedConversionError when it binds an invalid UTF-8
+    # string, and one hostile/buggy publisher must not wedge ingest. Repair
+    # at the storage boundary, and remember that the repair was lossy.
+    utf8 = raw.dup.force_encoding(Encoding::UTF_8)
+    @scrubbed = !utf8.valid_encoding?
+    @payload = utf8.scrub
+    @bytesize = raw.bytesize
+    @occurred_at = occurred_at || received_at
+    @received_at = received_at
+    @retained = retained
+  end
+
+  def record
+    result = PacketClassifier.call(topic: @topic, payload: @payload)
+    data = PacketClassifier.parse(@payload)
+    agent_id = result.agent_id || inferred_executor(result)
+    body, truncated = truncate(@payload)
+
+    packet = Packet.create!(
+      topic: @topic,
+      payload: body,
+      payload_bytes: @bytesize,
+      truncated: truncated,
+      scrubbed: @scrubbed,
+      agent_id: agent_id,
+      request_id: result.request_id,
+      kind: result.kind,
+      event: result.event,
+      tool: result.tool,
+      occurred_at: @occurred_at,
+      received_at: @received_at
+    )
+
+    self.class.remember_executor(correlation_key(result), agent_id)
+    update_agent(result, agent_id, data, retained: @retained)
+    attribute_packet(result, agent_id)
+    self.class.heartbeat!(at: @received_at)
+    self.class.prune_if_due!
+    packet
+  end
+
+  private
+
+  def correlation_key(result)
+    return "request:#{result.request_id}" if result.request_id.present?
+
+    nil
+  end
+
+  def inferred_executor(result)
+    key = correlation_key(result)
+    return nil if key.nil?
+
+    cached = self.class.cached_executor(key)
+    return cached if cached.present?
+
+    Packet.for_request(key.delete_prefix("request:")).where.not(agent_id: nil).recent.first&.agent_id
+  end
+
+  # The executor is often only known at the END of a request (the harness's
+  # journal entry carries `agent`; a delegation envelope carries `from`).
+  # Attribute the whole request retroactively when it becomes known, and keep
+  # the agent's cached packet_count in step with the rows we just claimed.
+  def attribute_packet(result, agent_id)
+    return if agent_id.blank?
+
+    claimed = 0
+    if result.request_id.present?
+      claimed = Packet.for_request(result.request_id).where(agent_id: nil).update_all(agent_id: agent_id)
+    end
+    Agent.bump_packet_count!(agent_id, by: claimed + 1)
+  rescue ActiveRecord::ActiveRecordError => e
+    Rails.logger.warn("[observer] attribution backfill failed: #{e.class}: #{e.message}")
+  end
+
+  def update_agent(result, agent_id, data, retained:)
+    return if agent_id.blank?
+
+    case result.kind
+    when "card", "a2a_card"
+      Agent.record_card!(agent_id, data, at: @occurred_at, touch: !retained) if data
+    when "status"
+      Agent.record_status!(agent_id, @payload, at: @occurred_at, touch: !retained)
+    else
+      Agent.touch_seen!(agent_id, at: @occurred_at)
+    end
+  end
+
+  def truncate(text)
+    return [text, false] if text.bytesize <= MAX_PAYLOAD_BYTES
+
+    # scrub can grow a torn multibyte character into a 3-byte U+FFFD, which
+    # would land above the cap again; drop whole characters until it holds.
+    cut = text.byteslice(0, MAX_PAYLOAD_BYTES).to_s.scrub
+    cut = cut[0...-1] while cut.bytesize > MAX_PAYLOAD_BYTES
+    [cut, true]
+  end
+end

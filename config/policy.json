@@ -1,0 +1,5 @@
+{
+  "_comment": "Default policy is default-deny. Per-tool rules live in tools/<name>/capabilities.json (loaded by ToolRegistry). This file is reserved for system-wide / ad-hoc overrides. NOTE: with the builtin baseline grants and this empty policy, the Guard is allow-all for write_file/read_file/run_command — narrow them here (e.g. {\"exec\": [\"ls,git*\"]}) to make the capability guard enforce.",
+  "default_allow": false,
+  "tools": {}
+}

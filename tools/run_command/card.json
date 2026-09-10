@@ -1,0 +1,1 @@
+{"name": "run_command", "description": "Run a guarded shell command in the workspace.", "version": "1.0.0", "capabilities": ["exec"]}

@@ -1,0 +1,101 @@
+<% content_for :title, "Fleet — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Fleet</h1>
+  <span class="sub">everything observed on <code>runes/#</code></span>
+  <%= link_to "All agents →", agents_path, class: "sub" %>
+</div>
+
+<div class="stats">
+  <div class="stat stat--online">
+    <div class="stat__value"><%= @stats[:online] %></div>
+    <div class="stat__label">running agents</div>
+  </div>
+  <div class="stat stat--ended">
+    <div class="stat__value"><%= @stats[:ended] %></div>
+    <div class="stat__label">ended agents</div>
+  </div>
+  <div class="stat stat--flow">
+    <div class="stat__value"><%= @stats[:last_5m] %></div>
+    <div class="stat__label">packets / 5 min</div>
+  </div>
+  <div class="stat">
+    <div class="stat__value"><%= @stats[:total_packets] %></div>
+    <div class="stat__label">packets observed</div>
+  </div>
+</div>
+
+<% if @stats[:total_packets].zero? %>
+  <div class="panel">
+    <div class="empty">
+      <h2>Nothing observed yet</h2>
+      <p>Start the ingest process so the observatory can watch the fabric:</p>
+      <p><code>bin/runes-ingest</code> &nbsp;·&nbsp; or generate a demo session with <code>bin/rails runes:demo</code></p>
+      <p class="faint small">Publishing to <code>runes/#</code> on <%= @status.host %>:<%= @status.port %></p>
+    </div>
+  </div>
+<% else %>
+  <div class="grid grid--dash">
+    <div class="grid">
+      <section class="panel">
+        <div class="panel__head">
+          <span class="panel__title">Running</span>
+          <span class="panel__count"><%= @stats[:online] %></span>
+        </div>
+        <%= render "agents/fleet", agents: @online, empty: "No agent is currently online." %>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head">
+          <span class="panel__title">Ended</span>
+          <span class="panel__count"><%= @stats[:ended] %></span>
+        </div>
+        <%= render "agents/fleet", agents: @ended, empty: "No agent has gone offline yet." %>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head">
+          <span class="panel__title">Ingest</span>
+          <span class="panel__count"><%= @status.display_state %></span>
+        </div>
+        <div class="panel__body">
+          <dl class="kv">
+            <dt>broker</dt><dd><%= @status.host %>:<%= @status.port %></dd>
+            <dt>connected</dt><dd><%= @status.connected? ? "yes" : "no" %></dd>
+            <dt>last packet</dt><dd><%= @status.last_message_at.present? ? "#{ago_in_words_short(@status.last_message_at)} ago" : "—" %></dd>
+            <dt>packets this run</dt><dd><%= @status.packets_total %></dd>
+            <% if @status.packets_dropped.to_i.positive? %>
+              <dt>dropped</dt><dd><%= @status.packets_dropped %> (unstoreable)</dd>
+            <% end %>
+            <% if @status.last_error.present? %><dt>last error</dt><dd><%= @status.last_error %></dd><% end %>
+          </dl>
+          <% if @top_kinds.any? %>
+            <div style="margin-top:10px">
+              <% @top_kinds.each do |kind, count| %>
+                <%= kind_badge(kind) %> <span class="faint small"><%= count %></span>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel"
+             data-controller="feed"
+             data-feed-url-value="<%= feed_path %>"
+             data-feed-interval-value="2000">
+      <div class="panel__head">
+        <span class="panel__title">Live packets</span>
+        <span class="panel__count">
+          <span data-feed-target="count"><%= @stats[:total_packets] %></span> packets · newest first
+        </span>
+      </div>
+      <div class="feed" data-feed-target="list" data-last-id="<%= @last_id %>">
+        <%= render partial: "packets/packet", collection: @recent, as: :packet, locals: { show_agent: true } %>
+      </div>
+      <div class="panel__body">
+        <%= link_to "Open the packet log →", packets_path, class: "small" %>
+      </div>
+    </section>
+  </div>
+<% end %>

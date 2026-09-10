@@ -1,0 +1,37 @@
+<% show_agent = local_assigns.fetch(:show_agent, false) %>
+<% show_links = local_assigns.fetch(:show_links, true) %>
+<details class="packet" id="packet-<%= packet.id %>">
+  <summary>
+    <span class="packet__time"><%= clock_time(packet.occurred_at) %></span>
+    <%= kind_badge(packet.kind) %>
+    <span>
+      <% if show_agent && packet.agent_id.present? %>
+        <span class="packet__agent"><%= short_id(packet.agent_id, 26) %></span>
+      <% end %>
+      <span class="packet__headline"><%= packet.headline %></span>
+    </span>
+    <span class="packet__size"><%= packet.size_label %></span>
+  </summary>
+
+  <div class="packet__body">
+    <div class="packet__topic">
+      <span class="label">topic</span>
+      <code><%= packet.topic %></code>
+      <% if show_links %>
+        <% if packet.agent_id.present? %>
+          <%= link_to "agent #{short_id(packet.agent_id, 24)}", agent_path(packet.agent_id) %>
+        <% end %>
+        <% if packet.request_id.present? %>
+          <%= link_to "request #{short_id(packet.request_id, 16)}", interaction_path(packet.request_id) %>
+        <% end %>
+        <%= link_to "full payload →", packet_path(packet), class: "small" %>
+      <% end %>
+      <span class="faint small">
+        <%= byte_size_label(packet.payload_bytes) %> payload<%= " · truncated for storage" if packet.truncated %>
+        <%- if packet.summary_truncated? %> · showing first <%= number_to_human_size(Packet::SUMMARY_BYTES) %><%- end %>
+        · received <%= ago_in_words_short(packet.received_at) %> ago
+      </span>
+    </div>
+    <pre class="payload__body<%= " payload__body--raw" if packet.parsed.nil? %>"><%= json_pretty(packet.summary_payload) %></pre>
+  </div>
+</details>

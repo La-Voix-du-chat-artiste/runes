@@ -1,0 +1,69 @@
+<% content_for :title, "Packets — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Packets</h1>
+  <span class="sub"><%= @total %> matching · newest first</span>
+</div>
+
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel__body">
+    <%= form_with url: packets_path, method: :get, class: "filters" do |form| %>
+      <div class="field">
+        <%= form.label :agent_id, "Agent" %>
+        <%= form.text_field :agent_id, value: @filters[:agent_id], list: "agent-ids", placeholder: "agent id" %>
+        <datalist id="agent-ids">
+          <% @agents.each do |agent_id| %><option value="<%= agent_id %>"></option><% end %>
+        </datalist>
+      </div>
+      <div class="field">
+        <%= form.label :kind, "Kind" %>
+        <%= form.select :kind, options_for_select([["any", ""]] + @kinds.map { |kind| [kind, kind] }, @filters[:kind]) %>
+      </div>
+      <div class="field">
+        <%= form.label :request_id, "Request" %>
+        <%= form.text_field :request_id, value: @filters[:request_id] %>
+      </div>
+      <div class="field">
+        <%= form.label :topic, "Topic contains" %>
+        <%= form.text_field :topic, value: @filters[:topic], placeholder: "runes/tools" %>
+      </div>
+      <div class="field">
+        <%= form.label :q, "Payload contains" %>
+        <%= form.text_field :q, value: @filters[:q] %>
+      </div>
+      <div class="field">
+        <%= form.label :since, "Since (minutes)" %>
+        <%= form.number_field :since, value: @filters[:since], min: 0, style: "min-width:100px" %>
+      </div>
+      <%= form.submit "Filter", class: "btn" %>
+      <%= link_to "Clear", packets_path, class: "btn btn--ghost" %>
+    <% end %>
+  </div>
+</div>
+
+<section class="panel"
+         data-controller="feed"
+         data-feed-url-value="<%= feed_path(@feed_params) %>"
+         data-feed-interval-value="2500">
+  <div class="panel__head">
+    <span class="panel__title">Packet log</span>
+    <span class="panel__count">
+      showing <%= @packets.size %> of <%= @total %> · live tail
+    </span>
+  </div>
+
+  <% if @packets.empty? %>
+    <div class="panel__empty">No packet matches these filters.</div>
+  <% else %>
+    <div class="feed feed--tall" data-feed-target="list" data-last-id="<%= @last_id %>">
+      <%= render partial: "packets/packet", collection: @packets, as: :packet,
+                 locals: { show_agent: @filters[:agent_id].blank? } %>
+    </div>
+    <div class="panel__body">
+      <% if @packets.last %>
+        <%= link_to "Older →", packets_path(@filters.compact.merge(before_id: @packets.last.id)), class: "btn btn--ghost" %>
+      <% end %>
+      <%= link_to "Newest first", packets_path(@filters.compact), class: "btn btn--ghost" %>
+    </div>
+  <% end %>
+</section>

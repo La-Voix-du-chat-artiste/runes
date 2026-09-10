@@ -1,0 +1,87 @@
+# One build request (req-1) executed by runes-alpha, in the shape the
+# observer stores it AFTER the trailing journal entry backfilled attribution,
+# plus a delegated task reply for runes-beta. The claim/started/session
+# fixtures were deleted with the protocol (X5-1).
+prompt_packet:
+  topic: runes/prompts
+  payload: '{"request_id":"req-1","prompt":"write a greeting file","mode":"build"}'
+  payload_bytes: 62
+  truncated: false
+  scrubbed: false
+  agent_id: runes-alpha
+  request_id: req-1
+  kind: prompt
+  event:
+  tool:
+  occurred_at: <%= 6.minutes.ago %>
+  received_at: <%= 6.minutes.ago %>
+
+progress_packet:
+  topic: runes/prompts/req-1/progress
+  payload: '{"event":"plan_ready","request_id":"req-1","steps":1}'
+  payload_bytes: 51
+  truncated: false
+  scrubbed: false
+  agent_id: runes-alpha
+  request_id: req-1
+  kind: progress
+  event: plan_ready
+  tool:
+  occurred_at: <%= 4.minutes.ago %>
+  received_at: <%= 4.minutes.ago %>
+
+response_packet:
+  topic: runes/prompts/req-1/response
+  payload: "Plan for: write a greeting file\n  1. write_file -> Wrote greet.rb (28B)"
+  payload_bytes: 70
+  truncated: false
+  scrubbed: false
+  agent_id: runes-alpha
+  request_id: req-1
+  kind: response
+  event:
+  tool:
+  occurred_at: <%= 3.minutes.ago %>
+  received_at: <%= 3.minutes.ago %>
+
+journal_packet:
+  topic: runes/_log/prompts
+  payload: '{"request_id":"req-1","agent":"runes-alpha","prompt":"write a greeting file","status":"complete","summary":"Plan for: write a greeting file"}'
+  payload_bytes: 145
+  truncated: false
+  scrubbed: false
+  agent_id: runes-alpha
+  request_id: req-1
+  kind: journal
+  event:
+  tool:
+  occurred_at: <%= 3.minutes.ago %>
+  received_at: <%= 3.minutes.ago %>
+
+global_response_packet:
+  topic: runes/prompts/response
+  payload: "Plan for: write a greeting file"
+  payload_bytes: 31
+  truncated: false
+  scrubbed: false
+  agent_id:
+  request_id:
+  kind: response_global
+  event:
+  tool:
+  occurred_at: <%= 3.minutes.ago %>
+  received_at: <%= 3.minutes.ago %>
+
+task_reply_packet:
+  topic: runes/agents/runes-beta/tasks/req-2/response
+  payload: "done: req-2"
+  payload_bytes: 12
+  truncated: false
+  scrubbed: false
+  agent_id: runes-beta
+  request_id: req-2
+  kind: task_response
+  event:
+  tool:
+  occurred_at: <%= 2.minutes.ago %>
+  received_at: <%= 2.minutes.ago %>

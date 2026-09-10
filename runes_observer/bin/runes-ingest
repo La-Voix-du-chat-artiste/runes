@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+# Long-running MQTT ingest for the Runes observatory.
+#
+#   bin/runes-ingest                                  # 127.0.0.1:1883, runes/#
+#   RUNES_MQTT_HOST=10.0.0.5 RUNES_MQTT_PORT=1884 bin/runes-ingest
+#
+# Writes every observed PUBLISH through PacketRecorder and publishes its
+# own health into the ingest_statuses table so the web UI can show whether
+# the fabric is being watched. Stop with Ctrl+C / SIGTERM.
+require_relative "../config/environment"
+
+ingest = MqttIngest.new
+%w[INT TERM].each { |sig| Signal.trap(sig) { ingest.stop } }
+ingest.run

@@ -1,0 +1,387 @@
+#!/usr/bin/env ruby
+# MCP server binstub: serves the harness's tools over stdio.
+#
+#   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/runes-mcp
+#
+# Self-contained on purpose: it never connects to a broker, never opens the
+# SQLite preferences DB, and never boots the WASM runtime. That means it runs
+# in a bare checkout, and a crash in one tool call cannot take the daemon
+# down with it. Tool schemas are read from the harness's own manifest
+# registry (tools/*/card.json + capabilities.json) and the three builtins are
+# described inline so we do not drag in llm_client.rb's provider table.
+require 'json'
+require 'open3'
+require 'fileutils'
+require 'rbconfig'
+
+require_relative '../lib/runes/mcp/protocol'
+require_relative '../lib/runes/mcp/tool_provider'
+require_relative '../lib/runes/mcp/server'
+# Stdlib-only on purpose (the guard touches no gems and ToolRegistry only
+# needs json/digest). Deliberately NOT Settings/Dispatcher/LLMClient.
+require_relative '../lib/runes/capabilities/guard'
+require_relative '../lib/runes/core/tool_registry'
+# One shared command-policy checker with the dispatcher (S5-2/E5-11).
+require_relative '../lib/runes/security/command_policy'
+
+# stdout is the protocol channel: stderr is the only place diagnostics may
+# go, and it must not be block-buffered (a panicking server's last words
+# matter). Sync both so partial frames can never be misinterpreted.
+$stdout.sync = true
+$stderr.sync = true
+
+module Runes
+  module MCP
+    # The executable entry point.
+    class Binstub
+      # __FILE__ can be relative (invoked as ./bin/runes-mcp), so anchor on
+      # its expanded dirname (bin/) and step up one level: the binstub must
+      # work from any cwd.
+      ROOT = File.expand_path('..', File.dirname(File.expand_path(__FILE__)))
+      BUILTIN_NAMES = %w[write_file read_file run_command].freeze
+
+      DEFAULT_OUTPUT_CAP = 64 * 1024
+      DEFAULT_CMD_TIMEOUT_S = 10
+      DEFAULT_READ_CAP = 1024 * 1024
+      DEFAULT_WRITE_CAP = 1024 * 1024
+      # Manifest tools run as plain Ruby subprocesses here (no WASM pool):
+      # bounded, and argv-only so nothing the tool prints can wedge us.
+      DEFAULT_TOOL_TIMEOUT_S = 15
+
+      DANGEROUS_COMMAND_PATTERNS = Runes::Security::CommandPolicy::DANGEROUS_COMMAND_PATTERNS
+      SHELL_INJECTION_CHARS = Runes::Security::CommandPolicy::SHELL_METACHARACTERS
+      SECRET_KEY_RE = /(API[_-]?KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIALS?)/i
+
+      # Inline schemas for the three builtins. Duplicated (not imported from
+      # LLMClient) so this binstub loads with zero gem dependencies.
+      BUILTIN_TOOLS = [
+        {
+          'name' => 'write_file',
+          'description' => 'Write content to a workspace-relative file.',
+          'inputSchema' => {
+            'type' => 'object',
+            'properties' => {
+              'path' => { 'type' => 'string', 'description' => 'Workspace-relative file path.' },
+              'content' => { 'type' => 'string', 'description' => 'Content to write.' }
+            },
+            'required' => %w[path content]
+          }
+        },
+        {
+          'name' => 'read_file',
+          'description' => 'Read the contents of a workspace-relative file.',
+          'inputSchema' => {
+            'type' => 'object',
+            'properties' => { 'path' => { 'type' => 'string' } },
+            'required' => %w[path]
+          }
+        },
+        {
+          'name' => 'run_command',
+          'description' => 'Run a shell command in the workspace. Shell metacharacters and destructive verbs are blocked.',
+          'inputSchema' => {
+            'type' => 'object',
+            'properties' => { 'cmd' => { 'type' => 'string' } },
+            'required' => %w[cmd]
+          }
+        }
+      ].freeze
+
+      def initialize(root: ROOT, env: ENV.to_h)
+        @root = root
+        @env = env
+
+        # `warn` inside Guard/ToolRegistry is exactly what we want: it writes
+        # to stderr, leaving stdout clean for the protocol.
+        @guard = Runes::Capabilities::Guard.new(@env['RUNES_POLICY'] || policy_path)
+        @registry = Runes::Core::ToolRegistry.new(tools_dir: File.join(@root, 'tools'))
+        @guard.merge_fragment!(@registry.policy_fragment, additive_for_builtins: true)
+
+        @tools = BUILTIN_TOOLS + manifest_tools
+        @workspace = File.expand_path(@env['RUNES_WORKSPACE'] || File.join(@root, 'workspace'))
+        FileUtils.mkdir_p(@workspace)
+      end
+
+      def provider
+        @provider ||= ToolProvider.new(source: self)
+      end
+
+      def tool_descriptors
+        @tools
+      end
+
+      # The harness-facing call surface. ToolProvider normalizes whatever
+      # comes back; errors are returned as strings (MCP error results) rather
+      # than raised, matching execute_builtin in the dispatcher.
+      def call_tool(name, args)
+        args = {} unless args.is_a?(Hash)
+        case name.to_s
+        when 'write_file'  then write_file(args)
+        when 'read_file'   then read_file(args)
+        when 'run_command' then run_command(args)
+        else
+          return "Error: unknown tool #{name}" unless @registry.cards.key?(name.to_s)
+
+          manifest_tool(name.to_s, args)
+        end
+      end
+
+      def server
+        @server ||= Server.new(
+          provider: provider,
+          logger: ->(message) { $stderr.puts message }
+        )
+      end
+
+      private
+
+      # ---------- provider: registration ----------
+
+      # A manifest that shadows a builtin name is skipped: the builtin has the
+      # real (confinement-checked) implementation and the registry does not
+      # expose run.rb for it anyway.
+      def manifest_tools
+        @registry.cards.values.filter_map do |card|
+          name = card['name'].to_s
+          next if name.empty? || BUILTIN_NAMES.include?(name)
+          next unless File.file?(File.join(@root, 'tools', name, 'run.rb'))
+
+          {
+            'name' => name,
+            'description' => card['description'].to_s,
+            'inputSchema' => card['parameters'].is_a?(Hash) ? card['parameters'] : { 'type' => 'object', 'properties' => {} }
+          }
+        end
+      end
+
+      # ---------- provider: builtins (mirrors Dispatcher#execute_builtin) ----
+
+      def write_file(args)
+        return 'Error: invalid args (missing path)' if args['path'].nil? || args['path'].to_s.empty?
+
+        path = safe_path(args['path'])
+        return 'Error: invalid args' if path.nil?
+        return 'Error: missing content' unless args.key?('content')
+
+        content = args['content'].to_s
+        resource = relative_to_workspace(path)
+        return 'Error: capability denied (fs_write)' unless @guard.allowed?('write_file', :fs_write, resource)
+        return "Error: content exceeds write cap (#{write_cap}B)" if content.bytesize > write_cap
+
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, content)
+        "Wrote #{resource} (#{content.bytesize}B)"
+      rescue StandardError => e
+        "Error: #{e.class}: #{e.message}"
+      end
+
+      def read_file(args)
+        path = safe_path(args['path'])
+        return 'Error: invalid args' if path.nil?
+
+        resource = relative_to_workspace(path)
+        return 'Error: capability denied (fs_read)' unless @guard.allowed?('read_file', :fs_read, resource)
+        return 'Error: not found' unless File.file?(path)
+        return "Error: file exceeds read cap (#{read_cap}B)" if File.size(path) > read_cap
+
+        File.read(path)
+      rescue StandardError => e
+        "Error: #{e.class}: #{e.message}"
+      end
+
+      def run_command(args)
+        cmd = args['cmd'].to_s
+        return 'Error: invalid args' if cmd.empty?
+        return 'Error: capability denied (exec)' unless @guard.allowed?('run_command', :exec, cmd)
+
+        # S5-2/E5-11: one policy checker, shared with the dispatcher. This
+        # binstub used to duplicate the old token scan, so a fix in one
+        # place silently left the other bypassable.
+        verdict = Runes::Security::CommandPolicy.evaluate(
+          cmd,
+          allowlist: Runes::Security::CommandPolicy.parse_allowlist(@env['RUNES_CMD_ALLOWLIST']),
+          path_resolver: method(:safe_path)
+        )
+        return verdict.message if verdict
+
+        capture_command(cmd)
+      rescue StandardError => e
+        "Error: #{e.class}: #{e.message}"
+      end
+
+      # ---------- provider: manifest runtimes ----------
+
+      # tools/*/run.rb contract: read JSON args from stdin, print a result.
+      # The dispatcher runs these inside the WASM sandbox; here we run them as
+      # bounded Ruby subprocesses with the same stdin shape and a scrubbed
+      # environment, which keeps this binstub free of the WASM dependency.
+      def manifest_tool(name, args)
+        src = File.join(@root, 'tools', name, 'run.rb')
+        return "Error: no implementation for #{name}" unless File.file?(src)
+
+        # Declared capabilities are enforced here too (mirrors S-W3): a policy
+        # can deny `execute` for a registered manifest tool.
+        unless @guard.allowed?(name, :execute, name)
+          return "Error: capability denied (execute #{name})"
+        end
+
+        capture_command("#{RbConfig.ruby} #{shell_escape(src)}", input: JSON.generate(args))
+      rescue StandardError => e
+        "Error: #{e.class}: #{e.message}"
+      end
+
+      # ---------- helpers ----------
+
+      def policy_path
+        File.join(@root, 'config', 'policy.json')
+      end
+
+      def safe_path(raw)
+        return nil if raw.nil? || raw.to_s.empty?
+        # S5-7: File.expand_path raises ArgumentError on a NUL byte.
+        return nil if raw.to_s.include?("\0")
+        return nil if raw.to_s.start_with?('/')
+
+        root_lexical = File.expand_path(@workspace)
+        expanded = File.expand_path(raw.to_s, root_lexical)
+        return nil unless expanded.start_with?(root_lexical + File::SEPARATOR)
+
+        # Lexical containment is not enough: a symlink inside the workspace
+        # can point outside. Resolve the deepest existing ancestor and
+        # re-check against the workspace's own realpath.
+        root_real = File.realpath(root_lexical)
+        constrained = resolve_realpath_within(expanded, root_real)
+        return nil unless constrained&.start_with?(root_real + File::SEPARATOR) || constrained == root_real
+
+        expanded
+      end
+
+      def resolve_realpath_within(path, root)
+        candidate = path
+        remainder = ''
+        until File.exist?(candidate) || File.symlink?(candidate)
+          parent = File.dirname(candidate)
+          return nil if parent == candidate
+
+          remainder = File.join(File.basename(candidate), remainder)
+          candidate = parent
+        end
+        real = File.realpath(candidate)
+        remainder.empty? ? real : File.join(real, remainder)
+      rescue Errno::EACCES, Errno::ENOENT
+        nil
+      end
+
+      def relative_to_workspace(abs)
+        abs.sub(File.expand_path(@workspace) + File::SEPARATOR, '')
+      end
+
+      # Runs `command` confined to the workspace, capturing bounded output.
+      # Uses `sh -c` semantics only for the (already vetted) builtin command;
+      # manifest tools pass an argv-shaped string we build ourselves.
+      def capture_command(command, input: nil)
+        out = String.new(capacity: 4096)
+        truncated = false
+        collect = lambda do |io|
+          while (chunk = io.read(1024))
+            if out.bytesize + chunk.bytesize > output_cap
+              out << chunk.byteslice(0, [output_cap - out.bytesize, 0].max)
+              truncated = true
+              break
+            end
+            out << chunk
+          end
+        rescue IOError
+          nil
+        end
+
+        Open3.popen3(scrubbed_env, command, chdir: @workspace, pgroup: true, unsetenv_others: true) do |stdin, stdout, stderr, wait_thr|
+          if input
+            stdin.write(input)
+            stdin.close
+          else
+            stdin.close
+          end
+          kill_group = -> { Process.kill('KILL', -wait_thr.pid) rescue nil }
+          t_out = Thread.new { collect.call(stdout) }
+          t_err = Thread.new { collect.call(stderr) }
+          finished = nil
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + cmd_timeout
+          loop do
+            finished = wait_thr.join(0.1)
+            break if finished
+            if truncated
+              kill_group.call
+              finished = wait_thr.join(1)
+              break
+            end
+            next unless Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+            kill_group.call
+            wait_thr.join(1)
+            t_out.kill rescue nil
+            t_err.kill rescue nil
+            return "Error: command timed out after #{cmd_timeout}s"
+          end
+          t_out.join(1)
+          t_err.join(1)
+          t_out.kill rescue nil
+          t_err.kill rescue nil
+          status = finished&.value
+          return 'Error: command did not terminate cleanly' if status.nil?
+
+          parts = [status.success? ? 'exit=0' : "exit=#{status.exitstatus}"]
+          parts << (out.empty? ? '(no output)' : out)
+          parts << "(output truncated at #{output_cap}B)" if truncated
+          parts.join("\n")
+        end
+      rescue Errno::ENOENT => e
+        "Error: #{e.message}"
+      end
+
+      # Provider API keys must never be visible to a spawned tool: unsetenv_
+      # others makes this hash the EXACT child environment.
+      def scrubbed_env
+        @env.reject { |key, _| key.match?(SECRET_KEY_RE) }
+      end
+
+      def shell_escape(token)
+        "'#{token.to_s.gsub("'", %q('\''))}'"
+      end
+
+      def output_cap
+        Integer(@env['RUNES_CMD_OUTPUT_CAP'] || DEFAULT_OUTPUT_CAP)
+      rescue ArgumentError
+        DEFAULT_OUTPUT_CAP
+      end
+
+      def cmd_timeout
+        Float(@env['RUNES_CMD_TIMEOUT_S'] || (@env['RUNES_MCP_TOOL_TIMEOUT_S'] || DEFAULT_CMD_TIMEOUT_S))
+      rescue ArgumentError
+        DEFAULT_CMD_TIMEOUT_S
+      end
+
+      def write_cap
+        Integer(@env['RUNES_WRITE_CAP'] || DEFAULT_WRITE_CAP)
+      rescue ArgumentError
+        DEFAULT_WRITE_CAP
+      end
+
+      def read_cap
+        Integer(@env['RUNES_READ_CAP'] || DEFAULT_READ_CAP)
+      rescue ArgumentError
+        DEFAULT_READ_CAP
+      end
+    end
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  binstub = Runes::MCP::Binstub.new
+  %w[INT TERM].each do |signal|
+    trap(signal) { exit 0 }
+  rescue ArgumentError
+    nil
+  end
+  binstub.server.serve
+end

@@ -1,0 +1,9 @@
+<%# Ingest health: is anything actually watching the bus? %>
+<span class="pill pill--<%= status.display_state.tr(" ", "-") %>">
+  ingest: <%= status.display_state %>
+</span>
+<% if status.last_message_at.present? %>
+  <span class="faint small">last packet <%= ago_in_words_short(status.last_message_at) %> ago</span>
+<% elsif status.last_error.present? %>
+  <span class="faint small" title="<%= status.last_error %>">error</span>
+<% end %>

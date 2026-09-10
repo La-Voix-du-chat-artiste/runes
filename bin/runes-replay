@@ -1,0 +1,82 @@
+#!/usr/bin/env ruby
+# Print or replay the durable prompt journal (log/journal.jsonl).
+#
+#   ./bin/runes-replay              # show the last N entries (default 20)
+#   ./bin/runes-replay -n 50        # last 50 entries
+#   ./bin/runes-replay --replay     # re-publish prompts to runes/prompts
+require 'mqtt'
+require 'json'
+require 'optparse'
+require 'securerandom'
+
+PROJECT_ROOT = ENV['RUNES_ROOT'].to_s.strip.empty? ? File.expand_path('..', __dir__) : ENV['RUNES_ROOT']
+JOURNAL = File.join(PROJECT_ROOT, 'log', 'journal.jsonl')
+
+options = { last: 20, replay: false }
+OptionParser.new do |o|
+  o.on('-n', '--last N', Integer) { |v| options[:last] = v }
+  o.on('--replay', 'Re-publish prompts to runes/prompts') { options[:replay] = true }
+end.parse(ARGV)
+
+# -n -5 used to raise an unhandled ArgumentError on entries.last(-5) (T7).
+if options[:last].negative?
+  warn 'Error: -n/--last must be >= 0'
+  exit 1
+end
+
+unless File.file?(JOURNAL)
+  warn "No journal at #{JOURNAL} yet."
+  exit 1
+end
+
+# Read only the tail of the journal — File.readlines parsed the whole
+# file to show the last 20 (enhancement). 1 MB of tail is plenty for a
+# bounded -n; fall back to a full read if the entries do not fit.
+read_tail = lambda do |wanted|
+  size = File.size(JOURNAL)
+  window = [size, wanted * 4096, 1024 * 1024].max
+  slice = window >= size ? File.readlines(JOURNAL) : begin
+    File.open(JOURNAL) do |f|
+      f.seek(size - window)
+      f.read.split("\n", 2).last.split("\n")
+    end
+  end
+  entries = slice.filter_map { |line| JSON.parse(line) rescue nil }
+  entries.size >= wanted || window >= size ? entries : nil
+rescue StandardError
+  nil
+end
+
+entries = read_tail.call(options[:last])
+entries ||= File.readlines(JOURNAL).filter_map do |line|
+  JSON.parse(line)
+rescue JSON::ParserError
+  nil
+end
+entries = entries.last(options[:last])
+
+entries.each do |e|
+  puts "[#{e['at']}] #{e['agent']} req=#{e['request_id']} status=#{e['status']}"
+  puts "  prompt: #{e['prompt'].to_s.gsub(/\s+/, ' ')[0, 120]}"
+  puts "  summary: #{e['summary'].to_s.gsub(/\s+/, ' ')[0, 120]}" if e['summary']
+  puts "  error: #{e['error']}" if e['error']
+end
+
+if options[:replay]
+  prompts = entries.select { |e| e['status'] == 'complete' || e['status'] == 'plan_empty' }
+  warn "Replaying #{prompts.size} prompt(s)..."
+  MQTT::Client.connect(ENV.fetch('RUNES_MQTT_HOST', '127.0.0.1'),
+                       ENV.fetch('RUNES_MQTT_PORT', 1883).to_i) do |c|
+    prompts.each do |e|
+      # Fresh request id per replay (T6): reusing the original id is
+      # silently deduped within the execution TTL and, after it, makes
+      # replays indistinguishable from originals in the journal.
+      replay_id = SecureRandom.uuid[0, 12]
+      c.publish('runes/prompts', JSON.generate('request_id' => replay_id,
+                                               'prompt' => e['prompt'],
+                                               'replayed_from' => e['request_id']))
+      sleep 0.1
+    end
+  end
+  warn 'Replay published.'
+end

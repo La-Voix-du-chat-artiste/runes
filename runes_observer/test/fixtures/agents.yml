@@ -1,0 +1,28 @@
+# Two observed dispatchers: one still running, one that went offline (LWT).
+online_agent:
+  agent_id: runes-alpha
+  name: runes-alpha
+  kind: runes.dispatcher
+  version: "0.2.0"
+  workspace: /tmp/runes-alpha/workspace
+  tools: '["write_file","read_file","run_command"]'
+  state: online
+  card: '{"name":"runes-alpha","kind":"runes.dispatcher","version":"0.2.0","tools":["write_file","read_file","run_command"]}'
+  first_seen_at: <%= 10.minutes.ago %>
+  last_seen_at: <%= 5.seconds.ago %>
+  ended_at:
+  packet_count: 12
+
+offline_agent:
+  agent_id: runes-beta
+  name: runes-beta
+  kind: runes.dispatcher
+  version: "0.2.0"
+  workspace: /tmp/runes-beta/workspace
+  tools: '["write_file"]'
+  state: offline
+  card: '{"name":"runes-beta","kind":"runes.dispatcher","tools":["write_file"]}'
+  first_seen_at: <%= 30.minutes.ago %>
+  last_seen_at: <%= 20.minutes.ago %>
+  ended_at: <%= 20.minutes.ago %>
+  packet_count: 4

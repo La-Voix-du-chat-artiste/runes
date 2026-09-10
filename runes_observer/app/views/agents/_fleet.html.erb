@@ -1,0 +1,25 @@
+<% if agents.empty? %>
+  <div class="panel__empty"><%= empty %></div>
+<% else %>
+  <ul class="fleet">
+    <% agents.each do |agent| %>
+      <li class="fleet__item">
+        <%= link_to agent_path(agent), class: "fleet__link" do %>
+          <%= state_pill(agent.display_state) %>
+          <span>
+            <span class="fleet__name"><%= agent.name.presence || agent.agent_id %></span>
+            <% tools = agent.tools_list %>
+            <% if tools.any? %>
+              <span class="fleet__tools">
+                · <%= tools.first(4).join(", ").truncate(60) %><%= " +#{tools.size - 4}" if tools.size > 4 %>
+              </span>
+            <% end %>
+          </span>
+          <span class="fleet__age" title="last packet <%= agent.last_seen_at %>">
+            <%= ago_in_words_short(agent.last_seen_at) %> ago
+          </span>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
+<% end %>

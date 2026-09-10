@@ -1,0 +1,148 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Run a Runes workflow file.
+#
+#   runes-workflow execute workflow.rb [targets...] [-- workflow_args]
+#   runes-workflow workflow.rb [targets...] [-- workflow_args]
+#   runes-workflow version
+#   runes-workflow help
+#
+# Everything before `--` is positional targets; after it, `key=value` tokens
+# become kwargs and bare tokens become symbol flags:
+#
+#   runes-workflow execute deploy.rb api -- --verbose env=staging
+#
+# `RUNES_WORKFLOW_DIR` (or `ROAST_WORKING_DIRECTORY`) overrides the working
+# directory. A workflow failure prints the error to stderr and exits non-zero.
+
+require_relative "../lib/runes/version"
+require_relative "../lib/runes/workflow"
+
+module RunesWorkflowCli
+  USAGE = <<~TEXT
+    Usage:
+      runes-workflow execute FILE [targets...] [-- workflow_args]
+      runes-workflow FILE [targets...] [-- workflow_args]
+      runes-workflow version
+      runes-workflow help
+
+    options:
+      -p, --print   print the workflow's final output (default)
+      -q, --quiet   print nothing on success; the exit code still reports it
+
+    workflow_args (after `--`):
+      key=value   passed to the workflow as kwargs[:key]
+      flag        passed to the workflow as args (symbol :flag)
+  TEXT
+
+  module_function
+
+  def main(argv)
+    case argv.first
+    when "version", "--version", "-v"
+      $stdout.puts("runes-workflow #{Runes::VERSION}")
+      0
+    when "help", "--help", "-h", nil
+      $stdout.puts(USAGE)
+      0
+    else
+      run_workflow(argv)
+    end
+  end
+
+  def run_workflow(argv)
+    args, print_output = extract_cli_options(argv.dup)
+    args.shift if args.first == "execute"
+    file = args.shift
+    unless file
+      $stderr.puts("runes-workflow: no workflow file given")
+      $stderr.puts(USAGE)
+      return 2
+    end
+
+    targets, flags, kwargs = parse_workflow_args(args)
+    params = Runes::WorkflowParams.new(targets, flags, kwargs)
+
+    change_directory
+    workflow = Runes::Workflow.from_file(file, params)
+    print_final_output(workflow.final_output) if print_output
+    0
+  rescue Runes::Error, Runes::ControlFlow::Base, StandardError => e
+    $stderr.puts("runes-workflow: #{e.class}: #{e.message}")
+    1
+  end
+
+  # CLI options live before `--`; after it, everything belongs to the
+  # workflow (`runes-workflow w.rb -- --quiet` passes the flag through).
+  def extract_cli_options(args)
+    split = args.index("--")
+    head = split ? args[0...split] : args
+    tail = split ? args[split..] : []
+    print_output = true
+    head = head.reject do |token|
+      case token
+      when "-q", "--quiet" then print_output = false
+                              true
+      when "-p", "--print" then print_output = true
+                              true
+      else false
+      end
+    end
+    [head + tail, print_output]
+  end
+
+  # The workflow's result: text runes print their text, everything else is
+  # inspected. Returning nil prints nothing (a workflow may end in a step
+  # whose whole point was its side effect).
+  # The workflow's result: text outputs print their text, other rune outputs
+  # are inspected, and a plain value (what an `outputs { ... }` block returns)
+  # is printed directly. Returning nil prints nothing (a workflow may end in a
+  # step whose whole point was its side effect).
+  def print_final_output(output)
+    return if output.nil?
+
+    value =
+      if output.is_a?(Runes::Cog::Output) && output.is_a?(Runes::Cog::Output::WithText)
+        text = output.raw_text
+        text.to_s.strip.empty? ? nil : text
+      elsif output.is_a?(Runes::Cog::Output) && output.respond_to?(:value)
+        output.value
+      else
+        output
+      end
+
+    return if value.nil?
+
+    $stdout.puts(value.is_a?(String) ? value : value.inspect)
+  end
+
+  # Splits at `--`: everything before is positional targets, everything after
+  # is workflow args (key=value -> kwargs, bare -> symbol flag).
+  def parse_workflow_args(args)
+    index = args.index("--")
+    targets = index ? args[0...index] : args
+    workflow_args = index ? args[(index + 1)..] || [] : []
+
+    flags = []
+    kwargs = {}
+    workflow_args.each do |token|
+      if token.include?("=")
+        key, value = token.split("=", 2)
+        kwargs[key.sub(/\A--?/, "").to_sym] = value
+      else
+        flags << token.sub(/\A--?/, "").to_sym
+      end
+    end
+    [targets, flags, kwargs]
+  end
+
+  def change_directory
+    directory = ENV["RUNES_WORKFLOW_DIR"] || ENV["ROAST_WORKING_DIRECTORY"]
+    return if directory.nil? || directory.empty?
+
+    Dir.chdir(directory)
+  end
+end
+
+exit(RunesWorkflowCli.main(ARGV)) if $PROGRAM_NAME == __FILE__

@@ -1,0 +1,152 @@
+#!/usr/bin/env ruby
+# Runes prompt client.
+#
+#   ./bin/runes-client "prompt"                 # broadcast (shared subscription: one agent executes)
+#   ./bin/runes-client --agents                 # list listening agents + their workspaces
+#   ./bin/runes-client --agent <id> "prompt"    # target ONE agent via its tasks topic
+#
+# Env: RUNES_MQTT_HOST, RUNES_MQTT_PORT, RUNES_TIMEOUT_S
+require 'mqtt'
+require 'json'
+require 'securerandom'
+require 'timeout'
+
+HOST = ENV.fetch('RUNES_MQTT_HOST', '127.0.0.1')
+PORT = ENV.fetch('RUNES_MQTT_PORT', 1883).to_i
+TIMEOUT_S = ENV.fetch('RUNES_TIMEOUT_S', 180).to_i
+
+# Topic fragments must never carry MQTT wildcards or separators (T8):
+# a `--agent` id containing +/# or / would produce wildcard/malformed
+# topics. Same charset as the dispatcher's request ids.
+AGENT_ID_RE = /\A[A-Za-z0-9_.-]{1,64}\z/.freeze
+
+# ---------- option parsing ----------
+
+mode = :broadcast
+target_agent = nil
+prompt_mode = nil
+args = []
+
+argv = ARGV.dup
+until argv.empty?
+  case argv.first
+  when '--agents'
+    mode = :list_agents
+    argv.shift
+  when '--agent'
+    argv.shift
+    mode = :target
+    target_agent = argv.shift
+    abort 'Error: --agent requires an agent id' unless target_agent
+    unless target_agent.match?(AGENT_ID_RE)
+      abort "Error: invalid agent id '#{target_agent[0, 40]}' (allowed: letters, digits, _ . -)"
+    end
+  when '--mode'
+    argv.shift
+    prompt_mode = argv.shift
+    abort 'Error: --mode requires goal or plan' unless %w[goal plan].include?(prompt_mode)
+  else
+    args << argv.shift
+  end
+end
+
+# ---------- --agents: list retained agent cards ----------
+
+if mode == :list_agents
+  cards = {}
+  MQTT::Client.connect(HOST, PORT) do |c|
+    c.subscribe('runes/agents/+/card', 'runes/agents/+/status')
+    begin
+      Timeout.timeout(2) do
+        c.get do |topic, msg|
+          if topic.end_with?('/card')
+            card = JSON.parse(msg) rescue {}
+            id = topic.split('/')[2]
+            cards[id] = { workspace: card['workspace'], tools: Array(card['tools']), status: '?' }
+          elsif topic.end_with?('/status')
+            id = topic.split('/')[2]
+            (cards[id] ||= { workspace: nil, tools: [] })[:status] = msg
+          end
+        end
+      end
+    rescue Timeout::Error
+      nil
+    end
+  end
+  if cards.empty?
+    puts 'No agents listening.'
+  else
+    puts format('%-40s %-8s %s', 'AGENT', 'STATUS', 'WORKSPACE')
+    cards.each do |id, info|
+      puts format('%-40s %-8s %s', id, info[:status], info[:workspace] || '?')
+    end
+  end
+  exit 0
+end
+
+prompt = args.join(' ')
+abort 'Usage: ./bin/runes-client [--agents | --agent <id>] "your prompt here"' if prompt.empty?
+request_id = SecureRandom.uuid[0, 12]
+reply_topic = "runes/prompts/#{request_id}/response"
+from_id = "client-#{Process.pid}"
+
+begin
+  MQTT::Client.connect(HOST, PORT) do |client|
+    case mode
+    when :target
+      # Targeted delegation: only the named agent executes. The reply
+      # comes back on our delegation reply topic.
+      reply_topic = "runes/agents/#{from_id}/tasks/#{request_id}/response"
+      client.subscribe("runes/agents/#{from_id}/tasks/+/response")
+      envelope = JSON.generate('prompt' => prompt, 'from' => from_id,
+                               'request_id' => request_id, 'at' => Time.now.utc.iso8601)
+      puts "Sending task to agent '#{target_agent}' (request=#{request_id}): #{prompt}"
+      client.publish("runes/agents/#{target_agent}/tasks", envelope)
+    else
+      # Broadcast: the broker's shared subscription hands the prompt to
+      # exactly one member of the group (the claim/lease protocol was
+      # deleted in Phase 16). Conversational modes (goal/plan) do not
+      # compete for a work slot.
+      client.subscribe(reply_topic)
+      # Show per-step progress while waiting (enhancement): a 180s plan is
+      # not a silent wait.
+      client.subscribe("runes/prompts/#{request_id}/progress")
+      envelope = JSON.generate('request_id' => request_id, 'prompt' => prompt)
+      envelope['mode'] = prompt_mode if prompt_mode
+      puts "Sending prompt (request=#{request_id}#{" mode=#{prompt_mode}" if prompt_mode}): #{prompt}"
+      client.publish('runes/prompts', envelope)
+    end
+
+    puts "Waiting for response on #{reply_topic} (timeout #{TIMEOUT_S}s)..."
+    Timeout.timeout(TIMEOUT_S) do
+      client.get do |topic, message|
+        if topic.end_with?('/progress')
+          # Compact progress lines: step events only, keep the reply clean.
+          evt = JSON.parse(message) rescue nil
+          next unless evt.is_a?(Hash) && evt['event']
+          case evt['event']
+          when 'step_start'
+            puts "  … step #{evt['step']}: #{evt['tool']}"
+          when 'plan_ready'
+            puts "  … plan ready (#{evt['steps']} steps)"
+          when 'prompt_received'
+            puts '  … agent claimed the prompt'
+          when 'prompt_complete'
+            puts '  … execution complete'
+          end
+          next
+        end
+        next unless topic == reply_topic
+        puts '---'
+        puts message
+        exit 0
+      end
+    end
+  end
+rescue Timeout::Error
+  warn "Error: no response within #{TIMEOUT_S}s"
+  exit 2
+rescue => e
+  warn "Error: #{e.class}: #{e.message}"
+  exit 1
+end

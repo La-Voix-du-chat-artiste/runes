@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title><%= content_for(:title) || "Runes Observatory" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Runes Observatory">
+    <meta name="mobile-web-app-capable" content="yes">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+
+    <%= yield :head %>
+
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+
+    <%# Includes all stylesheet files in app/assets/stylesheets %>
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body class="app">
+    <header class="topbar">
+      <%= link_to root_path, class: "brand" do %>
+        <span class="brand__mark">◈</span>
+        <span class="brand__text">RUNES<strong>OBSERVATORY</strong></span>
+      <% end %>
+
+      <nav class="nav">
+        <%= nav_link "Fleet", agents_path %>
+        <%= nav_link "Packets", packets_path %>
+      </nav>
+
+      <div class="topbar__status">
+        <%= render "shared/ingest_pill", status: ingest_status %>
+      </div>
+    </header>
+
+    <% if flash.any? %>
+      <div class="flash">
+        <% flash.each do |type, message| %>
+          <div class="flash__item flash__item--<%= type %>"><%= message %></div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <main class="main">
+      <%= yield %>
+    </main>
+
+    <footer class="footer">
+      <span>runes/# on <%= ingest_status.host %>:<%= ingest_status.port %></span>
+      <span><%= observed_packet_count %> packets · <%= observed_agent_count %> agents observed</span>
+    </footer>
+  </body>
+</html>

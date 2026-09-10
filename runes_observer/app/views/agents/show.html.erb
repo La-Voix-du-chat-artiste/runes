@@ -1,0 +1,102 @@
+<% content_for :title, "#{@agent.agent_id} — Runes Observatory" %>
+
+<div class="page-head">
+  <h1 class="mono"><%= @agent.agent_id %></h1>
+  <%= state_pill(@agent.display_state) %>
+  <span class="sub"><%= @stats[:packets] %> packets · <%= @stats[:requests] %> interactions</span>
+  <%= link_to "← Fleet", agents_path, class: "sub" %>
+</div>
+
+<div class="agent-head" style="margin-bottom:14px">
+  <section class="panel">
+    <div class="panel__head"><span class="panel__title">Identity</span></div>
+    <div class="panel__body">
+      <dl class="kv">
+        <dt>kind</dt><dd><%= @agent.kind.presence || "—" %></dd>
+        <dt>version</dt><dd><%= @agent.version.presence || "—" %></dd>
+        <dt>workspace</dt><dd><%= @agent.workspace.presence || "—" %></dd>
+        <dt>tools</dt><dd><%= @agent.tools_list.join(", ").presence || "—" %></dd>
+        <dt>first seen</dt><dd><%= @agent.first_seen_at&.strftime("%Y-%m-%d %H:%M:%S") || "—" %></dd>
+        <dt>last seen</dt><dd><%= @agent.last_seen_at&.strftime("%Y-%m-%d %H:%M:%S") || "—" %> (<%= ago_in_words_short(@agent.last_seen_at) %> ago)</dd>
+        <% if @agent.ended_at.present? %>
+          <dt>ended</dt><dd><%= @agent.ended_at.strftime("%Y-%m-%d %H:%M:%S") %> (LWT)</dd>
+        <% end %>
+        <dt>packets</dt><dd><%= @stats[:packets] %></dd>
+      </dl>
+      <% if @stats[:kinds].any? %>
+        <div style="margin-top:10px">
+          <% @stats[:kinds].each do |kind, count| %>
+            <%= kind_badge(kind) %> <span class="faint small"><%= count %></span>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head"><span class="panel__title">Agent card (retained)</span></div>
+    <div class="panel__body">
+      <% if @agent.card_hash.any? %>
+        <pre class="payload__body"><%= @agent.pretty_card %></pre>
+      <% else %>
+        <div class="faint">No card observed for this agent.</div>
+      <% end %>
+    </div>
+  </section>
+</div>
+
+<section class="panel" style="margin-bottom:14px">
+  <div class="panel__head">
+    <span class="panel__title">Interactions</span>
+    <span class="panel__count"><%= @stats[:requests] %></span>
+  </div>
+
+  <% if @interactions.empty? %>
+    <div class="panel__empty">This agent has not executed a request yet.</div>
+  <% else %>
+    <% @interactions.each do |interaction| %>
+      <% request_id = interaction[:request_id] %>
+      <details class="interaction">
+        <summary>
+          <span class="interaction__key">request:<%= request_id %></span>
+          <span class="interaction__title"><%= (interaction[:prompt] || "no prompt envelope").to_s.truncate(110) %></span>
+          <span class="interaction__meta">
+            <%= interaction[:count] %> packets<%= " · showing last #{interaction[:packets].size}" if interaction[:count] > interaction[:packets].size %>
+            · <%= ago_in_words_short(interaction[:packets].last&.occurred_at) %> ago
+          </span>
+        </summary>
+        <div class="interaction__body">
+          <div class="small" style="margin:4px 0 8px">
+            <%= link_to "Open full interaction →", interaction_path(request_id) %>
+          </div>
+          <%= render partial: "packets/packet", collection: interaction[:packets], as: :packet, locals: { show_agent: false } %>
+        </div>
+      </details>
+    <% end %>
+
+    <% if @total_pages > 1 %>
+      <div class="panel__body">
+        <% if @page > 1 %>
+          <%= link_to "← Newer", agent_path(@agent, page: @page - 1), class: "btn btn--ghost" %>
+        <% end %>
+        <span class="faint small">page <%= @page %> of <%= @total_pages %></span>
+        <% if @page < @total_pages %>
+          <%= link_to "Older →", agent_path(@agent, page: @page + 1), class: "btn btn--ghost" %>
+        <% end %>
+      </div>
+    <% end %>
+  <% end %>
+</section>
+
+<section class="panel"
+         data-controller="feed"
+         data-feed-url-value="<%= feed_path(agent_id: @agent.agent_id) %>"
+         data-feed-interval-value="2000">
+  <div class="panel__head">
+    <span class="panel__title">Packet history</span>
+    <span class="panel__count">newest first · live · last <%= @packets.size %></span>
+  </div>
+  <div class="feed feed--tall" data-feed-target="list" data-last-id="<%= @last_id %>">
+    <%= render partial: "packets/packet", collection: @packets, as: :packet, locals: { show_agent: false } %>
+  </div>
+</section>

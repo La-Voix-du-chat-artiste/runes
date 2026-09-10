@@ -1,0 +1,4 @@
+{
+  "mqtt_publish":   ["runes/tools/read_file/response"],
+  "mqtt_subscribe": ["runes/tools/read_file/request"]
+}

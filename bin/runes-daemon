@@ -1,0 +1,31 @@
+#!/usr/bin/env ruby
+require_relative '../lib/runes/core/dispatcher'
+require_relative '../lib/runes/core/settings'
+
+# Ensure logs are flushed immediately
+$stdout.sync = true
+
+# Resolve the project root so the daemon can be launched from anywhere.
+PROJECT_ROOT = File.expand_path('..', __dir__)
+Dir.chdir(PROJECT_ROOT)
+
+CONFIG = {
+  host: ENV.fetch('RUNES_MQTT_HOST', '127.0.0.1'),
+  port: ENV.fetch('RUNES_MQTT_PORT', 1883).to_i
+}.freeze
+
+puts "[Runes Daemon] Starting (broker=#{CONFIG[:host]}:#{CONFIG[:port]})..."
+dispatcher = Runes::Core::Dispatcher.new(CONFIG)
+
+begin
+  dispatcher.start
+rescue Interrupt
+  puts "\n[Runes Daemon] Shutting down..."
+rescue Exception => e # rubocop:disable Lint/RescueException -- supervisors need the backtrace
+  # Non-Interrupt crashes must reach the supervisor's log with a
+  # backtrace and a non-zero exit (enhancement) — otherwise launchd/
+  # systemd restart loops are undiagnosable.
+  warn "[Runes Daemon] FATAL #{e.class}: #{e.message}"
+  warn e.backtrace.join("\n") if e.backtrace
+  exit 1
+end

@@ -1,0 +1,52 @@
+<% content_for :title, "#{@id} — Runes Observatory" %>
+
+<div class="page-head">
+  <h1 class="mono"><%= @id %></h1>
+  <span class="sub">
+    request ·
+    <%= @packets.size %> packets ·
+    <%= @agents.size %> agent(s)
+  </span>
+  <%= link_to "← Packet log", packets_path(request_id: @id), class: "sub" %>
+</div>
+
+<% if @prompt.present? %>
+  <div class="panel" style="margin-bottom:14px">
+    <div class="panel__head"><span class="panel__title">Prompt</span></div>
+    <div class="panel__body">
+      <pre class="payload__body"><%= @prompt %></pre>
+    </div>
+  </div>
+<% end %>
+
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel__head">
+    <span class="panel__title">Participants</span>
+    <span class="panel__count"><%= @agents.size %></span>
+  </div>
+  <div class="panel__body">
+    <% if @agents.empty? %>
+      <span class="faint">No agent was attributed to this interaction.</span>
+    <% else %>
+      <% @agents.each do |agent_id| %>
+        <%= link_to agent_id, agent_path(agent_id), class: "mono small" %>
+      <% end %>
+    <% end %>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">Timeline</span>
+    <span class="panel__count">oldest first</span>
+  </div>
+
+  <% if @packets.empty? %>
+    <div class="panel__empty">
+      No packet carries this id.
+      <%= link_to "See all packets", packets_path %> to find the interaction you are after.
+    </div>
+  <% else %>
+    <%= render partial: "packets/packet", collection: @packets, as: :packet, locals: { show_agent: true } %>
+  <% end %>
+</section>

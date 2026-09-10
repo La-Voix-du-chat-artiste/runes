@@ -1,0 +1,1 @@
+{"name": "write_file", "description": "Write content to a workspace-relative file.", "version": "1.0.0", "capabilities": ["fs_write"]}

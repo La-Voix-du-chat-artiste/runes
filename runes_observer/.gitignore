@@ -1,0 +1,18 @@
+# Rails app-local ignores. The parent repo's .gitignore covers the runes
+# harness; these keep the observatory's runtime state out of git too.
+
+/.bundle
+/log/*
+!/log/.keep
+/tmp/*
+!/tmp/.keep
+/storage/*
+!/storage/.keep
+/public/assets
+
+# Secrets
+/config/master.key
+/config/credentials/*.key
+
+# A workspace-local bundle, if one is used
+/vendor/bundle

@@ -1,0 +1,31 @@
+<% content_for :title, "Packet #{@packet.id} — Runes Observatory" %>
+
+<div class="page-head">
+  <h1 class="mono">packet <%= @packet.id %></h1>
+  <%= kind_badge(@packet.kind) %>
+  <span class="sub"><%= byte_size_label(@packet.payload_bytes) %> payload<%= " · truncated for storage" if @packet.truncated %><%= " · repaired from non-UTF-8 bytes" if @packet.scrubbed %></span>
+  <%= link_to "← Packet log", packets_path, class: "sub" %>
+</div>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">Payload</span>
+    <span class="panel__count">full body</span>
+  </div>
+  <div class="panel__body">
+    <dl class="kv">
+      <dt>topic</dt><dd><code><%= @packet.topic %></code></dd>
+      <dt>occurred</dt><dd><%= @packet.occurred_at&.strftime("%Y-%m-%d %H:%M:%S") %></dd>
+      <dt>received</dt><dd><%= @packet.received_at&.strftime("%Y-%m-%d %H:%M:%S") %></dd>
+      <% if @packet.agent_id.present? %>
+        <dt>agent</dt><dd><%= link_to @packet.agent_id, agent_path(@packet.agent_id), class: "mono" %></dd>
+      <% end %>
+      <% if @packet.request_id.present? %>
+        <dt>request</dt><dd><%= link_to @packet.request_id, interaction_path(@packet.request_id), class: "mono" %></dd>
+      <% end %>
+      <% if @packet.event.present? %><dt>event</dt><dd><%= @packet.event %></dd><% end %>
+      <% if @packet.tool.present? %><dt>tool</dt><dd><%= @packet.tool %></dd><% end %>
+    </dl>
+    <pre class="payload__body<%= " payload__body--raw" if @packet.parsed.nil? %>"><%= json_pretty(@packet.payload) %></pre>
+  </div>
+</section>

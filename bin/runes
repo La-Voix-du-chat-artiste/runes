@@ -1,0 +1,983 @@
+#!/usr/bin/env ruby
+# Reactive TUI: no polling. Subscribes to the fabric and redraws only
+# when events arrive. Slash commands are handled locally and NEVER
+# published as prompt text:
+#   /goal <text>   open a goal session (rubber-duck PM conversation)
+#   /done          close the goal session -> epic in docs/epics/
+#   /plan [text]   epic/brief -> mission in docs/missions/
+#   /build         back to build mode (default)
+#   /agents /help
+#
+# Input is raw-mode line editing with a VISIBLE buffer and cursor
+# (the draw thread renders @input; keystrokes only mutate it, so fast
+# event redraws can never erase what you type):
+#   Enter          send
+#   Ctrl+J         insert a newline (write multi-line prompts)
+#   Alt+Enter      insert a newline (same thing, both hands)
+#   Ctrl+J == Ctrl+Enter on most terminals; plain Shift+Enter is
+#   indistinguishable from Enter at the terminal level.
+#   Arrows/Home/End move the cursor, Backspace/Delete edit,
+#   Ctrl+A/Ctrl+E = Home/End, Ctrl+K kills to end of line,
+#   Ctrl+U clears the line, Ctrl+W kills the previous word,
+#   Up/Down walk the prompt history, Ctrl+C/Ctrl+D quit.
+require 'mqtt'
+require 'json'
+require 'securerandom'
+require 'io/console'
+require_relative '../lib/runes/core/settings'
+
+class RunesTUI
+  # Key sequences (raw bytes) -> actions. Unmapped escape sequences are
+  # ignored; printable characters and bracketed-paste text are inserted.
+  KEYMAP = {
+    "\r" => :enter, "\n" => :newline, "\e\r" => :newline, "\e\n" => :newline,
+    "\x7f" => :backspace, "\x08" => :backspace, "\e[3~" => :delete,
+    "\e[D" => :left, "\eOD" => :left, "\e[C" => :right, "\eOC" => :right,
+    "\e[H" => :home, "\e[1~" => :home, "\eOH" => :home,
+    "\e[F" => :end, "\e[4~" => :end, "\eOF" => :end,
+    "\e[A" => :up, "\eOA" => :up, "\e[B" => :down, "\eOB" => :down,
+    "\x01" => :home, "\x05" => :end,
+    "\x0b" => :kill_to_end, "\x15" => :clear_line, "\x17" => :kill_word,
+    "\x03" => :ctrl_c, "\x04" => :ctrl_d
+  }.freeze
+
+  PASTE_START = "\e[200~"
+  PASTE_END   = "\e[201~"
+  INPUT_ROW_CAP = 8
+
+  # Truncation/bounding policy — kept in one place so it is auditable
+  # (this matters for S-T1: anything rendered must pass through the
+  # control-character scrub first).
+  LIMITS = {
+    status_bytes: 40,      # agent status payload
+    tools_chars: 30,       # registry panel tools column
+    traffic_chars: 110,    # traffic line snippet
+    response_chars: 120,   # global response snippet
+    agents: 50,            # registry panel entries
+    history: 500,          # prompt history entries
+    paste_bytes: 64_000,   # bracketed paste safety cap
+    paste_drain_bytes: 512 * 1024, # hard bound on the post-cap drain (T4-7)
+    topic_id_chars: 48,    # topic-derived id stored/rendered
+    label_chars: 80,       # short event label rendered in traffic
+    reader_retry_s: 3.0,   # reconnect backoff ceiling
+    pub_connect_s: 3       # publisher connect timeout (keystroke thread)
+  }.freeze
+
+  # Control characters must never reach the terminal (S-T1): broker
+  # payloads are untrusted (no broker auth), and ANSI/OSC sequences can
+  # rewrite the screen, spoof panel lines or touch the clipboard.
+  #
+  # TAB (\x09) and LF (\x0a) are included on purpose: they are not
+  # "harmless whitespace" once untrusted text is copied into a single
+  # traffic row — a payload carrying a newline used to paint a forged
+  # extra panel row (T4-5). Interactive multi-line *input* is not routed
+  # through this scrub; see scrub_input/1, which keeps LF/TAB so the
+  # editor and /goal prompts still work.
+  CONTROL_CHARS = /[\x00-\x1f\x7f]/.freeze
+
+  # Input-keystroke scrub: everything a terminal can interpret is
+  # dropped, but the editor's own newlines (Ctrl+J / Alt+Enter) and TAB
+  # survive so multi-line prompts remain typable (T4-6).
+  INPUT_CONTROL_CHARS = /[\x00-\x08\x0b-\x1f\x7f]/.freeze
+
+  # S-T1 boundary scrub. The payload arrives as raw bytes from the broker
+  # (no broker auth, no encoding guarantee), so it is first normalised to
+  # UTF-8 — matching a UTF-8 regexp against a BINARY string raises
+  # Encoding::CompatibilityError, which is just another way for a hostile
+  # publisher to kill the reader thread. Invalid bytes are scrubbed.
+  def self.sanitize(text)
+    # LF/TAB become a separator (so a multi-line payload keeps its word
+    # boundaries), remaining control bytes — including the ESC/BEL that
+    # frame an ANSI/OSC sequence — are DELETED, and whitespace runs then
+    # collapse to a single space so nothing can paint a second row
+    # (T4-5). Leading/trailing whitespace is dropped.
+    text.to_s.dup.force_encoding('UTF-8').scrub
+        .tr("\t\n", '  ').gsub(CONTROL_CHARS, '').gsub(/\s+/, ' ').strip
+  end
+
+  # Same ceiling as sanitize/1 but keeps newline/TAB, so pasted, piped
+  # and typed text can carry the editor's line breaks without ever
+  # letting ESC/OSC/CR/backspace bytes into @input (T4-6).
+  def self.scrub_input(text)
+    text.to_s.dup.force_encoding('UTF-8').scrub
+        .gsub(INPUT_CONTROL_CHARS, '').gsub("\t", '  ')
+  end
+
+  # Terminal display width: East-Asian wide / fullwidth characters and
+  # emoji occupy two columns; everything else one, so a CJK run cannot
+  # silently overflow a panel or an input row (T4-9).
+  WIDE_CHAR = /\A[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}\p{Emoji_Presentation}\p{Regional_Indicator}]\z/.freeze
+
+  def self.display_cols(text)
+    text.to_s.each_char.sum { |ch| ch.match?(WIDE_CHAR) ? 2 : 1 }
+  end
+
+  def initialize(host:, port:, root: Runes::Core::Settings.default_root)
+    @host = host
+    @port = port
+    @root = root
+    @running = true
+    @lock = Mutex.new
+    @agents = {}    # agent_id => {status:, tools:}
+    @traffic = []   # last N event lines
+    @traffic_limit = 200
+    @dirty = true
+    # input editor state (raw mode)
+    @input = +''
+    @cursor = 0          # char offset into @input
+    @history = []
+    @hist_idx = nil
+    @hist_draft = nil
+    # mode state
+    @mode = :build
+    @session_id = nil
+    @pending_done_req = nil
+    @last_epic = newest_epic_on_disk
+    @last_mission = newest_mission_on_disk
+    # reply correlation: request_id => prompt snippet (enhancement)
+    @prompts_by_req = {}
+    # long-lived publisher connection (enhancement): connect/disconnect
+    # per prompt risks dropping the packet and adds latency.
+    @pub_client = nil
+    @pub_mutex = Mutex.new
+  end
+
+  def stop
+    @running = false
+  end
+
+  # Epics/missions persist on disk; pick up the newest so /plan and
+  # /build work across TUI restarts.
+  def newest_epic_on_disk
+    newest_file_in(File.join(@root, 'docs', 'epics'), '*.md')
+  end
+
+  def newest_mission_on_disk
+    newest_file_in(File.join(@root, 'docs', 'missions'), '*.json')
+  end
+
+  def newest_file_in(dir, pattern)
+    return nil unless Dir.exist?(dir)
+
+    Dir.glob(File.join(dir, pattern)).max_by { |f| File.mtime(f) }
+  rescue StandardError
+    nil
+  end
+
+  # Reader thread: consumes fabric events, marks the UI dirty. Broker
+  # hiccups reconnect with backoff instead of silently killing the TUI
+  # (T4) — a dead reader used to exit the whole app with "bye.".
+  def run_reader
+    delay = 0.5
+    while @running
+      client = nil
+      begin
+        client = MQTT::Client.connect(host: @host, port: @port, client_id: "runes-tui-#{Process.pid}")
+        client.subscribe(
+          'runes/agents/+/card' => 1,
+          'runes/agents/+/status' => 1,
+          'runes/prompts/response' => 1,
+          'runes/prompts/+/response' => 1,
+          'runes/prompts/+/progress' => 1
+        )
+        # T4-3: resetting the backoff right after connect meant a broker
+        # that accepted the socket but failed subscribe/consume was
+        # retried at 0.5s forever. Only a connection we actually consumed
+        # a message from counts as healthy, so post-connect failures keep
+        # their escalating delay and reach LIMITS[:reader_retry_s].
+        healthy = false
+        client.get do |topic, message|
+          break unless @running
+          handle_event(topic, message)
+          healthy = true
+        end
+        delay = 0.5 if healthy && @running
+        traffic_notice('connection closed — reconnecting…') if @running
+      rescue StandardError, Interrupt => e
+        break unless @running
+        traffic_notice("connection lost (#{e.class}) — reconnecting…")
+      ensure
+        client&.disconnect rescue nil
+      end
+      break unless @running
+      sleep delay
+      delay = [delay * 2, LIMITS[:reader_retry_s]].min
+    end
+  ensure
+    stop
+  end
+
+  def handle_event(topic, message)
+    # Untrusted boundary (S-T1): strip control characters from payloads
+    # AND topic-derived ids before anything is stored or rendered.
+    #
+    # T4-2: the topic is matched against regexps below, and matching a
+    # string holding invalid UTF-8 raises ArgumentError *before* any
+    # scrub could run, so scrub it first and use the scrubbed value
+    # throughout (case + Regexp.last_match).
+    topic = topic.to_s.dup.force_encoding('UTF-8').scrub
+    message = self.class.sanitize(message)
+    @lock.synchronize do
+      case topic
+      when %r{\Arunes/agents/([^/]+)/card\z}
+        agent_id = topic_id(Regexp.last_match(1))
+        # T4-1: valid JSON that is not an object ("[]", "null", "5")
+        # used to raise TypeError on card['tools'], which escaped
+        # handle_event, killed the reader's client.get and replayed the
+        # retained card on every reconnect. Coerce to a Hash.
+        card = parse_object(message)
+        entry = (@agents[agent_id] ||= { 'status' => 'online' })
+        entry['tools'] = self.class.sanitize(Array(card['tools']).join(', '))[0, 180]
+        @traffic << "[card] #{agent_id}: #{entry['tools']}"
+        cap_agents!
+      when %r{\Arunes/agents/([^/]+)/status\z}
+        agent_id = topic_id(Regexp.last_match(1))
+        (@agents[agent_id] ||= {})['status'] = message[0, LIMITS[:status_bytes]]
+        @traffic << traffic_line("[#{@agents[agent_id]['status']}] #{agent_id}")
+        cap_agents!
+      when 'runes/prompts/response'
+        @traffic << traffic_line("response: #{snippet_text(message, LIMITS[:response_chars])}")
+      when %r{\Arunes/prompts/([^/]+)/response\z}
+        req = topic_id(Regexp.last_match(1))
+        snippet = @prompts_by_req[req]
+        line = "reply[#{req}]: #{snippet_text(message, LIMITS[:traffic_chars])}"
+        line = "reply[#{req}] to \"#{snippet}\": #{snippet_text(message, LIMITS[:traffic_chars])}" if snippet
+        @traffic << traffic_line(line)
+      when %r{\Arunes/prompts/([^/]+)/progress\z}
+        req = topic_id(Regexp.last_match(1))
+        # T4-1: same shape-safety as the card branch — a non-object body
+        # must degrade to the "[event]" fallback, not raise.
+        parsed = (JSON.parse(message) rescue nil)
+        evt = parsed.is_a?(Hash) ? parsed : {}
+        evt['event'] ||= message.to_s[0, LIMITS[:label_chars]]
+        case evt['event']
+        when 'conversation'
+          @traffic << traffic_line("agent: #{snippet_text(evt['text'], LIMITS[:traffic_chars])}")
+        when 'epic_written'
+          @last_epic = self.class.sanitize(evt['path'])
+          # T4-5: every traffic row goes through traffic_line, so a
+          # newline in a payload cannot paint a forged row.
+          @traffic << traffic_line("epic written: #{evt['path']}")
+          # The /done lifecycle completes only when THIS request's epic
+          # lands — any agent's epic_written must not flip our mode (T1).
+          if @pending_done_req && req == @pending_done_req
+            @mode = :build
+            @session_id = nil
+            @pending_done_req = nil
+            @traffic << '» back to build mode'
+          end
+        when 'mission_written'
+          @last_mission = self.class.sanitize(evt['path']).sub(/\.md\z/, '.json')
+          @traffic << traffic_line("mission written: #{evt['path']} (#{evt['todos']} todos)")
+        when 'mission_started'
+          @traffic << traffic_line("mission started: #{evt['pending']}/#{evt['total']} todos pending")
+        when 'mission_step_start'
+          @traffic << traffic_line("todo #{evt['todo_id']}: #{self.class.sanitize(evt['title']).to_s[0, 80]}")
+        when 'mission_step_done'
+          @traffic << traffic_line("todo #{evt['todo_id']} PASSED")
+        when 'mission_step_failed'
+          @traffic << traffic_line("todo #{evt['todo_id']} FAILED: #{self.class.sanitize(evt['reason']).to_s[0, 70]}")
+        when 'mission_complete'
+          @traffic << traffic_line("mission complete: #{evt['path']}")
+        when 'mission_failed'
+          @traffic << traffic_line("mission stopped — #{evt['remaining']} todo(s) left; /build to resume")
+        when 'planner_error', 'epic_invalid', 'epic_write_failed'
+          @traffic << traffic_line("error: #{(evt['error'] || evt['event']).to_s[0, 100]}")
+          # A failed /done keeps the goal session open server-side —
+          # stay in goal mode so the user can retry /done.
+          if req == @pending_done_req
+            @pending_done_req = nil
+            @traffic << '» still in goal session — /done to retry'
+          end
+        else
+          @traffic << traffic_line("[#{evt['event']}] step=#{evt['step']} tool=#{evt['tool']} req=#{evt['request_id']}")
+        end
+      end
+      trim_traffic!
+      @dirty = true
+    end
+  end
+
+  # Parse an untrusted payload into a Hash (T4-1). JSON.parse happily
+  # returns Array/String/Integer/nil for valid-but-non-object bodies,
+  # and every caller below indexes the result — so non-Hash shapes are
+  # normalised away here instead of raising deeper in the pipeline.
+  def parse_object(text)
+    parsed = (JSON.parse(text) rescue nil)
+    parsed.is_a?(Hash) ? parsed : {}
+  end
+
+  # Bound + scrub an id mined out of the topic (S-T1/T4-4): hostile
+  # publishers can mint arbitrarily long ids and each one is copied into
+  # a traffic line and the registry key.
+  def topic_id(raw)
+    self.class.sanitize(raw).to_s[0, LIMITS[:topic_id_chars]]
+  end
+
+  # Single-line snippet: scrub (which already collapses whitespace and
+  # drops newlines — T4-5) and cut to a character budget.
+  def snippet_text(text, chars)
+    self.class.sanitize(text)[0, chars].to_s
+  end
+
+  # Build one complete traffic row (T4-5): the assembled line is scrubbed
+  # again because interpolated fields are only sanitized by their
+  # producer, so untrusted text can never introduce a line break (which
+  # the renderer would draw as a forged extra row).
+  def traffic_line(line)
+    self.class.sanitize(line)
+  end
+
+  # Single choke point for the traffic ring buffer (T4-4): every producer
+  # (events, notices, submitted prompts) trims through here while holding
+  # @lock — traffic_notice used to grow it without bound.
+  def trim_traffic!
+    @traffic.shift while @traffic.size > @traffic_limit
+  end
+
+  # S-T2: hostile publishers can mint unlimited agent ids — bound the
+  # registry panel's memory.
+  def cap_agents!
+    @agents.shift while @agents.size > LIMITS[:agents]
+  end
+
+  # ---------- input editing (raw terminal, visible echo) ----------
+
+  # Input thread. With a TTY: raw mode, key-by-key editing (the buffer
+  # lives in @input and is rendered by the draw thread, so keystrokes
+  # are never erased by event redraws). Without a TTY (pipes): plain
+  # line reads.
+  def run_input
+    if $stdin.tty?
+      $stdin.raw!
+      print "\e[?2004h" # enable bracketed paste (terminals ignore if unsupported)
+      run_input_raw
+    else
+      run_input_gets
+    end
+  rescue StandardError, Interrupt
+    nil
+  ensure
+    # T4-10: teardown must run even when the tty is already dead. The
+    # bracketed-paste OFF write used to sit outside a rescue, so a
+    # write error (EIO on a closed pty) aborted the ensure block and
+    # stop/1 — and therefore the whole app — never ran.
+    if $stdin.tty?
+      begin
+        print "\e[?2004l"
+      rescue StandardError
+        nil
+      end
+      begin
+        $stdin.cooked!
+      rescue StandardError
+        nil
+      end
+    end
+    stop
+  end
+
+  def run_input_raw
+    while @running
+      key = read_key
+      break if key.nil?
+      action = apply_key(key)
+      break if action == :quit
+      submit_buffer if action == :submit
+      break unless @running
+    end
+  end
+
+  def run_input_gets
+    while @running && (line = $stdin.gets)
+      # T4-6: piped input is untrusted too — scrub it before it is
+      # stored or rendered (ESC/OSC would otherwise reach the terminal).
+      clean = self.class.scrub_input(line.chomp)
+      @lock.synchronize do
+        @input = clean
+        @cursor = @input.length
+        @dirty = true
+      end
+      # Route through the same submit path as Enter so CR/LF handling
+      # cannot drift between the tty and pipe readers.
+      submit_buffer
+    end
+  end
+
+  # Read one key. Returns a KEYMAP Symbol, an :ignore marker, or the
+  # text to insert (one UTF-8 char or a whole bracketed paste).
+  def read_key
+    c = $stdin.getch
+    return nil if c.nil? || c.empty? # EOF
+
+    if c == "\e"
+      seq = +"\e"
+      # Gather the rest of the escape sequence (tiny select window;
+      # a lone ESC times out and is ignored).
+      while IO.select([$stdin], nil, nil, 0.02)
+        nc = $stdin.getch
+        break if nc.nil?
+        seq << nc
+        break if nc.match?(/[\x40-\x7e]/) && seq.length >= 3
+      end
+      return read_paste if seq == PASTE_START
+
+      return :ignore unless KEYMAP.key?(seq)
+
+      KEYMAP[seq]
+    elsif c.ord >= 0x80
+      # UTF-8 multibyte: getch yields one BYTE; gather continuation
+      # bytes so é, ●, etc. arrive as one character.
+      total = c.ord >= 0xF0 ? 4 : c.ord >= 0xE0 ? 3 : 2
+      (total - 1).times do
+        nc = $stdin.getch
+        break if nc.nil?
+        c << nc
+      end
+      c.force_encoding('UTF-8')
+    elsif KEYMAP.key?(c)
+      KEYMAP[c]
+    elsif c.ord < 0x20
+      :ignore # unhandled control byte (Ctrl+G, Ctrl+Q, …)
+    else
+      c
+    end
+  end
+
+  def read_paste
+    buf = +''
+    dropped = false
+    until buf.end_with?(PASTE_END)
+      nc = $stdin.getch
+      if nc.nil?
+        dropped = true # terminator never arrived (robust bracketed paste)
+        break
+      end
+      buf << nc
+      if buf.length > LIMITS[:paste_bytes]
+        dropped = true
+        break
+      end
+    end
+    if dropped
+      # T4-7: the paste was capped (or never terminated) mid-stream. The
+      # leftover bytes are still queued on the tty and would be re-read
+      # as keystrokes — including a stray CR that auto-submits. Drain
+      # until the terminator, bounded so a hostile endless stream cannot
+      # hang the UI.
+      drain_paste_tail
+    end
+    # Insert what was collected and say so rather than silently
+    # swallowing the paste.
+    traffic_notice('paste truncated (cap or missing terminator) — inserted what was received') if dropped
+    read_paste_text(buf)
+  end
+
+  # Consume the remainder of a bracketed paste that was cut short
+  # (T4-7): read up to LIMITS[:paste_drain_bytes] looking for PASTE_END,
+  # then return. The bytes are deliberately discarded — they were never
+  # part of the accepted paste.
+  def drain_paste_tail
+    drained = 0
+    tail = +''
+    while drained <= LIMITS[:paste_drain_bytes]
+      break unless IO.select([$stdin], nil, nil, 0.05)
+
+      nc = $stdin.getch
+      break if nc.nil?
+
+      drained += nc.bytesize
+      tail << nc
+      tail = tail[-8, 8] || tail if tail.length > 8
+      break if tail.end_with?(PASTE_END)
+    end
+    nil
+  end
+
+  # Bracketed-paste body -> editor text (T4-6). CR/CRLF become the
+  # editor's newline; everything else terminal-interpretable (ESC/OSC,
+  # other control bytes) is scrubbed so a malicious clipboard cannot
+  # drive the terminal. TAB is kept as spaces by the caller's insert.
+  def read_paste_text(body)
+    text = body.sub(/#{Regexp.escape(PASTE_END)}\z/, '')
+               .gsub("\r\n", "\n")
+               .gsub("\r", "\n")
+    self.class.scrub_input(text)
+  end
+
+  # Mutate the editor state for one key. Returns :submit, :quit or nil.
+  def apply_key(key)
+    res = nil
+    @lock.synchronize do
+      case key
+      when String
+        # T4-6: typed/pasted text passes the same input scrub as broker
+        # payloads — no ESC/OSC byte may ever reach @input (and thus the
+        # renderer). LF is preserved for multi-line prompts.
+        insert_text(key == "\t" ? '  ' : self.class.scrub_input(key))
+      when :enter
+        res = :submit
+      when :newline
+        insert_text("\n")
+      when :backspace
+        if @cursor.positive?
+          @input[@cursor - 1, 1] = ''
+          @cursor -= 1
+        end
+      when :delete
+        @input[@cursor, 1] = ''
+      when :left then @cursor = [@cursor - 1, 0].max
+      when :right then @cursor = [@cursor + 1, @input.length].min
+      when :home then @cursor = (@input[0, @cursor].rindex("\n") || -1) + 1
+      when :end then @cursor = @input.index("\n", @cursor) || @input.length
+      when :kill_to_end
+        idx = @input.index("\n", @cursor) || @input.length
+        @input[@cursor...idx] = ''
+      when :kill_word
+        seg_start = (@input[0, @cursor].rindex("\n") || -1) + 1
+        before = @input[seg_start...@cursor].to_s.sub(/\S+\s*\z/, '')
+        @input[seg_start...@cursor] = before
+        @cursor = seg_start + before.length
+      when :clear_line
+        @input = +''
+        @cursor = 0
+      when :up then history_prev
+      when :down then history_next
+      when :ctrl_c then res = :quit
+      when :ctrl_d
+        if @input.empty?
+          res = :quit
+        else
+          @input[@cursor, 1] = ''
+        end
+      end
+      @dirty = true
+    end
+    res
+  end
+
+  # Insert editor text at the cursor. Callers pass text that already went
+  # through scrub_input/1 (T4-6); scrub_input is idempotent, so the second
+  # pass here is just belt-and-braces for direct callers.
+  def insert_text(text)
+    text = self.class.scrub_input(text)
+    return if text.empty?
+
+    @input[@cursor, 0] = text
+    @cursor += text.length
+  end
+
+  # Enter pressed: hand the buffer to the command pipeline. Empty
+  # buffers just clear (no publish), matching the old gets behaviour.
+  def submit_buffer
+    line = nil
+    @lock.synchronize do
+      line = @input.rstrip
+      reset_buffer
+      if line.empty?
+        @dirty = true
+        return
+      end
+      @history << line
+      @history.shift while @history.size > LIMITS[:history]
+      @hist_idx = nil
+      @hist_draft = nil
+      @traffic << traffic_line("» you: #{line[0, 110]}")
+      trim_traffic!
+      @dirty = true
+    end
+    handle_line(line)
+  end
+
+  def reset_buffer
+    @input = +''
+    @cursor = 0
+  end
+
+  def history_prev
+    return if @history.empty? || @hist_idx == 0
+
+    @hist_idx = @hist_idx.nil? ? @history.size - 1 : @hist_idx - 1
+    @hist_draft = @input if @hist_idx == @history.size - 1
+    @input = @history[@hist_idx].dup
+    @cursor = @input.length
+  end
+
+  def history_next
+    return if @hist_idx.nil?
+
+    if @hist_idx < @history.size - 1
+      @hist_idx += 1
+      @input = @history[@hist_idx].dup
+    else
+      @hist_idx = nil
+      @input = @hist_draft.to_s
+    end
+    @cursor = @input.length
+  end
+
+  # ---------- command pipeline (unchanged contract) ----------
+
+  # Slash commands are TUI-local state changes; they never reach
+  # runes/prompts as prompt text. Kept side-effect-light so it is
+  # unit-testable.
+  def handle_line(line)
+    case line
+    when %r{\A/goal\b(.*)\z}m
+      text = Regexp.last_match(1).to_s.strip
+      old_sid = nil
+      @lock.synchronize do
+        old_sid = @session_id if @mode == :goal
+        @mode = :goal
+        @session_id = "s-#{SecureRandom.hex(3)}"
+      end
+      traffic_notice("abandoning previous goal session #{old_sid}") if old_sid
+      text = 'I would like to define a new goal — help me shape it.' if text.empty?
+      traffic_notice("goal session #{@session_id} opened — answer the agent's questions, /done to finish")
+      req = publish_envelope('mode' => 'goal', 'session_id' => @session_id, 'prompt' => text)
+      if req.nil?
+        # T3: roll back the optimistic mode change — the broker never
+        # saw the envelope.
+        @lock.synchronize do
+          @mode = :build
+          @session_id = old_sid
+        end
+        traffic_notice('goal session rolled back')
+      end
+    when %r{\A/done\z}
+      if @mode == :goal && @session_id
+        sid = @session_id
+        # T2: the pending id must be recorded BEFORE publishing — a fast
+        # finalize's epic_written could otherwise arrive while it is nil.
+        req = SecureRandom.uuid[0, 12]
+        @lock.synchronize { @pending_done_req = req }
+        published = publish_envelope('request_id' => req, 'mode' => 'goal',
+                                     'session_id' => sid, 'control' => 'done', 'prompt' => '')
+        if published.nil?
+          @lock.synchronize { @pending_done_req = nil }
+        else
+          traffic_notice('closing goal session — waiting for the epic…')
+        end
+        # Mode stays :goal until the epic_written (or error) event
+        # arrives, so a failed render never orphans the session.
+      else
+        traffic_notice('No goal session open (/goal first).')
+      end
+    when %r{\A/plan\b(.*)\z}m
+      text = Regexp.last_match(1).to_s.strip
+      if text.empty? && @last_epic
+        traffic_notice("planning from latest epic: #{@last_epic}")
+        publish_envelope('mode' => 'plan', 'prompt' => '', 'epic_path' => @last_epic)
+      elsif text.empty?
+        traffic_notice('No epic yet — goal mode opened. Describe your need, then /done and /plan again.')
+        @lock.synchronize do
+          @mode = :goal
+          @session_id = "s-#{SecureRandom.hex(3)}"
+        end
+      else
+        publish_envelope('mode' => 'plan', 'prompt' => text)
+      end
+    when %r{\A/build\b(.*)\z}m
+      arg = Regexp.last_match(1).to_s.strip
+      old_sid = nil
+      @lock.synchronize do
+        old_sid = @session_id if @mode == :goal
+        @mode = :build
+        @session_id = nil
+        @pending_done_req = nil
+      end
+      traffic_notice("abandoning goal session #{old_sid}") if old_sid
+
+      if arg.empty?
+        traffic_notice('Build mode — type a prompt. (/build <mission> runs a mission.)')
+      else
+        path = arg == 'latest' ? @last_mission : arg
+        if path.nil?
+          traffic_notice('No mission known yet — run /plan first, or give a path: /build docs/missions/<file>.md')
+        else
+          traffic_notice("running mission: #{path}")
+          publish_envelope('mode' => 'mission', 'mission_path' => path, 'prompt' => '')
+        end
+      end
+    when %r{\A/agents\z}
+      traffic_notice('Listening agents are listed in the Registry panel (left).')
+    when %r{\A/help\z}
+      traffic_notice('Commands: /goal <text> | /done | /plan [text] | /build [mission|latest] | /agents | /help')
+      traffic_notice('Keys: Enter send · Ctrl+J or Alt+Enter newline · ↑/↓ history · Ctrl+U clear · Ctrl+C quit')
+    when %r{\A/(\S+)}
+      traffic_notice("Unknown command /#{Regexp.last_match(1)} — /help")
+    else
+      if @mode == :goal && @session_id
+        publish_envelope('mode' => 'goal', 'session_id' => @session_id, 'prompt' => line)
+      else
+        publish_envelope('prompt' => line)
+      end
+    end
+  end
+
+  # Add a local notice to the traffic panel. T4-4: notices are a traffic
+  # producer like any other and must respect the same ring-buffer cap —
+  # previously only handle_event and submit_buffer trimmed, so a chatty
+  # error path could grow @traffic without bound.
+  def traffic_notice(msg)
+    @lock.synchronize do
+      @traffic << traffic_line("» #{msg}")
+      trim_traffic!
+      @dirty = true
+    end
+  end
+
+  # Publish an envelope hash to runes/prompts with a fresh request id,
+  # over a long-lived publisher connection (enhancement — connect per
+  # publish risks dropping the packet and adds latency).
+  #
+  # Returns the request id, or nil when the publish failed (T3): callers
+  # must not leave optimistic local mode state flipped when the broker
+  # never saw the message.
+  def publish_envelope(fields)
+    envelope = { 'request_id' => SecureRandom.uuid[0, 12] }.merge(fields.transform_keys(&:to_s))
+    @pub_mutex.synchronize do
+      @pub_client ||= connect_publisher
+      @pub_client.publish('runes/prompts', JSON.generate(envelope))
+    end
+    remember_prompt(envelope['request_id'], envelope['prompt'])
+    envelope['request_id']
+  rescue StandardError => e
+    traffic_notice("publish failed: #{e.class} — not sent")
+    # The publisher connection is suspect after a failure — reconnect
+    # lazily on the next publish.
+    @pub_mutex.synchronize do
+      @pub_client&.disconnect rescue nil
+      @pub_client = nil
+    end
+    nil
+  end
+
+  # T4-8: the publisher connect runs on the keystroke thread, so it must
+  # not inherit the mqtt gem's 30 s default. MQTT::Client uses
+  # connect_timeout both for the TCP connect (Ruby >= 3) and the CONNACK
+  # wait, so bounding it keeps Enter and Ctrl+C responsive against an
+  # unreachable broker. Full async publishing is deliberately avoided:
+  # callers need the real request id / delivery result for correlation.
+  def connect_publisher
+    MQTT::Client.connect(host: @host, port: @port,
+                         client_id: "runes-tui-in-#{Process.pid}",
+                         connect_timeout: LIMITS[:pub_connect_s],
+                         ack_timeout: LIMITS[:pub_connect_s])
+  end
+
+  # Correlate replies to the prompt that produced them (enhancement).
+  def remember_prompt(req, prompt)
+    return unless req && prompt
+
+    @lock.synchronize do
+      @prompts_by_req[req] = prompt.to_s.gsub(/\s+/, ' ')[0, 60]
+      @prompts_by_req.shift while @prompts_by_req.size > LIMITS[:history]
+    end
+  end
+
+  # ---------- rendering ----------
+
+  # Draw thread: redraws only when dirty (event-driven, no polling of
+  # fabric state — the sleep is just a redraw cadence). The input line
+  # is part of every frame, so typing is always visible.
+  def run
+    print "\e[2J\e[?25l"
+    last_draw = nil
+    while @running
+      if @dirty || (last_draw && Time.now - last_draw > 1)
+        snap = @lock.synchronize do
+          @dirty = false
+          [@agents.dup, @traffic.dup, @mode, @session_id, @input.dup, @cursor]
+        end
+        draw(*snap)
+        last_draw = Time.now
+      end
+      sleep 0.03
+    end
+  ensure
+    print "\e[?25h\e[0m"
+  end
+
+  def draw(agents, traffic, mode = :build, session_id = nil, input = '', cursor = 0)
+    print compose_frame(agents, traffic, mode, session_id, input, cursor)
+    $stdout.flush
+  end
+
+  # Pure frame builder (unit-testable): panels, chip line, multi-row
+  # input buffer with a reverse-video cursor glyph.
+  # Panel text is display-budgeted in TERMINAL COLUMNS, not characters:
+  # multibyte ids (CJK etc.) render 2+ columns per char and would push
+  # the tools column into the Traffic panel (T5).
+  def self.display_safe(text, max_cols)
+    ascii = text.to_s.gsub(/[^\x20-\x7e]/, '?')
+    ascii.length <= max_cols ? ascii : ascii[0, max_cols]
+  end
+
+  # Cut a string at a terminal-column budget without splitting a wide
+  # character in half (the half-glyph would still occupy a column).
+  # Keeps the characters verbatim — used for input rows, where turning
+  # CJK into '?' would make the line unreadable (T4-9).
+  def self.display_truncate(text, max_cols)
+    return '' if max_cols.to_i <= 0
+
+    out = +''
+    cols = 0
+    text.to_s.each_char do |ch|
+      w = ch.match?(WIDE_CHAR) ? 2 : 1
+      break if cols + w > max_cols
+
+      out << ch
+      cols += w
+    end
+    out
+  end
+
+  # Character index at which the prefix occupies `cols` display columns
+  # (the inverse of display_cols, for slicing input rows by column
+  # budget instead of by character count).
+  def self.index_for_cols(text, cols)
+    used = 0
+    text.to_s.each_char.with_index do |ch, i|
+      w = ch.match?(WIDE_CHAR) ? 2 : 1
+      return [i, cols].min if used + w > cols
+
+      used += w
+    end
+    text.to_s.length
+  end
+
+  def compose_frame(agents, traffic, mode = :build, session_id = nil, input = '', cursor = 0)
+    size = IO.console.winsize rescue [24, 80]
+    height, width = size
+    height = 24 if height.to_i < 10
+    width = 80 if width.to_i < 40
+    half = width / 2
+
+    # Split the buffer into visual rows; window them so the cursor row
+    # stays visible when the buffer exceeds INPUT_ROW_CAP rows.
+    segments = input.split("\n", -1)
+    seg = input[0, cursor].count("\n")
+    if segments.size > INPUT_ROW_CAP
+      first = [[seg - INPUT_ROW_CAP + 1, 0].max, segments.size - INPUT_ROW_CAP].min
+      first = 0 if first.negative?
+    else
+      first = 0
+    end
+    shown = segments[first, INPUT_ROW_CAP] || ['']
+    cur_row = seg - first
+    seg_offset = segments[0...seg].sum(&:length) + seg
+    cur_col = cursor - seg_offset
+
+    chip_row = height - shown.size
+    content_h = [chip_row - 2, 1].max
+
+    chip = mode == :goal ? "\e[35m[ goal #{session_id} ]" : "[ #{mode} ]"
+
+    out = +"\e[H"
+    out << "\e[1;1H\e[1;34m[ Registry ]\e[0m\e[K"
+    agents.first(content_h - 1).each_with_index do |(id, info), i|
+      status = info['status'] == 'online' ? "\e[32m●\e[0m" : "\e[31m○\e[0m"
+      # Clamp the row to the Registry panel (T5): prefix + id + tools
+      # together must never cross into the Traffic panel's columns, on
+      # any row — including rows where Traffic rendered nothing.
+      prefix_cols = 3 # " " + status dot + space
+      id_show = self.class.display_safe(id, half - prefix_cols - 1)
+      tools_budget = half - prefix_cols - id_show.length - 1
+      tools_show = tools_budget.positive? ? self.class.display_safe(info['tools'], tools_budget) : ''
+      out << "\e[#{i + 2};1H #{status} #{id_show}#{tools_show.empty? ? '' : " \e[2m#{tools_show}\e[0m"}\e[K"
+    end
+    out << "\e[1;#{half + 1}H\e[1;32m[ Traffic ]\e[0m\e[K"
+    shown_traffic = traffic.last(content_h - 1)
+    shown_traffic.each_with_index do |m, i|
+      # T4-9: budget the row in terminal columns (display_safe replaces
+      # wide/multibyte glyphs with '?'), not in characters — a CJK
+      # payload used to wrap into the Registry panel's columns.
+      out << "\e[#{i + 2};#{half + 1}H#{self.class.display_safe(m, width - half)}\e[K"
+    end
+    # Erase panel rows no longer used (lists shrank or the input grew).
+    used = [agents.first(content_h - 1).size, shown_traffic.size].max
+    (used + 2..chip_row - 1).each do |r|
+      out << "\e[#{r};1H\e[K"
+    end
+
+    out << "\e[#{chip_row};1H\e[1;33m#{chip}\e[0m Enter send · Ctrl+J newline · /help\e[K"
+
+    shown.each_with_index do |segtext, i|
+      row = chip_row + 1 + i
+      idx = first + i
+      prefix = idx.zero? ? '> ' : (first.positive? && i.zero? ? '… ' : '  ')
+      if i == cur_row
+        out << "\e[#{row};1H#{render_cursor_row(segtext, cur_col, prefix, width)}"
+      else
+        # T4-9: column-budgeted copy that keeps the glyphs verbatim (one
+        # column of slack, like the cursor row).
+        out << "\e[#{row};1H#{prefix}#{self.class.display_truncate(segtext, width - prefix.length - 1)}\e[K"
+      end
+    end
+    out
+  end
+
+  # One input row containing the cursor; the character under the cursor
+  # is rendered reverse-video (the terminal cursor stays hidden), with
+  # a horizontal window so long lines never wrap and break the layout.
+  # T4-9: the window is measured in terminal columns, and the sliced
+  # parts are always rebuilt from the tail so a cut can never leave a
+  # repeated character behind the cursor.
+  def render_cursor_row(segtext, cur_col, prefix, width)
+    segtext = segtext.to_s
+    # Keep one column of slack: a row that exactly fills the terminal
+    # makes most emulators wrap the cursor to the next line and shears
+    # the layout.
+    max_w = [width - prefix.length - 1, 1].max
+    at = segtext[cur_col, 1].to_s
+    if self.class.display_cols(segtext) <= max_w
+      before = segtext[0, cur_col].to_s
+      after = segtext[(cur_col + 1)..].to_s
+    else
+      # Keep the cursor about 4 columns from the right edge; '…' markers
+      # take one column each, so the character window shrinks by the
+      # number of markers actually drawn.
+      cursor_col = self.class.display_cols(segtext[0, cur_col])
+      start_col = [cursor_col - (max_w - 4), 0].max
+      start = self.class.index_for_cols(segtext, start_col)
+      lead = start.positive? ? 1 : 0
+      start = self.class.index_for_cols(segtext, start_col + lead) if lead.positive?
+      window_cols = max_w - lead
+      finish = self.class.index_for_cols(segtext, start_col + window_cols)
+      tail = finish < segtext.length ? 1 : 0
+      finish = self.class.index_for_cols(segtext, start_col + window_cols - tail) if tail.positive?
+      slice_a = start + lead
+      slice_b = [finish - tail, slice_a].max
+      before = (lead.positive? ? '…' : '') + segtext[slice_a...cur_col].to_s
+      after = segtext[(cur_col + 1)...slice_b].to_s
+      after += '…' if tail.positive?
+    end
+    glyph = at.empty? ? "\e[7m \e[0m" : "\e[7m#{at}\e[0m"
+    "#{prefix}#{before}#{glyph}#{after}\e[K"
+  end
+end
+
+# NOTE: `bundle exec ./bin/runes` loads this file by ABSOLUTE path, so
+# `__FILE__ == $0` is false there (the TUI silently never started — the
+# documented runbook command was affected). Compare expanded paths.
+if File.expand_path(__FILE__) == File.expand_path($0.to_s)
+  settings = Runes::Core::Settings.new
+  host = ENV.fetch('RUNES_MQTT_HOST', settings.get('mqtt_host') || '127.0.0.1')
+  port = Integer(ENV.fetch('RUNES_MQTT_PORT', settings.get('mqtt_port') || 1883))
+
+  tui = RunesTUI.new(host: host, port: port, root: settings.root)
+
+  reader = Thread.new { tui.run_reader }
+  input  = Thread.new { tui.run_input }
+  begin
+    tui.run
+  rescue Interrupt
+    nil
+  ensure
+    tui.stop
+    reader.kill
+    input.kill
+    puts "\nbye."
+  end
+end

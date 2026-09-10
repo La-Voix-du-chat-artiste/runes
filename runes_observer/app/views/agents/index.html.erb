@@ -1,0 +1,70 @@
+<% content_for :title, "Agents — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Agents</h1>
+  <span class="sub"><%= @counts[:online] %> running · <%= @counts[:offline] %> ended · <%= @counts[:unknown] %> unknown</span>
+</div>
+
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel__body">
+    <%= form_with url: agents_path, method: :get, class: "filters" do |form| %>
+      <div class="field">
+        <%= form.label :q, "Search" %>
+        <%= form.text_field :q, value: @query, placeholder: "agent id, name, workspace" %>
+      </div>
+      <div class="field">
+        <%= form.label :state, "State" %>
+        <%= form.select :state, options_for_select([["any", ""], ["online", "online"], ["offline", "offline"], ["unknown", "unknown"]], @state) %>
+      </div>
+      <%= form.submit "Filter", class: "btn" %>
+      <% if @query.present? || @state.present? %>
+        <%= link_to "Clear", agents_path, class: "btn btn--ghost" %>
+      <% end %>
+    <% end %>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">Observed agents</span>
+    <span class="panel__count"><%= @agents.size %></span>
+  </div>
+  <% if @agents.empty? %>
+    <div class="panel__empty">No agent matches.</div>
+  <% else %>
+    <table class="data">
+      <thead>
+        <tr>
+          <th>State</th>
+          <th>Agent</th>
+          <th>Tools</th>
+          <th>Workspace</th>
+          <th class="num">Packets</th>
+          <th>First seen</th>
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @agents.each do |agent| %>
+          <tr>
+            <td><%= state_pill(agent.display_state) %></td>
+            <td>
+              <%= link_to agent.agent_id, agent_path(agent), class: "mono" %>
+              <% if agent.name.present? && agent.name != agent.agent_id %>
+                <div class="faint small"><%= agent.name %> · v<%= agent.version %></div>
+              <% end %>
+            </td>
+            <td class="small muted">
+              <% tools = agent.tools_list %>
+              <%= tools.any? ? tools.join(", ").truncate(48) : "—" %>
+            </td>
+            <td class="small muted mono"><%= agent.workspace.presence || "—" %></td>
+            <td class="num"><%= agent.packet_count %></td>
+            <td class="small faint nowrap"><%= agent.first_seen_at.present? ? "#{ago_in_words_short(agent.first_seen_at)} ago" : "—" %></td>
+            <td class="small faint nowrap"><%= agent.last_seen_at.present? ? "#{ago_in_words_short(agent.last_seen_at)} ago" : "—" %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</section>

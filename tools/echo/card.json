@@ -1,0 +1,6 @@
+{
+  "name": "echo",
+  "description": "Echoes its `message` argument back (example WASM-backable tool).",
+  "version": "1.0.0",
+  "capabilities": ["wasm"]
+}

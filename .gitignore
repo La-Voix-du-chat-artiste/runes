@@ -1,0 +1,32 @@
+# --- Secrets: never commit (B4/S4-3) -------------------------------------
+# config/.env holds live provider API keys. config/.env.example is the
+# tracked template. If a key ever lands in git history, rotate it.
+config/.env
+config/.env.local
+.env
+.env.local
+*.pem
+*.key
+*.p12
+
+# --- Local runtime state -------------------------------------------------
+runes.db
+runes.db-*
+log/
+tmp/
+workspace/
+
+# --- Large / vendored binaries -------------------------------------------
+ruby.wasm
+*.wasm
+*.wasm.gz
+
+# --- Generated artifacts (host-written, LLM-influenced) ------------------
+docs/epics/
+docs/missions/
+
+# --- OS / editor ----------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp
