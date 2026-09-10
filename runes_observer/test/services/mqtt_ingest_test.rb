@@ -99,3 +99,31 @@ class MqttIngestTest < ActiveSupport::TestCase
     [ingest, clients]
   end
 end
+
+# Retention must not depend on traffic: the pruner thread is what makes it a
+# property of the process (doc5.md O5-6).
+class MqttIngestPrunerTest < ActiveSupport::TestCase
+  def test_the_pruner_runs_without_any_traffic
+    previous = ENV["RUNES_OBSERVER_PRUNE_INTERVAL_S"]
+    ENV["RUNES_OBSERVER_PRUNE_INTERVAL_S"] = "0.05"
+
+    stale = Packet.create!(topic: "runes/agents/old/card", kind: "card", payload: "{}",
+                           occurred_at: 400.days.ago, received_at: 400.days.ago,
+                           payload_bytes: 2)
+    ingest = MqttIngest.new(host: "127.0.0.1", port: 1, logger: Logger.new(File::NULL))
+
+    ingest.start_pruner
+    Timeout.timeout(10) do
+      sleep 0.05 while Packet.exists?(stale.id)
+    end
+
+    refute Packet.exists?(stale.id), "an idle ingest must still prune old packets"
+  ensure
+    ingest&.stop_pruner
+    if previous.nil?
+      ENV.delete("RUNES_OBSERVER_PRUNE_INTERVAL_S")
+    else
+      ENV["RUNES_OBSERVER_PRUNE_INTERVAL_S"] = previous
+    end
+  end
+end

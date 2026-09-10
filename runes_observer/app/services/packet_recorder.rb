@@ -118,7 +118,10 @@ class PacketRecorder
     # Keep the observatory bounded: drop packets older than `days` and, if
     # still over `max`, the oldest rows. A nil or non-positive `max` means
     # "no cap" — never `max <= 0` becoming "delete everything".
-    def prune!(days: retention_days, max: max_packets)
+    # Default grace before an agent row with no packets left is dropped.
+    AGENT_RETENTION_DAYS = 30
+
+    def prune!(days: retention_days, max: max_packets, agent_days: agent_retention_days)
       deleted = 0
       if days.to_i.positive?
         deleted += Packet.where("occurred_at < ?", days.to_i.days.ago).delete_all
@@ -133,11 +136,38 @@ class PacketRecorder
         end
       end
 
+      pruned_agents = prune_agents!(days: agent_days)
+
       if deleted.positive?
         refresh_agent_counts!
         Rails.logger.info("[observer] pruned #{deleted} packet(s)")
       end
+      Rails.logger.info("[observer] pruned #{pruned_agents} agent(s)") if pruned_agents.positive?
       deleted
+    end
+
+    # Agents used to accumulate forever: they were never part of retention, so
+    # a long-lived observer's fleet table grew without bound even though the
+    # packet table did not (doc5.md O5-6). Only agents with nothing left to
+    # show are removed, and only after a long grace period.
+    def prune_agents!(days: agent_retention_days)
+      cutoff_days = days.to_i
+      return 0 unless cutoff_days.positive?
+
+      cutoff = cutoff_days.days.ago
+      stale = Agent.where("last_seen_at < ?", cutoff)
+      removed = 0
+      stale.find_each do |agent|
+        next if Packet.where(agent_id: agent.agent_id).exists?
+
+        agent.destroy
+        removed += 1
+      end
+      removed
+    end
+
+    def agent_retention_days
+      ENV.fetch("RUNES_OBSERVER_AGENT_RETENTION_DAYS", AGENT_RETENTION_DAYS.to_s).to_i
     end
 
     # The packet_count column is a cached count of attributed packets; a

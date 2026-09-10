@@ -7,6 +7,10 @@ require "mqtt"
 class MqttIngest
   DEFAULT_TOPIC = "runes/#"
   MAX_BACKOFF = 30
+  # Retention used to run only from the packet path, so an idle broker (or a
+  # wedged ingest) meant nothing was ever pruned. This thread makes pruning a
+  # property of the process rather than of the traffic (doc5.md O5-6).
+  PRUNE_INTERVAL_S = 900
 
   attr_reader :host, :port, :topic
 
@@ -27,6 +31,7 @@ class MqttIngest
   end
 
   def run
+    start_pruner
     delay = 1
     until @stopping
       begin
@@ -45,6 +50,7 @@ class MqttIngest
       delay = [delay * 2, MAX_BACKOFF].min
     end
   ensure
+    stop_pruner
     disconnect
     IngestStatus.mark_disconnected!("stopped")
   end
@@ -52,7 +58,43 @@ class MqttIngest
   # Called from a signal trap: drops the client so the blocking read ends.
   def stop
     @stopping = true
+    stop_pruner
     disconnect
+  end
+
+  # A timer thread independent of the message path. Public so a test can start
+  # it without a broker.
+  def start_pruner
+    return @pruner if @pruner&.alive?
+
+    interval = ENV.fetch("RUNES_OBSERVER_PRUNE_INTERVAL_S", PRUNE_INTERVAL_S.to_s).to_f
+    return nil unless interval.positive?
+
+    @pruner = Thread.new do
+      loop do
+        sleep interval
+        break if @stopping
+
+        prune_once!
+      end
+    end
+    @pruner.name = "runes-ingest-pruner" if @pruner.respond_to?(:name=)
+    @pruner.report_on_exception = false if @pruner.respond_to?(:report_on_exception=)
+    @pruner
+  end
+
+  def stop_pruner
+    @pruner&.kill
+    @pruner = nil
+  end
+
+  # One pruning pass; never raises into the caller (a locked database must not
+  # take the ingest down).
+  def prune_once!
+    PacketRecorder.prune!
+  rescue StandardError => e
+    @logger.warn("[observer] prune failed: #{e.class}: #{e.message}") if @logger.respond_to?(:warn)
+    0
   end
 
   private

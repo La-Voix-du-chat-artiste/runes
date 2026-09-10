@@ -1195,3 +1195,79 @@ every `IngestStatus` writer is now non-raising. Measured: connect attempts 4 →
 - The default `run_command` allowlist is deliberately small, so `git`, `make`
   and `curl` now need `RUNES_CMD_ALLOWLIST`: an intended deny-by-default, but a
   real behaviour change for planner demos.
+
+---
+
+## Phase 19 — closing the audit's leftovers, and version control
+
+Driver: the residues `doc5.md` listed as *deliberately not fixed* in Phase 18,
+plus two process gaps the audit exposed.
+
+### Version control
+
+The repository had no history at all, so a 52-finding audit and four parallel
+workstreams were only reconstructable from this log. It is now a git repository
+with one commit per logical batch. `config/.env`, `runes_observer/config/master.key`,
+the SQLite databases and `log/` are ignored, and the index was verified to
+contain **none** of them (and not the live key's value) before the first commit
+— the S4-3 exposure this project has been one `git init` away from since round 4.
+
+### The leftovers
+
+- **Signed-envelope replay (S5-4 residual).** The signature proved *who* sent a
+  payload, not *when*: a captured signed envelope replayed forever.
+  `Envelope.sign(fresh: true)` now puts a `ts`/`nonce` pair *inside* the signed
+  payload, so altering or stripping them breaks the signature, and `verify!`
+  enforces a clock window and consumes the nonce through a bounded cache.
+  `Fabric` signs fresh and verifies with a process-wide guard;
+  `RUNES_REQUIRE_FRESHNESS=1` additionally refuses envelopes carrying no
+  freshness, so an older peer still interoperates by default. The nonce cache
+  moved out of `RPCAuth` into `Runes::Security::NonceCache` so both paths share
+  one implementation, and the audit's missing **signature-forgery** negative
+  test (sign with key B while claiming trusted kid A) is pinned as
+  `:bad_signature`.
+- **MQTT 3.1.1 reconnect (T5-1's other half).** Worse than the MQTT 5 form: the
+  `mqtt` gem's read thread raises on a dropped socket and stops, and
+  `MQTT::Client#get` then blocks forever on an empty queue — so the adapter went
+  silent while still reporting `connected? == true`, and no reconnect could
+  ever fire. It now consumes the gem's queue with a timeout, notices the dead
+  reader within 0.5 s, and reconnects with backoff, re-sending every
+  subscription. The embedded broker gained `disconnect_clients!` and `stop` so a
+  broker-side drop is testable at all.
+- **W5-6..W5-9.** The agent rune now passes its configured `working_directory` to
+  the child (it was accepted and ignored); `Bundler.with_unbundled_env` is
+  serialised, because it mutates the *process* environment and concurrent runes
+  could corrupt it; `TaskGroup#async` no longer starts a task after `stop`; and
+  `stop` reports stragglers while a new `drain(timeout:)` joins them — it
+  deliberately does not block, because joining would make a fast failure wait
+  for a slow sibling and undo W5-5.
+- **Retention backstop (O5-6 residual).** Pruning ran only from the packet path,
+  so an idle broker meant nothing was ever pruned, and agent rows were never
+  pruned at all. The ingest now owns a pruner thread independent of traffic
+  (`RUNES_OBSERVER_PRUNE_INTERVAL_S`, default 15 min) and `prune!` also drops
+  agents that are past `RUNES_OBSERVER_AGENT_RETENTION_DAYS` and have no packets
+  left.
+
+### Verification
+
+- Parent **541 runs / 2460 assertions / 0 failures**; observatory **90 runs /
+  455 assertions / 0 failures**.
+- Live against mosquitto 2.1.2: the MQTT 5 proof still passes after the
+  lifecycle rewrite, and a new script (`tmp/verify_reconnect_live.rb`) yanks the
+  socket out from under a real connection and proves the adapter reconnects,
+  re-subscribes and receives traffic published *after* the drop — the audit's
+  own demonstration, in reverse.
+- The 3.1.1 reconnect is covered in-suite by killing the gem's reader (the exact
+  condition the adapter polls for). Closing the socket under that reader raises
+  from the gem's own thread, which the harness attributes to whichever test is
+  running — a limitation of `mqtt` 0.7 documented in the test rather than hidden.
+- Two order-dependent assertions were found and fixed while doing this: they
+  passed only when an earlier test had leaked a `TaskGroup` into the thread-local
+  (`assert_same nil` trips Minitest's style guard) — the same class as D5-2.
+
+### Still open
+
+`O0.1` (observatory ingest through `Runes::Transport`), `E5-2` (a
+publisher↔observer topic contract test), `E5-6` (guard-aware runes) and `O1.1`
+(workflow telemetry + run console) remain from `docs/OBSERVATORY_ROADMAP.md`;
+A2A peer-card spoofing and "token scanning is not a sandbox" are untouched.
