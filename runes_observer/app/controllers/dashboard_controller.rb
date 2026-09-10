@@ -4,6 +4,11 @@ class DashboardController < ApplicationController
     @online = Agent.online.by_activity.to_a
     @ended = Agent.ended.by_activity.limit(25).to_a
     @recent = Packet.recent.limit(80).to_a
+    @runs = WorkflowRun.recent.limit(6).includes(:workflow_steps).to_a
+    @run_stats = {
+      total: WorkflowRun.count,
+      failed: WorkflowRun.where(status: %w[failed timeout]).count
+    }
     @last_id = @recent.map(&:id).max || 0
     @top_kinds = Packet.group(:kind).count.sort_by { |_kind, count| -count }.first(8).to_h
     @stats = {

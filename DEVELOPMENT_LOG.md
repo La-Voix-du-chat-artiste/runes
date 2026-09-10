@@ -1271,3 +1271,54 @@ contain **none** of them (and not the live key's value) before the first commit
 publisher↔observer topic contract test), `E5-6` (guard-aware runes) and `O1.1`
 (workflow telemetry + run console) remain from `docs/OBSERVATORY_ROADMAP.md`;
 A2A peer-card spoofing and "token scanning is not a sandbox" are untouched.
+
+---
+
+## Phase 20 — the observatory becomes a fleet console (O1.1)
+
+Driver: the newest code in the project was invisible. A Roast-compatible
+workflow runs in-process and published nothing, so the observatory could only
+ever show packets — never the runs that produce them.
+
+### The engine seam
+
+`lib/runes/telemetry.rb` adds a best-effort event stream at run and step
+boundaries: `run_started`, `step_started`, `step_finished`, `run_finished`,
+each carrying the run id, rune, name, scope, run-wide step index, status,
+duration, output and error. `Runes::Telemetry.sink` is any callable, so a
+library user pays nothing when it is unset; `TransportSink` publishes the events
+on `runes/workflows/<run_id>/<kind>` for anything watching the fabric. A raising
+sink cannot fail a run (tested), and long output is truncated with a marker.
+
+The context is threaded through the `CogInputContext` — every rune already
+receives one — so no call site had to learn about telemetry, and nested scopes
+(call/map/repeat) share the run's id.
+
+### The console
+
+`bin/runes-workflow` gained `RUNES_TELEMETRY=mqtt|auto|1`; the observer gained
+`workflow_runs`/`workflow_steps` (two migrations), a classifier branch for
+`runes/workflows/#`, a `WorkflowRunProjector` that folds the four event kinds
+into rows (idempotent, and it creates a run on demand if the observer started
+mid-run), plus:
+
+- **`/runs`** — every run with status, step count, and a duration bar scaled
+  across the page so a slow run stands out without reading numbers.
+- **`/runs/:id`** — the timeline: one row per step with a bar positioned by its
+  offset and scaled to the run, then a card per step carrying scope, output and
+  error, and finally the packets that carry that run id.
+- A **Runs** nav link and a "Workflow runs" dashboard panel.
+
+### Verification
+
+Parent **548 runs / 2493 assertions / 0 failures**; observatory **103 runs /
+530 assertions / 0 failures**. The projection test runs the *real* engine and
+feeds its events through the same recorder the ingest uses, so the two halves
+cannot drift. And the whole path was driven over a real broker: the CLI
+published 8 telemetry events to mosquitto 2.1.2, the observer's recorder
+ingested them, and the run appeared with three correctly ordered steps
+(`ruby(greeting) 0.2ms`, `cmd(echo) 24.7ms`, `ruby(check) 0.3ms`).
+
+Still open from the roadmap: `O0.1` (ingest via `Runes::Transport`), `E5-2`
+(topic contract test), `E5-6` (guard-aware runes), and the further views
+(topology, trace waterfall).

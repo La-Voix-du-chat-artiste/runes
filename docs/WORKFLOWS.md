@@ -188,3 +188,33 @@ can be bounded with `Workflow.from_file(path, params, timeout:)` or
   available to those runes as ordinary capabilities.
 - It gives the Ruby community the ergonomics it is actually good at
   (readable DSL, blocks, plain objects) on top of a hardened execution core.
+
+## Watching a run
+
+A workflow executes in-process, so until Phase 20 it published nothing: a run
+was invisible to everything except its own stdout. The engine now emits a small
+event stream and a **sink** decides where it goes:
+
+```ruby
+Runes::Telemetry.sink = ->(event) { ... }                     # anything
+Runes::Telemetry.sink = Runes::Telemetry::TransportSink.new(transport: t)
+```
+
+```bash
+RUNES_TELEMETRY=mqtt bin/runes-workflow execute examples/analyze_codebase.rb
+```
+
+Events (JSON on `runes/workflows/<run_id>/<kind>`):
+
+| Kind | Carries |
+| --- | --- |
+| `run_started` | workflow path, params, planned step count |
+| `step_started` | rune, name, scope, run index, `async?` |
+| `step_finished` | status (`ok`/`skipped`/`failed`), duration, output, error |
+| `run_finished` | status (`ok`/`failed`/`timeout`), duration, error, step count |
+
+Emitting is best-effort — a broken sink is a broken observer, never a broken
+run — and long outputs are truncated with a marker rather than flooding the
+bus. The observatory projects these into `workflow_runs`/`workflow_steps`, so
+`/runs` draws each run as a timeline (bars positioned by start offset, scaled to
+the run) with per-step output and error.

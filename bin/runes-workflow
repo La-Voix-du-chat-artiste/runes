@@ -64,6 +64,7 @@ module RunesWorkflowCli
     targets, flags, kwargs = parse_workflow_args(args)
     params = Runes::WorkflowParams.new(targets, flags, kwargs)
 
+    install_telemetry
     change_directory
     workflow = Runes::Workflow.from_file(file, params)
     print_final_output(workflow.final_output) if print_output
@@ -115,6 +116,24 @@ module RunesWorkflowCli
     return if value.nil?
 
     $stdout.puts(value.is_a?(String) ? value : value.inspect)
+  end
+
+  # `RUNES_TELEMETRY=mqtt` (or 1/auto/inproc) publishes this run's events on
+  # the fabric so the observatory can show it; unset means no telemetry at all.
+  def install_telemetry
+    spec = ENV["RUNES_TELEMETRY"].to_s
+    return if spec.strip.empty?
+
+    sink = Runes::Telemetry.build_sink(spec)
+    if sink.nil?
+      $stderr.puts "runes-workflow: telemetry disabled (RUNES_TELEMETRY=#{spec})"
+      return
+    end
+
+    Runes::Telemetry.sink = sink
+    $stderr.puts "runes-workflow: telemetry -> #{sink.topic('<run_id>', '<kind>')}"
+  rescue StandardError => e
+    $stderr.puts "runes-workflow: telemetry unavailable (#{e.class}: #{e.message})"
   end
 
   # Splits at `--`: everything before is positional targets, everything after

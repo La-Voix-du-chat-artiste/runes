@@ -22,6 +22,7 @@
 #   * `cmd` does NOT inherit Roast's shell behaviour for a command String
 #     (W5-1): Strings are shell-split and run as argv; `shell: true` opts in.
 #   * `Workflow.from_file` deletes its tmpdir before returning (W5-13).
+require_relative "telemetry"
 require_relative "rune"
 require_relative "command_runner"
 

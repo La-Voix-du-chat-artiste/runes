@@ -278,3 +278,58 @@ pre.payload__body--raw { color: var(--text-dim); }
 .empty { padding: 40px 20px; text-align: center; color: var(--text-faint); }
 .empty h2 { color: var(--text-dim); font-size: 15px; font-weight: 600; }
 .empty code { color: var(--accent); }
+
+/* --- workflow runs ------------------------------------------------------ */
+/* One run, drawn as a timeline: bars are laid out on a shared track so the
+   shape of a run (where the time went) is visible before reading any number. */
+
+.bar { display: inline-block; width: 120px; height: 6px; border-radius: 3px; background: var(--bg-elevated-2); border: 1px solid var(--border); overflow: hidden; vertical-align: middle; margin-right: 8px; }
+.bar__fill { display: block; height: 100%; background: var(--accent); }
+.bar__fill--ok      { background: var(--online); }
+.bar__fill--failed  { background: var(--offline); }
+.bar__fill--timeout { background: var(--stale); }
+.bar__fill--running { background: var(--accent); }
+
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline__row {
+  display: grid; grid-template-columns: 22px 74px minmax(120px, 1.1fr) minmax(160px, 3fr) 74px;
+  gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border);
+}
+.timeline__row:last-child { border-bottom: none; }
+.timeline__idx { color: var(--text-faint); font-size: 11px; text-align: right; }
+.timeline__name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline__track { position: relative; height: 14px; background: var(--bg-elevated-2); border: 1px solid var(--border); border-radius: 4px; }
+.timeline__bar { position: absolute; top: 1px; bottom: 1px; border-radius: 3px; background: var(--accent); min-width: 2px; }
+.timeline__bar--ok      { background: var(--online); }
+.timeline__bar--skipped { background: var(--unknown); }
+.timeline__bar--failed  { background: var(--offline); }
+.timeline__bar--running { background: var(--stale); }
+.timeline__dur { font-size: 11.5px; text-align: right; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.timeline__note { margin: 10px 0 0; }
+
+.step { border-bottom: 1px solid var(--border); }
+.step:last-child { border-bottom: none; }
+.step > summary { display: grid; grid-template-columns: 22px 74px minmax(0, 1fr) auto auto 74px; gap: 10px; align-items: center; padding: 8px 12px; cursor: pointer; }
+.step > summary:hover { background: rgba(255, 255, 255, 0.02); }
+.step--failed > summary { background: rgba(255, 107, 107, 0.06); }
+.step__label { font-size: 12.5px; }
+.step__status { font-size: 10px; }
+.step__dur { font-size: 11.5px; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
+.step__body { padding: 4px 12px 12px 44px; }
+.step__meta { margin-bottom: 6px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-size: 11px; padding: 2px 7px; border-radius: 5px;
+  background: var(--bg-elevated-2); border: 1px solid var(--border); color: var(--text-dim);
+}
+.kv__section { margin: 12px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); }
+
+.alert { margin: 10px 0; padding: 8px 10px; border-radius: 6px; font-size: 12px; border: 1px solid var(--border); background: var(--bg-elevated-2); overflow-wrap: anywhere; }
+.alert--error { color: var(--offline); border-color: rgba(255, 107, 107, 0.4); }
+
+/* rune badges, so a step's kind is readable at a glance */
+.badge--ruby, .badge--map, .badge--repeat, .badge--call { color: #b48ef0; border-color: #4b3a6b; }
+.badge--cmd  { color: #ffb07c; border-color: #6b452b; }
+.badge--chat { color: #9ad3ff; border-color: #2b4a6b; }
+.badge--agent{ color: #3ddc97; border-color: #2b5a4a; }

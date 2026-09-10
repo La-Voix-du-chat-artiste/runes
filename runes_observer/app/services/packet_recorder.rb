@@ -246,6 +246,7 @@ class PacketRecorder
       scrubbed: @scrubbed,
       agent_id: agent_id,
       request_id: result.request_id,
+      run_id: result.run_id,
       kind: result.kind,
       event: result.event,
       tool: result.tool,
@@ -256,9 +257,19 @@ class PacketRecorder
     self.class.remember_executor(correlation_key(result), agent_id)
     update_agent(result, agent_id, data, retained: @retained)
     attribute_packet(result, agent_id)
+    # A workflow telemetry event is also a packet, but the run view reads the
+    # projected rows, so fold it into WorkflowRun/WorkflowStep here.
+    project_workflow_event(packet)
     self.class.heartbeat!(at: @received_at)
     self.class.prune_if_due!
     packet
+  end
+
+  # Telemetry must never break ingest: a bad event is logged and skipped.
+  def project_workflow_event(packet)
+    return unless packet.kind == "workflow_event"
+
+    WorkflowRunProjector.apply(packet)
   end
 
   private

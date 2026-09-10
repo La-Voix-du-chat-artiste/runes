@@ -63,6 +63,19 @@ module Runes
     end
 
     attr_reader :workflow_path, :workflow_context, :final_output, :config_manager
+    # The run's telemetry context: one id and one sink, shared by every step
+    # and every nested scope so a viewer can stitch the run back together.
+    attr_reader :telemetry_context
+
+    def telemetry_params
+      params = @workflow_context.respond_to?(:params) ? @workflow_context.params : nil
+      return nil if params.nil?
+
+      { 'targets' => Array(params.targets), 'args' => Array(params.args),
+        'kwargs' => (params.kwargs || {}).transform_keys(&:to_s) }
+    rescue StandardError
+      nil
+    end
 
     def initialize(workflow_path, workflow_context)
       @workflow_path = Pathname.new(workflow_path)
@@ -131,12 +144,14 @@ module Runes
       extract_dsl_procs!
       @config_manager = ConfigManager.new(@config_procs, @workflow_context)
       @config_manager.prepare!
+      @telemetry_context = Runes::Telemetry::Context.new(workflow: @workflow_path, params: telemetry_params)
       @execution_manager = ExecutionManager.new(
         self,
         @config_manager,
         @execution_procs,
         @workflow_context,
-        scope_value: @workflow_context.params
+        scope_value: @workflow_context.params,
+        telemetry: @telemetry_context
       )
       @execution_manager.prepare!
       @prepared = true

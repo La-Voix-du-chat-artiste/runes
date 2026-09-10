@@ -31,10 +31,17 @@ module Runes
     CogFailedError = Runes::CogFailedError
     CogStoppedError = Runes::CogStoppedError
 
-    def initialize(workflow_context)
+    def initialize(workflow_context, telemetry: nil, scope: nil)
       @workflow_context = workflow_context
       @runes = {}
+      # The run's telemetry context (nil when nobody is listening). Every rune
+      # reaches it through its input context, so no call site has to thread it
+      # through by hand.
+      @telemetry = telemetry
+      @telemetry_scope = scope
     end
+
+    attr_reader :telemetry, :telemetry_scope
 
     # --- control flow -------------------------------------------------
 

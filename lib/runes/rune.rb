@@ -110,6 +110,11 @@ module Runes
 
       @config = config
       group = task_group || Runes::TaskGroup.new
+      telemetry = input_context.respond_to?(:telemetry) ? input_context.telemetry : nil
+      scope = input_context.respond_to?(:telemetry_scope) ? input_context.telemetry_scope : nil
+      step_index = telemetry&.next_step_index
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      telemetry&.step_started!(rune: self, scope: scope, index: step_index)
       @task = group.async do
         input = self.class.input_class.new
         returned = if @input_proc
@@ -117,17 +122,32 @@ module Runes
         end
         coerce_and_validate_input!(input, returned)
         @output = execute(input)
-      rescue ControlFlow::SkipCog
+      rescue ControlFlow::SkipCog => e
         @skipped = true
+        @telemetry_error = e.message
       rescue ControlFlow::FailCog => e
         @failed = true
+        @telemetry_error = "#{e.class}: #{e.message}"
         raise e if config.abort_on_failure?
       rescue ControlFlow::Next, ControlFlow::Break => e
         @skipped = true
+        @telemetry_error = "#{e.class}: #{e.message}"
         raise e
       rescue StandardError => e
         @failed = true
+        @telemetry_error = "#{e.class}: #{e.message}"
         raise e
+      ensure
+        # Emitted for every outcome (ok / skipped / failed / raised) so a
+        # viewer never has a step that started and never finished.
+        if telemetry
+          telemetry.step_finished!(
+            rune: self, scope: scope, index: step_index,
+            status: (@failed ? "failed" : (@skipped ? "skipped" : "ok")),
+            duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(1),
+            output: telemetry_output_text, error: telemetry_error_text
+          )
+        end
       end
       @task
     end
@@ -168,6 +188,25 @@ module Runes
     # output. Called inside the rune's task.
     def execute(_input)
       raise NotImplementedError, "#{self.class} must implement #execute"
+    end
+
+    private
+
+    # What a viewer shows for this step. `raw_text` is the canonical text form
+    # every output exposes; a rune whose output cannot produce one contributes
+    # nothing rather than raising inside an ensure block.
+    def telemetry_output_text
+      return nil if @output.nil?
+
+      @output.raw_text
+    rescue StandardError, NotImplementedError
+      nil
+    end
+
+    def telemetry_error_text
+      return nil unless @failed || @skipped
+
+      @telemetry_error
     end
 
     private

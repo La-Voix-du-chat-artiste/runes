@@ -19,7 +19,7 @@
 #   $a2a/v1/discovery/<org>/<unit>/<agent_id>   (retained Agent Card)
 #   $a2a/v1/tasks/<org>/<unit>/<agent_id>       (addressed task)
 module PacketClassifier
-  Result = Struct.new(:kind, :agent_id, :request_id, :event, :tool,
+  Result = Struct.new(:kind, :agent_id, :request_id, :event, :tool, :run_id,
                       keyword_init: true)
 
   AGENT_CARD        = %r{\Arunes/agents/([^/]+)/card\z}
@@ -32,6 +32,11 @@ module PacketClassifier
   PROMPT_RESPONSE   = %r{\Arunes/prompts/([^/]+)/response\z}
   TOOL              = %r{\Arunes/tools/([^/]+)/(request|response|error)\z}
   JOURNAL           = %r{\Arunes/_log/prompts(?:/latest)?\z}
+
+  # Workflow telemetry: runes/workflows/<run_id>/<run_started|step_started|
+  # step_finished|run_finished>. Emitted by the engine's telemetry sink
+  # (lib/runes/telemetry.rb) and projected into WorkflowRun/WorkflowStep.
+  WORKFLOW          = %r{\Arunes/workflows/([^/]+)/([a-z_]+)\z}
 
   # A2A-over-MQTT. The whole topic must match: a topic that merely starts
   # with `$a2a` but is missing `<org>/<unit>/<agent_id>` falls through to
@@ -73,6 +78,8 @@ module PacketClassifier
     when JOURNAL
       Result.new(kind: "journal", agent_id: dig(data, "agent"),
                  request_id: dig(data, "request_id"))
+    when WORKFLOW
+      Result.new(kind: "workflow_event", run_id: $1, event: $2)
     when A2A_CARD
       Result.new(kind: "a2a_card", agent_id: $3)
     when A2A_TASK

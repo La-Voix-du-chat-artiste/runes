@@ -6,7 +6,7 @@
 # database, no network. The only optional dependency is `wasmtime`, which
 # the WASM sandbox needs; it is not a gemspec runtime dependency, so the
 # requires that transitively pull it in are guarded (see GEM_PACKAGING.md).
-require_relative 'runes/version'
+require_relative 'runes/telemetry'
 require_relative 'runes/transport'
 require_relative 'runes/a2a'
 require_relative 'runes/core/settings'

@@ -10,7 +10,7 @@ class Packet < ApplicationRecord
     card status task task_response a2a_card a2a_task
     prompt progress response response_global
     tool_request tool_response tool_error
-    journal other
+    journal workflow_event other
   ].freeze
 
   # Payloads are stored whole unless they are enormous; an observatory must
@@ -57,6 +57,8 @@ class Packet < ApplicationRecord
     when "response", "response_global", "task_response", "tool_response", "tool_error"
       payload.to_s.gsub(/\s+/, " ")[0, 160]
     when "journal"       then [data&.dig("status"), data&.dig("summary")].compact.join(" — ")[0, 160]
+    when "workflow_event"
+      [event, data&.dig("rune"), data&.dig("name"), data&.dig("status")].compact.join(" ")[0, 160]
     when "card"          then [name_from_card(data), Array(data&.dig("tools")).join(", ")].compact.join(" — ")[0, 160]
     when "status"        then payload.to_s[0, 40]
     when "tool_request"  then payload.to_s.gsub(/\s+/, " ")[0, 160]

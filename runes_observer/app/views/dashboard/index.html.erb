@@ -80,7 +80,41 @@
       </section>
     </div>
 
-    <section class="panel"
+    <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Workflow runs</span>
+      <span class="panel__count">
+        <%= @run_stats[:total] %> total<% if @run_stats[:failed].positive? %> ·
+          <span class="muted"><%= @run_stats[:failed] %> failed</span><% end %>
+      </span>
+    </div>
+    <div class="panel__body panel__body--flush">
+      <% if @runs.empty? %>
+        <p class="panel__empty">
+          No runs yet — publish some with
+          <span class="mono">RUNES_TELEMETRY=mqtt bin/runes-workflow execute &lt;file&gt;</span>.
+        </p>
+      <% else %>
+        <ul class="fleet">
+          <% @runs.each do |run| %>
+            <li class="fleet__item">
+              <%= link_to run_path(run.run_id), class: "fleet__link" do %>
+                <span class="pill pill--<%= run.status == 'ok' ? 'online' : (run.failed? ? 'offline' : 'connected') %>"><%= run.status %></span>
+                <span>
+                  <span class="fleet__name"><%= run.workflow_name %></span>
+                  <span class="fleet__meta"><%= run.step_count %> steps · <%= run.duration_label %></span>
+                </span>
+                <span class="fleet__age"><%= run.started_at ? time_ago_in_words(run.started_at) + " ago" : "—" %></span>
+              <% end %>
+            </li>
+          <% end %>
+        </ul>
+        <p class="panel__body small"><%= link_to "All runs →", runs_path %></p>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="panel"
              data-controller="feed"
              data-feed-url-value="<%= feed_path %>"
              data-feed-interval-value="2000">

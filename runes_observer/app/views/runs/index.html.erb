@@ -1,0 +1,99 @@
+<%# Every workflow run the observer has seen. The duration bar is scaled across
+    the whole page so a slow run stands out without reading any numbers. %>
+<div class="page-head">
+  <h1>Runs</h1>
+  <span class="sub">workflow telemetry from <span class="mono">runes/workflows/#</span></span>
+</div>
+
+<div class="stats">
+  <div class="stat stat--flow">
+    <div class="stat__value"><%= @stats[:total] %></div>
+    <div class="stat__label">runs</div>
+  </div>
+  <div class="stat stat--online">
+    <div class="stat__value"><%= @stats[:ok] %></div>
+    <div class="stat__label">ok</div>
+  </div>
+  <div class="stat stat--ended">
+    <div class="stat__value"><%= @stats[:failed] %></div>
+    <div class="stat__label">failed</div>
+  </div>
+  <div class="stat">
+    <div class="stat__value"><%= @stats[:running] %></div>
+    <div class="stat__label">running</div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">All runs</span>
+    <span class="panel__count"><%= @runs.size %> shown</span>
+  </div>
+
+  <% if @workflows.any? %>
+    <%= form_with url: runs_path, method: :get, class: "filters" do |form| %>
+      <div class="field">
+        <%= form.label :q, "Workflow or run id" %>
+        <%= form.text_field :q, value: params[:q], placeholder: "analyze_codebase" %>
+      </div>
+      <div class="field">
+        <%= form.label :status, "Status" %>
+        <%= form.select :status, options_for_select([["any", ""]] + @statuses.map { |s| [s, s] }, params[:status]) %>
+      </div>
+      <div class="field">
+        <%= form.label :workflow, "Workflow file" %>
+        <%= form.select :workflow,
+                        options_for_select([["any", ""]] + @workflows.map { |w| [File.basename(w), w] }, params[:workflow]) %>
+      </div>
+      <div class="field"><%= form.submit "Filter" %></div>
+    <% end %>
+  <% end %>
+
+  <div class="panel__body panel__body--flush">
+    <% if @runs.empty? %>
+      <p class="panel__empty">
+        No runs yet. Publish workflow telemetry with
+        <span class="mono">RUNES_TELEMETRY=mqtt bin/runes-workflow execute &lt;file&gt;</span>
+        and they appear here.
+      </p>
+    <% else %>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Workflow</th>
+            <th>Status</th>
+            <th class="num">Steps</th>
+            <th>Duration</th>
+            <th class="num">Started</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @runs.each do |run| %>
+            <tr>
+              <td>
+                <%= link_to run.workflow_name, run_path(run.run_id), class: "mono" %>
+                <div class="faint small mono"><%= run.run_id[0, 12] %></div>
+              </td>
+              <td>
+                <span class="pill pill--<%= run.status == 'ok' ? 'online' : (run.failed? ? 'offline' : 'connected') %>">
+                  <%= run.status %>
+                </span>
+              </td>
+              <td class="num"><%= run.step_count %></td>
+              <td>
+                <span class="bar" title="<%= run.duration_label %>">
+                  <span class="bar__fill bar__fill--<%= run.status %>"
+                        style="width: <%= ((run.duration_ms.to_f / @slowest) * 100).clamp(2.0, 100.0).round(1) %>%"></span>
+                </span>
+                <span class="mono small"><%= run.duration_label %></span>
+              </td>
+              <td class="num faint small"><%= run.started_at ? time_ago_in_words(run.started_at) + " ago" : "—" %></td>
+              <td class="right"><%= link_to "timeline →", run_path(run.run_id), class: "small" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+</section>

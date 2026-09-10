@@ -32,7 +32,7 @@ module Runes
                 :cog_input_context, :execution_context
 
     def initialize(workflow, config_manager, all_execution_procs, workflow_context,
-                   scope: nil, scope_value: nil, scope_index: 0)
+                   scope: nil, scope_value: nil, scope_index: 0, telemetry: nil)
       @workflow = workflow
       @config_manager = config_manager
       @all_execution_procs = all_execution_procs
@@ -41,7 +41,8 @@ module Runes
       @scope_value = scope_value
       @scope_index = scope_index
       @cog_stack = []
-      @cog_input_context = CogInputContext.new(workflow_context)
+      @telemetry = telemetry
+      @cog_input_context = CogInputContext.new(workflow_context, telemetry: telemetry, scope: scope)
       @execution_context = ExecutionContext.new
       @outputs = nil
       @outputs_bang = nil
@@ -67,6 +68,8 @@ module Runes
 
       @running = true
       @task_group = Runes::TaskGroup.new
+      @run_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @telemetry&.run_started!(total_steps: @cog_stack.size) if root_scope?
       previous_group = Runes::TaskGroup.current
       Runes::TaskGroup.current = @task_group
       begin
@@ -99,6 +102,7 @@ module Runes
         # (control flow still needs it), then always restore @running and the
         # caller's TaskGroup before re-raising any cleanup failure.
         in_flight = $!
+        emit_run_finished(in_flight)
         begin
           @task_group&.stop
         rescue StandardError
@@ -142,13 +146,42 @@ module Runes
         @workflow_context,
         scope: scope,
         scope_value: scope_value,
-        scope_index: scope_index
+        scope_index: scope_index,
+        telemetry: @telemetry
       )
       manager.prepare!
       manager
     end
 
     private
+
+    # The manager with no scope is the one Workflow builds for the whole run;
+    # nested scopes (call/map/repeat) build their own and must not emit a
+    # second run_started/finished pair.
+    def root_scope?
+      @scope.nil?
+    end
+
+    def emit_run_finished(in_flight)
+      return unless @telemetry && root_scope?
+
+      status = if in_flight.nil?
+                 "ok"
+               elsif in_flight.is_a?(Runes::WorkflowTimeoutError)
+                 "timeout"
+               else
+                 "failed"
+               end
+      @telemetry.run_finished!(
+        status: status,
+        duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - @run_started_at) * 1000).round(1),
+        error: in_flight && "#{in_flight.class}: #{in_flight.message}",
+        steps: @cog_stack.size
+      )
+    rescue StandardError
+      nil
+    end
+
 
     def prepare_system_rune(rune)
       return unless rune.is_a?(Runes::SystemRune)

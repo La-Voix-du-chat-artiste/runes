@@ -1,0 +1,154 @@
+<%# One run, as a timeline. The bar chart on the left is the point: it shows
+    where the run's time went at a glance, and the step cards below carry the
+    detail (output, error, scope) without needing a packet feed. %>
+<% content_for :title, "#{@run.workflow_name} · run #{@run.run_id[0, 8]}" %>
+
+<div class="page-head">
+  <h1><%= @run.workflow_name %></h1>
+  <span class="pill pill--<%= @run.status == 'ok' ? 'online' : (@run.failed? ? 'offline' : 'connected') %>">
+    <%= @run.status %>
+  </span>
+  <span class="sub mono"><%= @run.run_id %></span>
+  <span class="sub"><%= link_to "all runs", runs_path %></span>
+</div>
+
+<div class="stats">
+  <div class="stat stat--flow">
+    <div class="stat__value"><%= @run.duration_label %></div>
+    <div class="stat__label">wall clock</div>
+  </div>
+  <div class="stat">
+    <div class="stat__value"><%= @steps.size %></div>
+    <div class="stat__label">steps</div>
+  </div>
+  <div class="stat <%= @failed_steps.positive? ? 'stat--ended' : '' %>">
+    <div class="stat__value"><%= @failed_steps %></div>
+    <div class="stat__label">failed</div>
+  </div>
+  <div class="stat">
+    <div class="stat__value"><%= @longest_step ? @longest_step.duration_label : "—" %></div>
+    <div class="stat__label">slowest step</div>
+  </div>
+</div>
+
+<div class="grid grid--dash">
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Timeline</span>
+      <span class="panel__count">
+        started <%= @run.started_label %>
+        <% if @run.finished_at %>· ended <%= @run.finished_at.strftime("%H:%M:%S") %><% end %>
+      </span>
+    </div>
+    <div class="panel__body">
+      <% if @steps.empty? %>
+        <p class="panel__empty">No steps recorded yet — the run may still be starting.</p>
+      <% else %>
+        <ol class="timeline">
+          <% @steps.each do |step| %>
+            <li class="timeline__row">
+              <span class="timeline__idx mono"><%= step.position %></span>
+              <span class="badge badge--<%= step.rune %>"><%= step.rune %></span>
+              <span class="timeline__name mono"><%= step.display_name %></span>
+              <span class="timeline__track">
+                <span class="timeline__bar timeline__bar--<%= step.status %>"
+                      style="left: <%= step.offset_percent %>%; width: <%= step.width_percent %>%"
+                      title="<%= step.label %> · <%= step.duration_label %>"></span>
+              </span>
+              <span class="timeline__dur mono"><%= step.duration_label %></span>
+            </li>
+          <% end %>
+        </ol>
+        <p class="faint small timeline__note">
+          Bars are positioned by each step's start offset and scaled to the run's
+          total duration (<%= @run.duration_label %>).
+        </p>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Run</span>
+    </div>
+    <div class="panel__body">
+      <dl class="kv">
+        <dt>workflow</dt><dd class="mono"><%= @run.workflow %></dd>
+        <dt>status</dt><dd><%= @run.status %></dd>
+        <dt>steps</dt><dd><%= @run.step_count %></dd>
+        <dt>duration</dt><dd><%= @run.duration_label %></dd>
+        <dt>started</dt><dd><%= @run.started_at&.strftime("%Y-%m-%d %H:%M:%S") || "—" %></dd>
+        <% if @run.agent_id.present? %>
+          <dt>agent</dt><dd><%= link_to @run.agent_id, agent_path(@run.agent_id) %></dd>
+        <% end %>
+      </dl>
+      <% if @run.error.present? %>
+        <div class="alert alert--error"><%= @run.error %></div>
+      <% end %>
+      <% if @params.any? %>
+        <div class="kv__section">parameters</div>
+        <div class="chips">
+          <% @params.each do |key, value| %>
+            <span class="chip mono"><%= key %>=<%= Array(value).join(",") %></span>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">Steps</span>
+    <span class="panel__count"><%= @steps.size %> recorded</span>
+  </div>
+  <div class="panel__body panel__body--flush">
+    <% if @steps.empty? %>
+      <p class="panel__empty">Nothing yet.</p>
+    <% else %>
+      <% @steps.each do |step| %>
+        <details class="step step--<%= step.status %>">
+          <summary class="step__head">
+            <span class="timeline__idx mono"><%= step.position %></span>
+            <span class="badge badge--<%= step.rune %>"><%= step.rune %></span>
+            <span class="step__label mono"><%= step.label %></span>
+            <% if step.async %><span class="badge">async</span><% end %>
+            <span class="step__status pill pill--<%= step.pill_class %>"><%= step.status %></span>
+            <span class="step__dur mono"><%= step.duration_label %></span>
+          </summary>
+          <div class="step__body">
+            <% if step.error.present? %>
+              <div class="alert alert--error"><%= step.error %></div>
+            <% end %>
+            <% if step.started_at %>
+              <div class="step__meta faint small">
+                started <%= step.started_at.strftime("%H:%M:%S.%L") %>
+                · offset <%= step.offset_percent.round(1) %>% of the run
+                <% if step.scope.present? %>· scope <span class="mono"><%= step.scope %></span><% end %>
+              </div>
+            <% end %>
+            <% if step.output.present? %>
+              <pre class="payload__body"><%= step.output %></pre>
+            <% else %>
+              <p class="faint small">No output captured.</p>
+            <% end %>
+          </div>
+        </details>
+      <% end %>
+    <% end %>
+  </div>
+</section>
+
+<% if @packets.any? %>
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Packets from this run</span>
+      <span class="panel__count"><%= @packets.size %></span>
+    </div>
+    <div class="panel__body panel__body--flush">
+      <% @packets.each do |packet| %>
+        <%= render "packets/packet", packet: packet %>
+      <% end %>
+    </div>
+  </section>
+<% end %>

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_10_080002) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_10_090001) do
   create_table "agents", force: :cascade do |t|
     t.string "agent_id", null: false
     t.text "card"
@@ -54,6 +54,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_080002) do
     t.integer "payload_bytes", default: 0, null: false
     t.datetime "received_at", null: false
     t.string "request_id"
+    t.string "run_id"
     t.boolean "scrubbed", default: false, null: false
     t.string "tool"
     t.string "topic", null: false
@@ -65,6 +66,48 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_080002) do
     t.index ["occurred_at"], name: "index_packets_on_occurred_at"
     t.index ["request_id", "id"], name: "index_packets_on_request_id_and_id"
     t.index ["request_id"], name: "index_packets_on_request_id"
+    t.index ["run_id"], name: "index_packets_on_run_id"
     t.index ["topic"], name: "index_packets_on_topic"
   end
+
+  create_table "workflow_runs", force: :cascade do |t|
+    t.string "agent_id"
+    t.datetime "created_at", null: false
+    t.float "duration_ms"
+    t.text "error"
+    t.datetime "finished_at"
+    t.text "params"
+    t.string "run_id", null: false
+    t.datetime "started_at"
+    t.string "status", default: "running", null: false
+    t.integer "step_count", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.string "workflow", null: false
+    t.index ["run_id"], name: "index_workflow_runs_on_run_id", unique: true
+    t.index ["started_at"], name: "index_workflow_runs_on_started_at"
+    t.index ["status"], name: "index_workflow_runs_on_status"
+    t.index ["workflow"], name: "index_workflow_runs_on_workflow"
+  end
+
+  create_table "workflow_steps", force: :cascade do |t|
+    t.boolean "async", default: false, null: false
+    t.datetime "created_at", null: false
+    t.float "duration_ms"
+    t.text "error"
+    t.datetime "finished_at"
+    t.text "input"
+    t.string "name"
+    t.text "output"
+    t.integer "position", default: 0, null: false
+    t.string "rune"
+    t.string "scope"
+    t.datetime "started_at"
+    t.string "status", default: "running", null: false
+    t.datetime "updated_at", null: false
+    t.integer "workflow_run_id", null: false
+    t.index ["workflow_run_id", "position"], name: "index_workflow_steps_on_workflow_run_id_and_position"
+    t.index ["workflow_run_id"], name: "index_workflow_steps_on_workflow_run_id"
+  end
+
+  add_foreign_key "workflow_steps", "workflow_runs"
 end
