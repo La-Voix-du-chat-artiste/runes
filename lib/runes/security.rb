@@ -14,6 +14,7 @@ module Runes
   end
 end
 
+require_relative "security/nonce_cache"
 require_relative "security/identity"
 require_relative "security/envelope"
 require_relative "security/trust_store"

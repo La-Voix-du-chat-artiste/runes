@@ -136,10 +136,25 @@ module Runes
       # answered, never executed. Returns the VERIFIED payload (sig/alg/kid
       # stripped) so callers cannot fall back to their own pre-verification
       # parse (S5-1); nil means the message was refused and answered.
+      # A process-wide replay guard: the nonce of every envelope we accept is
+      # remembered for a window, so a captured signed envelope cannot be
+      # replayed (doc5.md S5-4 / E5-13). `RUNES_REQUIRE_FRESHNESS=1` also
+      # refuses envelopes that carry no ts/nonce at all — off by default so a
+      # peer running an older build still interoperates.
+      REPLAY_GUARD = Runes::Security::NonceCache.new
+
+      def self.replay_guard
+        REPLAY_GUARD
+      end
+
       def verify_signed!(message, reply_topic)
         raw = message.respond_to?(:payload) ? message.payload : message
         data = safe_parse_args(raw)
-        Runes::Security::Envelope.verify!(data, @trust_store)
+        Runes::Security::Envelope.verify!(
+          data, @trust_store,
+          require_fresh: @require_freshness,
+          replay_guard: REPLAY_GUARD
+        )
       rescue Runes::Security::EnvelopeError => e
         reason = e.respond_to?(:reason) ? e.reason : :malformed
         warn "[Dispatcher] rejected envelope: #{e.message}"
@@ -262,7 +277,7 @@ module Runes
           'request_id' => request_id,
           'at' => Time.now.utc.iso8601
         }
-        payload = Runes::Security::Envelope.sign(payload, @identity) if @require_signatures
+        payload = Runes::Security::Envelope.sign(payload, @identity, fresh: true) if @require_signatures
         envelope = JSON.generate(payload)
         publisher.publish("runes/agents/#{peer_agent_id}/tasks", envelope,
                           qos: 1,
@@ -286,7 +301,7 @@ module Runes
 
         JSON.generate(
           Runes::Security::Envelope.sign(
-            { 'a2a' => JSON.generate(task), 'request_id' => request_id.to_s }, @identity
+            { 'a2a' => JSON.generate(task), 'request_id' => request_id.to_s }, @identity, fresh: true
           )
         )
       end

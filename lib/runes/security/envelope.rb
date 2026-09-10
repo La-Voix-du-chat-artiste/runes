@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
+require_relative 'nonce_cache'
 require 'openssl'
 
 module Runes
@@ -15,9 +16,13 @@ module Runes
     #   :unknown_key        no trusted key exists for the envelope's kid
     #   :bad_signature      signature does not match the canonical payload
     #   :malformed          wrong shape, unsupported alg, bad base64/length
+    #   :missing_freshness  freshness required, but ts/nonce absent
+    #   :stale              ts outside the accepted clock window
+    #   :replayed           this nonce was already accepted inside the window
     # Messages never embed key material or the payload body.
     class VerificationError < EnvelopeError
-      REASONS = %i[missing_signature unknown_key bad_signature malformed].freeze
+      REASONS = %i[missing_signature unknown_key bad_signature malformed
+                   missing_freshness stale replayed].freeze
 
       attr_reader :reason
 
@@ -47,6 +52,14 @@ module Runes
       SIGNATURE_FIELDS = [SIG_FIELD, ALG_FIELD, KID_FIELD].freeze
       ED25519_SIGNATURE_BYTES = 64
 
+      # Optional freshness fields. They live INSIDE the signed payload, so a
+      # relay cannot alter or strip them without breaking the signature.
+      TS_FIELD = 'ts'
+      NONCE_FIELD = 'nonce'
+      FRESHNESS_FIELDS = [TS_FIELD, NONCE_FIELD].freeze
+      # How far a timestamp may be from the verifier's clock.
+      MAX_AGE_S = 120
+
       class << self
         # Deterministic canonical bytes for a payload hash:
         #   * object keys sorted by byte order, nested hashes too
@@ -67,7 +80,8 @@ module Runes
         # Return a new hash: the payload plus sig/alg/kid. The signature
         # covers canonical(payload) — i.e. WITHOUT those three fields — so
         # an existing signature on the input is stripped and replaced.
-        def sign(payload_hash, identity)
+        def sign(payload_hash, identity, fresh: false, ts: Time.now.to_i,
+                 nonce: SecureRandom.hex(16))
           unless payload_hash.is_a?(Hash)
             raise EnvelopeError, "sign: expected a Hash payload, got #{payload_hash.class}"
           end
@@ -76,6 +90,11 @@ module Runes
           end
 
           payload = strip_signature(payload_hash)
+          if fresh
+            # Signed, so a relay cannot refresh an old envelope to make it
+            # look new: changing ts or nonce invalidates the signature.
+            payload = payload.merge(TS_FIELD => Integer(ts), NONCE_FIELD => nonce.to_s)
+          end
           signature = identity.sign(canonical(payload))
           payload.merge(
             SIG_FIELD => encode_signature(signature),
@@ -92,7 +111,12 @@ module Runes
         # never degrades into "trust everything".
         #
         # @raise [VerificationError]
-        def verify!(signed_hash, trust_store)
+        # @param require_fresh [Boolean] refuse an envelope with no ts/nonce
+        # @param max_age [Integer] accepted clock skew, in seconds
+        # @param replay_guard [#check_and_record, nil] consumes the nonce;
+        #   pass a Runes::Security::NonceCache to make replay impossible
+        def verify!(signed_hash, trust_store, require_fresh: false,
+                    max_age: MAX_AGE_S, replay_guard: nil, now: Time.now.to_i)
           unless signed_hash.is_a?(Hash)
             raise VerificationError.new(:malformed, "verify: expected a Hash, got #{signed_hash.class}")
           end
@@ -138,7 +162,48 @@ module Runes
             raise VerificationError.new(:bad_signature, "signature does not match payload for kid #{kid.inspect}")
           end
 
+          check_freshness!(payload, require_fresh: require_fresh, max_age: max_age,
+                                   replay_guard: replay_guard, now: now)
+
           payload
+        end
+
+        # Freshness is checked AFTER the signature, so an attacker cannot use
+        # a forged ts/nonce to influence anything, and the nonce is consumed
+        # only for a payload that verified.
+        def check_freshness!(payload, require_fresh:, max_age:, replay_guard:, now:)
+          ts = payload[TS_FIELD]
+          nonce = payload[NONCE_FIELD].to_s
+
+          if ts.nil? || nonce.empty?
+            if require_fresh
+              raise VerificationError.new(
+                :missing_freshness,
+                "envelope carries no #{FRESHNESS_FIELDS.join('/')}; replay cannot be ruled out"
+              )
+            end
+            return true
+          end
+
+          begin
+            stamp = Integer(ts.to_s, 10)
+          rescue ArgumentError, TypeError
+            raise VerificationError.new(:malformed, "envelope #{TS_FIELD} is not an integer")
+          end
+
+          if (now - stamp).abs > max_age.to_i
+            raise VerificationError.new(
+              :stale, "envelope is #{(now - stamp).abs}s from the clock (limit #{max_age}s)"
+            )
+          end
+
+          return true if replay_guard.nil?
+
+          unless replay_guard.check_and_record(nonce, now)
+            raise VerificationError.new(:replayed, 'this envelope nonce has already been accepted')
+          end
+
+          true
         end
 
         # True when all three signature fields are present and non-empty.

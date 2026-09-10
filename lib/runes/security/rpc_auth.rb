@@ -5,6 +5,8 @@ require 'openssl'
 require 'digest'
 require 'securerandom'
 
+require_relative 'nonce_cache'
+
 module Runes
   module Security
     # Freshness for the tool-RPC request (S5-4/E5-13).
@@ -30,42 +32,10 @@ module Runes
       MAX_SEEN_NONCES = 1024
       AUTH_FIELDS = %w[token ts nonce mac].freeze
 
-      # Bounded, thread-safe set of accepted nonces with a TTL.
-      class NonceCache
-        def initialize(ttl: NONCE_TTL_S, max: MAX_SEEN_NONCES)
-          @ttl = Integer(ttl)
-          @max = Integer(max)
-          @seen = {}
-          @mutex = Mutex.new
-        end
-
-        # Atomically test-and-record. Returns true the first time a nonce
-        # is seen inside the TTL, false for any replay.
-        def check_and_record(nonce, now = Time.now.to_i)
-          key = nonce.to_s
-          return false if key.empty?
-
-          @mutex.synchronize do
-            prune(now)
-            return false if @seen.key?(key)
-
-            @seen[key] = now
-            @seen.shift while @seen.size > @max
-            true
-          end
-        end
-
-        def size
-          @mutex.synchronize { @seen.size }
-        end
-
-        private
-
-        def prune(now)
-          cutoff = now - @ttl
-          @seen.delete_if { |_nonce, at| at < cutoff }
-        end
-      end
+      # Kept as a constant so existing callers (and tests) that reference
+      # RPCAuth::NonceCache keep working; the implementation is shared with
+      # the signed-envelope replay guard.
+      NonceCache = Runes::Security::NonceCache
 
       class << self
         # Deterministic digest of the request body without auth fields.

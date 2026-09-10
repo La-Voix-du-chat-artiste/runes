@@ -153,6 +153,9 @@ module Runes
         # inbound envelopes must carry a valid signature from a trusted key
         # and outbound delegation envelopes are signed.
         @require_signatures = %w[1 true yes on].include?(@settings.env('RUNES_REQUIRE_SIGNATURES').to_s.downcase)
+        # Stricter sibling: refuse envelopes that carry no ts/nonce, so replay
+        # protection cannot be skipped by omitting the fields (doc5.md S5-4).
+        @require_freshness = %w[1 true yes on].include?(@settings.env('RUNES_REQUIRE_FRESHNESS').to_s.downcase)
         if @require_signatures
           @identity = Runes::Security::Identity.load_or_create(agent_id: @agent_id)
           @trust_store = Runes::Security::TrustStore.load_dir(trust_dir)
