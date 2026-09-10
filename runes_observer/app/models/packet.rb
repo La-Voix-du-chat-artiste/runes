@@ -6,12 +6,10 @@
 class Packet < ApplicationRecord
   # The topics the harness actually publishes (Phase 17 vocabulary). The
   # claim/lease kinds were deleted with the protocol in Phase 16.
-  KINDS = %w[
-    card status task task_response a2a_card a2a_task
-    prompt progress response response_global
-    tool_request tool_response tool_error
-    journal workflow_event other
-  ].freeze
+  # Re-exported from the classifier so the vocabulary has ONE definition:
+  # PacketClassifier is plain Ruby, so the harness's own suite can assert that
+  # every topic it publishes classifies into this list (doc5.md E5-2).
+  KINDS = PacketClassifier::KINDS
 
   # Payloads are stored whole unless they are enormous; an observatory must
   # not be the thing that OOMs when someone publishes a 40 MB blob.

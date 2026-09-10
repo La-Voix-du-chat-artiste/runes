@@ -19,6 +19,18 @@
 #   $a2a/v1/discovery/<org>/<unit>/<agent_id>   (retained Agent Card)
 #   $a2a/v1/tasks/<org>/<unit>/<agent_id>       (addressed task)
 module PacketClassifier
+  # The vocabulary a classified topic can produce. It lives HERE, in the pure
+  # module, rather than only on the ActiveRecord model, so the parent suite can
+  # assert that every topic the harness publishes maps into it (doc5.md E5-2):
+  # the two halves of the contract are then checked against one list instead of
+  # two copies that drift.
+  KINDS = %w[
+    card status task task_response a2a_card a2a_task
+    prompt progress response response_global
+    tool_request tool_response tool_error
+    journal workflow_event other
+  ].freeze
+
   Result = Struct.new(:kind, :agent_id, :request_id, :event, :tool, :run_id,
                       keyword_init: true)
 
