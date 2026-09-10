@@ -9,5 +9,6 @@ class InteractionsController < ApplicationController
     @packets = Packet.for_request(@id).chronological.to_a
     @agents = @packets.filter_map(&:agent_id).uniq
     @prompt = @packets.find { |packet| packet.kind == "prompt" }&.parsed&.dig("prompt")
+    @timeline = InteractionTimeline.build(@packets)
   end
 end

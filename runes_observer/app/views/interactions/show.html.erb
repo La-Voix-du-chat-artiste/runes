@@ -35,6 +35,47 @@
   </div>
 </div>
 
+<% if @timeline[:spans].any? %>
+  <section class="panel" style="margin-bottom:14px">
+    <div class="panel__head">
+      <span class="panel__title">Where the time went</span>
+      <span class="panel__count">
+        total <%= WorkflowStep.duration_label(@timeline[:total_ms]) %>
+        <% if @timeline[:dominant] %>
+          · dominated by <span class="mono"><%= @timeline[:dominant].label %></span>
+          (<%= WorkflowStep.duration_label(@timeline[:dominant].duration_ms) %>)
+        <% end %>
+      </span>
+    </div>
+    <div class="panel__body">
+      <ol class="trace">
+        <% @timeline[:spans].each do |span| %>
+          <li class="trace__row">
+            <span class="trace__idx mono"><%= span.index %></span>
+            <span class="trace__label mono"><%= span.label %></span>
+            <span class="trace__track">
+              <span class="trace__gap <%= "trace__gap--dominant" if @timeline[:dominant] && span.index == @timeline[:dominant].index %>"
+                    style="left: <%= span.percent %>%; width: <%= span.width_percent %>%"
+                    title="<%= span.from_kind %><%= " · #{span.from_event}" if span.from_event.present? %> →
+                           <%= span.label %>: <%= WorkflowStep.duration_label(span.duration_ms) %>"></span>
+              <% @timeline[:markers].each do |marker| %>
+                <% next unless marker.index == span.index %>
+                <span class="trace__tick" style="left: <%= marker.offset_percent %>%"
+                      title="<%= marker.label %> at <%= marker.at.strftime("%H:%M:%S.%L") %>"></span>
+              <% end %>
+            </span>
+            <span class="trace__dur mono"><%= WorkflowStep.duration_label(span.duration_ms) %></span>
+          </li>
+        <% end %>
+      </ol>
+      <p class="faint small timeline__note">
+        Each bar is the gap before a packet arrived, so the wait is drawn rather than
+        implied: the longest bar is what the interaction actually spent its time on.
+      </p>
+    </div>
+  </section>
+<% end %>
+
 <section class="panel">
   <div class="panel__head">
     <span class="panel__title">Timeline</span>

@@ -4,6 +4,7 @@ Rails.application.routes.draw do
   resources :agents, only: %i[index show], param: :agent_id
   resources :packets, only: %i[index show]
   resources :runs, only: %i[index show], param: :run_id
+  get "topology", to: "topology#show", as: :topology
   resources :interactions, only: %i[show], param: :id
 
   # JSON feed used by the Stimulus poller (?after_id=&agent_id=&kind=&request_id=).

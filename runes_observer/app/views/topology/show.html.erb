@@ -1,0 +1,153 @@
+<%# The fleet drawn as a graph. The layout is computed in Ruby and rendered as
+    SVG so the picture is deterministic and testable — no JavaScript, no
+    physics, and the same fleet always draws the same. %>
+<div class="page-head">
+  <h1>Topology</h1>
+  <span class="sub">who delegates to whom — derived from <span class="mono">from</span> on delegation packets</span>
+  <%= link_to "Fleet list", agents_path, class: "sub" %>
+</div>
+
+<div class="stats">
+  <div class="stat stat--online">
+    <div class="stat__value"><%= @stats[:online] %></div>
+    <div class="stat__label">online</div>
+  </div>
+  <div class="stat">
+    <div class="stat__value"><%= @stats[:agents] %></div>
+    <div class="stat__label">agents</div>
+  </div>
+  <div class="stat stat--flow">
+    <div class="stat__value"><%= @stats[:edges] %></div>
+    <div class="stat__label">delegation links</div>
+  </div>
+  <div class="stat <%= @stats[:errors].positive? ? 'stat--ended' : '' %>">
+    <div class="stat__value"><%= @stats[:errors] %></div>
+    <div class="stat__label">failed replies</div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">Fleet graph</span>
+    <span class="panel__count">
+      <%= @stats[:tasks] %> delegated task<%= "s" unless @stats[:tasks] == 1 %>
+      <% if @stats[:orphan_inbound].positive? %>
+        · <%= @stats[:orphan_inbound] %> inbound with no stated sender
+      <% end %>
+    </span>
+  </div>
+
+  <div class="panel__body panel__body--flush">
+    <% if @layout.empty? %>
+      <p class="panel__empty">
+        No agents observed yet. Start a fleet and the graph fills in:
+        <span class="mono">bin/runes-daemon</span> (one per agent), then
+        <span class="mono">bin/runes-client "prompt"</span> or a delegation to draw an edge.
+      </p>
+    <% else %>
+      <svg class="topo" viewBox="0 0 <%= FleetTopology::Layout::WIDTH %> <%= FleetTopology::Layout::HEIGHT %>"
+           role="img" aria-label="Agent delegation graph">
+        <defs>
+          <marker id="arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="arrow arrow--ok" />
+          </marker>
+          <marker id="arrow-error" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="arrow arrow--error" />
+          </marker>
+        </defs>
+
+        <% @layout.wires.each do |wire| %>
+          <path class="wire <%= wire.css_class %>" stroke-width="<%= wire.width %>"
+                marker-end="url(#<%= wire.css_class == 'wire--error' ? 'arrow-error' : 'arrow-ok' %>)"
+                d="M <%= wire.x1 %> <%= wire.y1 %> Q <%= wire.cx %> <%= wire.cy %> <%= wire.x2 %> <%= wire.y2 %>">
+            <title><%= wire.edge.from %> → <%= wire.edge.to %>: <%= wire.edge.tasks %> task(s),
+                   <%= wire.edge.replies %> repl<%= wire.edge.replies == 1 ? "y" : "ies" %>,
+                   avg <%= wire.edge.latency_label %><%= ", #{wire.edge.errors} failed" if wire.edge.errors.positive? %></title>
+          </path>
+        <% end %>
+
+        <% @layout.placed.each do |placed| %>
+          <g class="topo-node topo-node--<%= placed.node.display_state %>">
+            <circle cx="<%= placed.x %>" cy="<%= placed.y %>" r="<%= placed.radius %>" />
+            <text class="topo-node__label" x="<%= placed.label_x %>" y="<%= placed.label_y %>"
+                  text-anchor="<%= placed.anchor %>"><%= placed.node.label %></text>
+            <text class="topo-node__meta" x="<%= placed.label_x %>" y="<%= placed.label_y + 13 %>"
+                  text-anchor="<%= placed.anchor %>"><%= placed.node.display_state %><% if placed.node.degree.positive? %> · <%= placed.node.degree %> link<%= "s" unless placed.node.degree == 1 %><% end %></text>
+            <title><%= placed.node.agent_id %> — <%= placed.node.packets %> packets,
+                   in <%= placed.node.inbound %> / out <%= placed.node.outbound %><% if placed.node.tools.positive? %>, <%= placed.node.tools %> tools<% end %></title>
+          </g>
+        <% end %>
+      </svg>
+    <% end %>
+  </div>
+</section>
+
+<% if @edges.any? %>
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Delegation links</span>
+      <span class="panel__count"><%= @edges.size %></span>
+    </div>
+    <div class="panel__body panel__body--flush">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>From</th><th>To</th><th class="num">Tasks</th><th class="num">Replies</th>
+            <th class="num">Failed</th><th class="num">Avg</th><th class="num">Max</th><th class="num">Last</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @edges.each do |edge| %>
+            <tr>
+              <td><%= link_to edge.from, agent_path(edge.from), class: "mono" %></td>
+              <td><span class="faint">→</span> <%= link_to edge.to, agent_path(edge.to), class: "mono" %></td>
+              <td class="num"><%= edge.tasks %></td>
+              <td class="num"><%= edge.replies %></td>
+              <td class="num <%= "muted" if edge.errors.positive? %>"><%= edge.errors %></td>
+              <td class="num mono"><%= edge.latency_label %></td>
+              <td class="num mono"><%= WorkflowStep.duration_label(edge.max_ms) %></td>
+              <td class="num faint small"><%= edge.last_at ? time_ago_in_words(edge.last_at) + " ago" : "—" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+<% end %>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">Nodes</span>
+    <span class="panel__count"><%= @nodes.size %></span>
+  </div>
+  <div class="panel__body panel__body--flush">
+    <% if @nodes.empty? %>
+      <p class="panel__empty">Nothing observed.</p>
+    <% else %>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Agent</th><th>State</th><th class="num">Inbound</th><th class="num">Outbound</th>
+            <th class="num">Executed</th><th class="num">Errors</th><th class="num">Tools</th>
+            <th class="num">Packets</th><th class="num">Last seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @nodes.each do |node| %>
+            <tr>
+              <td><%= link_to node.agent_id, agent_path(node.agent_id), class: "mono" %></td>
+              <td><span class="pill pill--<%= node.display_state %>"><%= node.display_state %></span></td>
+              <td class="num"><%= node.inbound %></td>
+              <td class="num"><%= node.outbound %></td>
+              <td class="num"><%= node.executed %></td>
+              <td class="num"><%= node.errors %></td>
+              <td class="num"><%= node.tools %></td>
+              <td class="num"><%= node.packets %></td>
+              <td class="num faint small"><%= node.last_seen_at ? time_ago_in_words(node.last_seen_at) + " ago" : "—" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+</section>

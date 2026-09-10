@@ -290,7 +290,7 @@ that can launch unguarded shell commands from a browser is not shippable —
 the runner must consult the guard, and the allowlist must be explicit.
 **Size** L+ · **Do not start before auth and guard-awareness land.**
 
-### O1.3 Fleet topology and the A2A view (uses P0.3)
+### O1.3 Fleet topology and the A2A view (uses P0.3) — **built, Phase 21**
 
 The observer sees discovery cards and A2A tasks but shows them as rows. A
 **topology page** — nodes for agents, directed edges for discovery and
@@ -305,7 +305,7 @@ do `run_command`?").
 edge with the right counts; a changed card produces a second revision and a
 visible diff.
 
-### O1.4 Trace waterfall, export, and a CI oracle
+### O1.4 Trace waterfall, export, and a CI oracle — **waterfall built, Phase 21**
 
 `/interactions/:id` groups a request correctly but reads as a list. Make it
 a **waterfall**: one bar per packet, positioned by `occurred_at`, so gaps

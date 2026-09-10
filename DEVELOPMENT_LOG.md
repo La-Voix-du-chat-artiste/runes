@@ -1322,3 +1322,62 @@ ingested them, and the run appeared with three correctly ordered steps
 Still open from the roadmap: `O0.1` (ingest via `Runes::Transport`), `E5-2`
 (topic contract test), `E5-6` (guard-aware runes), and the further views
 (topology, trace waterfall).
+
+---
+
+## Phase 21 — the rest of the fleet console: topology, waterfall, traffic
+
+Driver: the observatory could show runs, agents and packets, but nothing that
+answers *how is this fleet shaped* or *where did this interaction spend its
+time*. Both answers are derivable from packets already stored, so this phase is
+view work with no new ingest.
+
+### `/topology` — the fleet as a graph
+
+`FleetTopology` derives nodes and edges from stored packets, deliberately
+conservatively: an **edge** exists only where the harness states both ends
+(a delegation packet's topic names the target and its payload's `from` names the
+delegator), and a `task_response` for the same request id completes that edge
+with its measured latency. An A2A task whose sender is not in the payload is
+counted as **inbound work on the target node, never drawn as an edge** —
+inventing an arrow from a topic that only names the receiver would be a lie with
+a nice picture. Node degree, executed work, tool counts and errors come from
+cards, progress and tool packets.
+
+`FleetTopology::Layout` computes a **deterministic** circular layout in Ruby and
+the view renders it as inline SVG: no JavaScript, no physics, and the same fleet
+always draws the same picture (so a screenshot, a test and a second look agree).
+Wire width scales with task volume, colour with failure rate; nodes are sized by
+activity and coloured by state. A table underneath carries the numbers (tasks,
+replies, failed, average and max latency, last seen), and an empty fleet
+explains how to produce traffic instead of drawing blank space.
+
+### The interaction page's waterfall
+
+`InteractionTimeline` turns an interaction into spans. A packet on this bus is an
+*instant*, so the informative quantity is the **gap before it**: a 30-second
+pause between `started` and the first `progress` is the planner call, and it now
+looks like 30 seconds. Each bar is a gap, positioned by offset and scaled to the
+whole interaction; the largest gap is named when it is at least 40% of the total
+("dominated by progress · plan_ready"), and packet arrivals are drawn as ticks.
+The 40% threshold was chosen after the first attempt called a 33% gap dominant in
+a four-packet interaction — noise dressed up as insight.
+
+### The dashboard
+
+A 30-minute packets-per-minute sparkline (a quiet minute is a zero-height bar,
+because "the fleet went silent" is information) and a "what it is carrying" mix
+of the top kinds over the last hour with counts and shares.
+
+### Verification
+
+Observatory **124 runs / 629 assertions / 0 failures** (was 103 / 530); parent
+**548 runs / 2493 assertions / 0 failures**. New coverage: 7 topology-derivation
+tests (including "a self-delegation creates no self-loop" and "an A2A task with
+no sender is not an edge"), 5 topology page tests (wire, arrow marker, error
+styling, empty state, unattributed inbound), 7 waterfall-arithmetic tests and a
+render test, plus a dashboard visual test.
+
+Two bugs of my own were caught by these tests while writing them: `each_cons(2)
+.with_index` returns the enumerator rather than the block's spans (needs
+`map.with_index`), and the dominant-gap threshold was too low to mean anything.

@@ -82,6 +82,41 @@
 
     <section class="panel">
     <div class="panel__head">
+      <span class="panel__title">Traffic · last 30 min</span>
+      <span class="panel__count"><%= @volume_total %> packet<%= "s" unless @volume_total == 1 %></span>
+    </div>
+    <div class="panel__body">
+      <% peak = [@volume.map { |slot| slot[:count] }.max.to_i, 1].max %>
+      <div class="spark" role="img" aria-label="Packets per minute over the last 30 minutes">
+        <% @volume.each do |slot| %>
+          <span class="spark__bar <%= "spark__bar--empty" if slot[:count].zero? %>"
+                style="height: <%= [(slot[:count].to_f / peak * 100).round(1), slot[:count].zero? ? 2.0 : 6.0].max %>%"
+                title="<%= slot[:at].strftime("%H:%M") %> · <%= slot[:count] %> packet<%= "s" unless slot[:count] == 1 %>"></span>
+        <% end %>
+      </div>
+      <div class="spark__axis faint small">
+        <span><%= @volume.first[:at].strftime("%H:%M") %></span>
+        <span>peak <%= peak %>/min</span>
+        <span>now</span>
+      </div>
+
+      <% if @kind_mix.any? %>
+        <div class="kv__section">what it is carrying · last hour</div>
+        <div class="mix">
+          <% @kind_mix.each do |row| %>
+            <div class="mix__row">
+              <span class="badge badge--<%= row[:kind].tr("_", "-") %>"><%= row[:kind] %></span>
+              <span class="mix__track"><span class="mix__bar" style="width: <%= row[:percent] %>%"></span></span>
+              <span class="mix__num mono small"><%= row[:count] %> · <%= row[:percent] %>%</span>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
       <span class="panel__title">Workflow runs</span>
       <span class="panel__count">
         <%= @run_stats[:total] %> total<% if @run_stats[:failed].positive? %> ·

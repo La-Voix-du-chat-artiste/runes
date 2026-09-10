@@ -333,3 +333,60 @@ pre.payload__body--raw { color: var(--text-dim); }
 .badge--cmd  { color: #ffb07c; border-color: #6b452b; }
 .badge--chat { color: #9ad3ff; border-color: #2b4a6b; }
 .badge--agent{ color: #3ddc97; border-color: #2b5a4a; }
+
+/* --- topology ----------------------------------------------------------- */
+/* A deterministic SVG graph: nodes on a circle, delegations as bowed wires
+   whose width is task volume and whose colour is failure rate. */
+
+.topo { display: block; width: 100%; height: auto; }
+.wire { fill: none; stroke: var(--accent-2); opacity: 0.55; }
+.wire--ok { stroke: var(--accent-2); }
+.wire--error { stroke: var(--offline); opacity: 0.8; }
+.arrow--ok { fill: var(--accent-2); }
+.arrow--error { fill: var(--offline); }
+
+.topo-node circle {
+  fill: var(--bg-elevated-2); stroke: var(--border-strong); stroke-width: 1.5;
+}
+.topo-node--online circle { stroke: var(--online); }
+.topo-node--offline circle { stroke: var(--offline); }
+.topo-node--stale circle { stroke: var(--stale); }
+.topo-node--unknown circle { stroke: var(--unknown); }
+.topo-node__label {
+  fill: var(--text); font-family: var(--mono); font-size: 12px;
+}
+.topo-node__meta { fill: var(--text-faint); font-size: 10px; }
+
+/* --- interaction waterfall ---------------------------------------------- */
+/* Bars are the GAPS between packets: an instant packet cannot have a duration,
+   but the wait before it can, and that is what a flat list hides. */
+
+.trace { list-style: none; margin: 0; padding: 0; }
+.trace__row {
+  display: grid; grid-template-columns: 22px minmax(140px, 1fr) minmax(200px, 3fr) 74px;
+  gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border);
+}
+.trace__row:last-child { border-bottom: none; }
+.trace__idx { color: var(--text-faint); font-size: 11px; text-align: right; }
+.trace__label { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trace__track { position: relative; height: 14px; background: var(--bg-elevated-2); border: 1px solid var(--border); border-radius: 4px; }
+.trace__gap { position: absolute; top: 1px; bottom: 1px; border-radius: 3px; background: var(--accent); opacity: 0.75; min-width: 2px; }
+.trace__gap--dominant { background: var(--stale); opacity: 0.95; }
+.trace__tick { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--text-dim); opacity: 0.6; }
+.trace__dur { font-size: 11.5px; text-align: right; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+/* --- dashboard sparkline & mix ------------------------------------------ */
+
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 64px; padding: 4px 0; }
+.spark__bar {
+  flex: 1 1 0; min-width: 2px; border-radius: 2px 2px 0 0;
+  background: linear-gradient(180deg, var(--accent), rgba(88, 196, 221, 0.35));
+}
+.spark__bar--empty { background: var(--border); }
+.spark__axis { display: flex; justify-content: space-between; margin-top: 4px; }
+
+.mix { display: flex; flex-direction: column; gap: 5px; }
+.mix__row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 96px; gap: 8px; align-items: center; }
+.mix__track { height: 8px; border-radius: 4px; background: var(--bg-elevated-2); border: 1px solid var(--border); overflow: hidden; }
+.mix__bar { display: block; height: 100%; background: var(--accent-2); }
+.mix__num { color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
