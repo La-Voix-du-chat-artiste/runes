@@ -1381,3 +1381,50 @@ render test, plus a dashboard visual test.
 Two bugs of my own were caught by these tests while writing them: `each_cons(2)
 .with_index` returns the enumerator rather than the block's spans (needs
 `map.with_index`), and the dominant-gap threshold was too low to mean anything.
+
+---
+
+## Phase 22 — the publisher/observer contract (E5-2)
+
+Driver: the observatory's classifier is a **copy** of the harness's topic
+grammar, and nothing checked the two against each other. That is exactly how the
+claim/lease vocabulary survived the Phase 16 protocol deletion: the observer kept
+modelling traffic no producer could emit, its demo published the dead topics, and
+the tests asserted them — while the agent filter showed almost nothing on live
+data (O5-5).
+
+`test/topic_contract_test.rb` closes the loop in **both** directions:
+
+1. **Producer → observer.** It drives a real dispatcher — card/status announce,
+   `subscribe_topics`, a build prompt with a correlated reply, the global-reply
+   path, and a delegation — then asserts every topic it published classifies to a
+   known kind rather than silently falling through to `other`. The delegation
+   assertion also pins the two ends (the topic names the target, the payload's
+   `from` names the delegator), because that is what the topology view draws its
+   edges from.
+2. **Observer → producer.** Every pattern the classifier defines must have a
+   representative topic in the test's table, so a new pattern cannot be added
+   without a producer to justify it — and the representatives must classify to
+   their expected kind, which documents the grammar in one place.
+
+Making that possible required a small structural fix: the kind vocabulary now
+lives in the pure `PacketClassifier` (re-exported by the `Packet` model), because
+the parent suite cannot load an ActiveRecord model. The two halves of the
+contract are now checked against one list instead of two copies that drift.
+
+**Left deliberately uncovered:** `runes/prompts` itself is published by the
+*client* (`bin/runes-client`, the TUI), not by an agent, so no dispatcher-driven
+run can emit it — it is covered by the representative table instead, and the test
+says so.
+
+**Verification:** parent **555 runs / 2551 assertions / 0 failures / 0 errors**;
+observatory **124 runs / 629 assertions / 0 failures**; `zeitwerk:check` clean.
+The full-suite run caught a leak in this test itself — it overwrote the
+process-global `RUNES_ROOT` and deleted that directory in teardown, breaking 11
+unrelated tests — which is the same class of global-state leak the round-5 audit
+found in the workflow suite (D5-2). File-local `Settings.new(root:)` is the
+pattern to use instead.
+
+Still open from the goal: `O0.1` (ingest through `Runes::Transport` — MQTT 5
+properties visible, the `mqtt` gem dropped, a broker-free `inproc` mode) and
+`E5-6` (guard-aware runes).
