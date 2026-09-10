@@ -315,6 +315,32 @@ class RoastCompatibilityTest < Minitest::Test
     assert_empty @cmd_runner.commands, "nothing should have been executed"
   end
 
+  # --- W5-9: the rune's working directory must reach the child -----------
+
+  def test_agent_working_directory_is_passed_to_the_runner
+    dir = File.join(@dirs.first || Dir.mktmpdir("runes-wd-"), "sub")
+    FileUtils.mkdir_p(dir)
+    @dirs << dir unless @dirs.include?(dir)
+    runner = CapturingRunner.new([JSON.generate("type" => "assistant", "message" => "ok")])
+    Runes::Plugins::Agent.command_runner = runner
+    Runes::Plugins::Agent.provider_factory = nil
+
+    run_source(<<~RUBY)
+      config do
+        agent(:a) do
+          provider(:pi)
+          working_directory("#{dir}")
+        end
+      end
+      execute { agent(:a) { "hi" } }
+    RUBY
+
+    call = runner.calls.last
+    refute_nil call, "the runner must have been invoked"
+    assert_equal dir, call[:options][:working_directory].to_s,
+                 "Roast honours working_directory; the rune used to accept and ignore it (W5-9)"
+  end
+
   # --- chat config ----------------------------------------------------
 
   def test_chat_config_surface

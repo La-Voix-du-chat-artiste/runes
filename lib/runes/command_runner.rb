@@ -224,9 +224,16 @@ module Runes
         false
       end
 
+      # `Bundler.with_unbundled_env` mutates the PROCESS environment around
+      # the block, so two concurrent spawns (async runes, a parallel map) can
+      # interleave and leave ENV corrupted — observed as BUNDLE_GEMFILE
+      # becoming nil (doc5.md W5-6). Serialise it: spawning is I/O-bound, and
+      # the child environment is the reason we are here at all.
+      ENV_SWAP_MUTEX = Mutex.new
+
       def with_unbundled_env(&block)
         if defined?(Bundler) && Bundler.respond_to?(:with_unbundled_env)
-          Bundler.with_unbundled_env(&block)
+          ENV_SWAP_MUTEX.synchronize { Bundler.with_unbundled_env(&block) }
         else
           block.call
         end

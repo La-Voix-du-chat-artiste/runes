@@ -468,7 +468,7 @@ class WorkflowEngineTest < Minitest::Test
     end
 
     assert_equal "ORIGINAL", error.message, "the original exception must win (W5-4)"
-    assert_same previous_group, Runes::TaskGroup.current, "the thread-local TaskGroup must be restored"
+    assert_group_restored(previous_group, "the thread-local TaskGroup must be restored")
   end
 
   def test_execution_manager_restores_state_when_final_output_computation_fails
@@ -477,8 +477,66 @@ class WorkflowEngineTest < Minitest::Test
       run_workflow("execute { }")
     end
 
-    assert_same previous_group, Runes::TaskGroup.current,
-                "a cleanup failure must still restore the thread-local TaskGroup"
+    assert_group_restored(previous_group,
+                          "a cleanup failure must still restore the thread-local TaskGroup")
+  end
+
+  # --- W5-7 / W5-8: TaskGroup stop semantics ----------------------------
+
+  def test_async_after_stop_does_not_run_the_block
+    group = Runes::TaskGroup.new
+    ran = false
+    group.stop
+
+    task = group.async { ran = true }
+    sleep 0.15
+
+    refute ran, "a task created after stop must not execute its block (W5-8)"
+    assert task.stopped?
+    refute task.started?, "no thread may be created for it"
+    assert_nil task.wait
+  end
+
+  def test_stop_reports_stragglers_without_waiting_and_drain_joins_them
+    group = Runes::TaskGroup.new
+    finished = false
+    group.async do
+      sleep 0.6
+      finished = true
+    end
+    sleep 0.05
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    outstanding = group.stop
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+    assert_equal 1, outstanding.size, "the rune still in flight must be reported (W5-7)"
+    assert_operator elapsed, :<, 0.4,
+                    "stop must not block on a running rune: a fast failure must not wait for a slow sibling (W5-5)"
+    assert_equal [], group.drain(timeout: 5), "drain joins it"
+    assert finished, "the rune finished on its own"
+  end
+
+  # --- W5-6: the Bundler env swap is process-wide, so it must be serialised
+
+  def test_concurrent_spawns_do_not_corrupt_the_bundler_environment
+    before = ENV["BUNDLE_GEMFILE"]
+
+    results = 4.times.map do
+      Thread.new do
+        Runes::CommandRunner.execute("ruby", args: ["-e", "print ENV['BUNDLE_GEMFILE'].to_s"])
+      end
+    end.map(&:value)
+
+    results.each { |result| assert result.status.success?, "each spawn must succeed" }
+    # `assert_equal nil` trips Minitest's style guard, and BUNDLE_GEMFILE is
+    # legitimately absent outside `bundle exec`.
+    if before.nil?
+      assert_nil ENV["BUNDLE_GEMFILE"], "the ENV swap must not invent a gemfile"
+    else
+      assert_equal before, ENV["BUNDLE_GEMFILE"],
+                   "Bundler.with_unbundled_env mutates the process ENV; concurrent spawns must not interleave (W5-6)"
+    end
   end
 
   # --- config manager -------------------------------------------------
@@ -1011,4 +1069,16 @@ class WorkflowEngineTest < Minitest::Test
     assert_operator Runes::ControlFlow::Next, :<, Runes::ControlFlow::Base
     assert_operator Runes::ControlFlow::Break, :<, Runes::ControlFlow::Base
   end
+
+  # `assert_same nil, x` trips Minitest's "use assert_nil" guard, which is why
+  # these two tests only passed when an earlier test happened to leak a group
+  # into the thread-local — the order-dependence class doc5.md D5-2 describes.
+  def assert_group_restored(previous, message)
+    if previous.nil?
+      assert_nil Runes::TaskGroup.current, message
+    else
+      assert_same previous, Runes::TaskGroup.current, message
+    end
+  end
+
 end

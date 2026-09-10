@@ -395,7 +395,10 @@ module Runes
             command_line,
             stdin: @prompt,
             stdout_handler: ->(line) { handle_stdout(line) },
-            timeout: @config.valid_timeout
+            timeout: @config.valid_timeout,
+            # Roast honours the configured working directory; this rune used
+            # to accept the setting and silently ignore it (doc5.md W5-9).
+            working_directory: @config.valid_working_directory
           )
           @duration_ms = monotonic_ms - started
 

@@ -11,7 +11,7 @@ module Runes
   # difference is that a thread already running cannot be cooperatively
   # cancelled, so `stop` only stops work that has not started yet.
   class Task
-    def initialize(on_complete: nil, &block)
+    def initialize(on_complete: nil, autostart: true, &block)
       @mutex = Mutex.new
       @condition = ConditionVariable.new
       @done = false
@@ -19,6 +19,15 @@ module Runes
       @value = nil
       @exception = nil
       @on_complete = on_complete
+      # A task created for an already-stopped group must not run at all: the
+      # block used to execute and only then be marked stopped (doc5.md W5-8),
+      # so a post-stop `async` did work nobody would ever observe.
+      unless autostart
+        @done = true
+        @stopped = true
+        @thread = nil
+        return
+      end
       @thread = Thread.new do
         begin
           @value = block.call(self)
@@ -49,6 +58,12 @@ module Runes
       raise @exception if @exception
 
       @value
+    end
+
+    # A task that never started is not "running"; used by TaskGroup#stop to
+    # decide what still needs joining.
+    def started?
+      !@thread.nil?
     end
 
     def finished?
@@ -107,13 +122,17 @@ module Runes
     end
 
     def async(&block)
-      task = Task.new(on_complete: method(:task_completed), &block)
+      stopped = false
+      task = nil
       @mutex.synchronize do
-        if @stopped
-          task.mark_stopped!
-        else
-          @tasks << task
-        end
+        stopped = @stopped
+        task = if stopped
+                 # Never start the thread: the group is already stopped.
+                 Task.new(on_complete: method(:task_completed), autostart: false, &block)
+               else
+                 Task.new(on_complete: method(:task_completed), &block)
+               end
+        @tasks << task unless stopped
       end
       task
     end
@@ -122,19 +141,6 @@ module Runes
     def task_completed(task)
       @completions << task
       nil
-    end
-
-    # Requests a stop. Tasks that have not started are marked stopped; a
-    # thread already running is left to finish on its own.
-    def stop
-      @mutex.synchronize do
-        @stopped = true
-        @tasks.each { |task| task.mark_stopped! unless task.finished? }
-      end
-    end
-
-    def stopped?
-      @mutex.synchronize { @stopped }
     end
 
     def tasks
@@ -160,6 +166,61 @@ module Runes
         remaining -= 1
         block ? block.call(task) : task.wait
       end
+    end
+
+    # How long #drain waits for stragglers before giving up on them.
+    STOP_JOIN_TIMEOUT_S = 5.0
+
+    # Mark the group stopped and REPORT the runes still in flight.
+    #
+    # It deliberately does not block. A Ruby thread cannot be interrupted
+    # mid-call, so joining here would make an abort wait for the slowest
+    # sibling — exactly what W5-5 forbids ("the fast failure must not wait for
+    # the slow task"). Instead the stragglers stay tracked on the group, are
+    # named in a warning, and can be joined with #drain by anyone who wants
+    # the guarantee.
+    def stop(join_timeout: nil)
+      outstanding = []
+      @mutex.synchronize do
+        @stopped = true
+        @tasks.each do |task|
+          task.mark_stopped! unless task.finished?
+          outstanding << task if task.started? && !task.finished?
+        end
+      end
+
+      if join_timeout
+        stragglers = drain(outstanding, timeout: join_timeout)
+        warn_about(stragglers, join_timeout) unless stragglers.empty?
+      elsif !outstanding.empty?
+        warn "[Workflow] scope stopped with #{outstanding.size} rune(s) still running; " \
+             'they cannot be interrupted (give them a timeout) and are tracked on the group'
+      end
+      outstanding
+    end
+
+    # Join the given tasks (default: everything outstanding), bounded by
+    # `timeout`. Returns the tasks that were still running when it elapsed.
+    def drain(tasks = nil, timeout: STOP_JOIN_TIMEOUT_S)
+      pending = tasks || tasks_in_flight
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout.to_f
+      pending.each do |task|
+        remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        break if remaining <= 0
+
+        task.thread&.join(remaining)
+      end
+      pending.reject(&:finished?)
+    end
+
+    # Tasks that started and have not finished.
+    def tasks_in_flight
+      tasks.select { |task| task.started? && !task.finished? }
+    end
+
+    def warn_about(stragglers, timeout)
+      warn "[Workflow] #{stragglers.size} rune(s) still running #{timeout}s after the scope stopped; " \
+           'they cannot be interrupted mid-call (give them a timeout)'
     end
   end
 
