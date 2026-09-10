@@ -31,10 +31,11 @@ class IngestStatus < ApplicationRecord
     ENV.fetch("RUNES_MQTT_PORT", "1883").to_i
   end
 
-  def self.mark_connected!(host:, port:)
+  def self.mark_connected!(host:, port:, transport: nil)
     status = current
     status.update!(connected: true, host: host, port: port, last_error: nil,
-                   started_at: Time.current)
+                   started_at: Time.current,
+                   transport: transport.presence || status.transport)
     status
   rescue StandardError => e
     warn_failure("mark_connected!", e)

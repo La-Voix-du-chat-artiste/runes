@@ -541,14 +541,18 @@ It is **read-only** (subscribe + record, never publishes).
 cd runes_observer
 bin/rails db:prepare
 mosquitto -p 1883 &            # or: bundle exec ruby demo/broker.rb 1883
-bin/runes-ingest               # ingest process: subscribes to runes/#
+bin/runes-ingest               # ingest process: subscribes via Runes::Transport
 bin/rails server -p 3100       # → http://127.0.0.1:3100
-# no broker? seed a demo session instead:
+# no broker? watch this process only (inproc), or seed a demo session:
+RUNES_TRANSPORT=inproc bin/runes-ingest
 bin/rails runes:demo
 ```
 
-Architecture: `MqttIngest → PacketClassifier → PacketRecorder → SQLite`, with
+Architecture: `FabricIngest → PacketClassifier → PacketRecorder → SQLite`, with
 the web process polling `GET /feed?after_id=…` (Stimulus) for the live tail.
+The ingest subscribes through `Runes::Transport` — the same seam the fleet
+publishes through — so it sees MQTT 5 `correlation_id`, `response_topic` and
+`user_properties`, and `RUNES_TRANSPORT=inproc` runs it with no broker at all.
 Both the live ingest and the demo seeder write through `PacketRecorder`, so
 the UI only ever shows rows the recorder produced. Full details, data model
 and rake tasks: [`runes_observer/README.md`](runes_observer/README.md).

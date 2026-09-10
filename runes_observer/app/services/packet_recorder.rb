@@ -15,6 +15,12 @@ class PacketRecorder
   DEDUPE_WINDOW = 10.0
   DEFAULT_RETENTION_DAYS = 7
   DEFAULT_MAX_PACKETS = 200_000
+  # User properties are publisher-controlled: bound both the number of pairs
+  # and the size of each value so one hostile publisher cannot inflate the
+  # database through a header field. Truncation happens per value, never on
+  # the encoded JSON, so whatever is stored still parses.
+  USER_PROPERTY_LIMIT = 32
+  USER_PROPERTY_VALUE_BYTES = 512
 
   @executors = {}
   @executors_mutex = Mutex.new
@@ -26,11 +32,13 @@ class PacketRecorder
   @dedupe_mutex = Mutex.new
 
   class << self
-    def record(topic:, payload:, occurred_at: nil, received_at: Time.current, retained: false)
+    def record(topic:, payload:, occurred_at: nil, received_at: Time.current, retained: false,
+               qos: nil, properties: nil)
       return nil if retained_replay?(topic, payload)
 
       new(topic: topic, payload: payload, occurred_at: occurred_at,
-          received_at: received_at, retained: retained).record
+          received_at: received_at, retained: retained, qos: qos,
+          properties: properties).record
     end
 
     def record_packet!(packet_hash)
@@ -216,7 +224,8 @@ class PacketRecorder
     end
   end
 
-  def initialize(topic:, payload:, occurred_at: nil, received_at: Time.current, retained: false)
+  def initialize(topic:, payload:, occurred_at: nil, received_at: Time.current, retained: false,
+                 qos: nil, properties: nil)
     @topic = topic.to_s
     raw = payload.to_s
     # MQTT payloads are arbitrary bytes: sqlite3 raises
@@ -230,6 +239,12 @@ class PacketRecorder
     @occurred_at = occurred_at || received_at
     @received_at = received_at
     @retained = retained
+    @qos = qos
+    # `Runes::Transport::Message#properties` is the transport-neutral
+    # subset (`response_topic`, `correlation_id`, `user_properties`); the
+    # inproc hub also marks retained replays with `{retained: true}`, which
+    # is not a real property and is not stored as one.
+    @properties = properties.is_a?(Hash) ? properties : {}
   end
 
   def record
@@ -251,7 +266,12 @@ class PacketRecorder
       event: result.event,
       tool: result.tool,
       occurred_at: @occurred_at,
-      received_at: @received_at
+      received_at: @received_at,
+      qos: @qos,
+      retain: @retained,
+      correlation_id: @properties[:correlation_id].presence,
+      response_topic: @properties[:response_topic].presence,
+      user_properties: user_properties_json
     )
 
     self.class.remember_executor(correlation_key(result), agent_id)
@@ -317,6 +337,20 @@ class PacketRecorder
     else
       Agent.touch_seen!(agent_id, at: @occurred_at)
     end
+  end
+
+  # The MQTT 5 user properties as stored JSON text, or nil when there are
+  # none. Publisher-controlled, so bounded on the way in (see
+  # USER_PROPERTY_LIMIT): one packet must not be able to write a megabyte of
+  # headers, and a value that was cut is still valid JSON.
+  def user_properties_json
+    users = @properties[:user_properties]
+    return nil unless users.is_a?(Hash) && users.any?
+
+    trimmed = users.first(USER_PROPERTY_LIMIT).to_h do |key, value|
+      [key.to_s[0, 128], value.to_s.byteslice(0, USER_PROPERTY_VALUE_BYTES).to_s.scrub]
+    end
+    JSON.generate(trimmed)
   end
 
   def truncate(text)

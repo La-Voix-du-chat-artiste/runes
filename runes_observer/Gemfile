@@ -17,7 +17,10 @@ gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 gem "jbuilder"
 
-# MQTT client — the observatory subscribes to the Runes fabric with this.
+# NOT the observatory's own client: the ingest subscribes through
+# Runes::Transport. This is here for `Runes::Transport::MQTT311`, the adapter
+# `RUNES_TRANSPORT=auto` falls back to on a broker that refuses MQTT 5 — the
+# adapter requires it lazily, so mqtt5 and inproc never load it.
 gem "mqtt", "~> 0.7"
 
 # Pin json to the 2.x series. The 3.0.0 gem available here changes

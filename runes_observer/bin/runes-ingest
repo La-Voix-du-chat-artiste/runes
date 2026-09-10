@@ -1,14 +1,18 @@
 #!/usr/bin/env ruby
-# Long-running MQTT ingest for the Runes observatory.
+# Long-running fabric ingest for the Runes observatory.
 #
-#   bin/runes-ingest                                  # 127.0.0.1:1883, runes/#
+#   bin/runes-ingest                                  # auto (mqtt5 → mqtt311 → inproc)
+#   RUNES_TRANSPORT=mqtt5 bin/runes-ingest           # force MQTT 5 (properties!)
+#   RUNES_TRANSPORT=inproc bin/runes-ingest          # no broker at all
 #   RUNES_MQTT_HOST=10.0.0.5 RUNES_MQTT_PORT=1884 bin/runes-ingest
 #
-# Writes every observed PUBLISH through PacketRecorder and publishes its
-# own health into the ingest_statuses table so the web UI can show whether
-# the fabric is being watched. Stop with Ctrl+C / SIGTERM.
+# Subscribes through Runes::Transport (the same seam the fleet publishes
+# through), writes every observed message through PacketRecorder — MQTT 5
+# properties included — and publishes its own health into the ingest_statuses
+# table so the web UI can show whether the fabric is being watched.
+# Stop with Ctrl+C / SIGTERM.
 require_relative "../config/environment"
 
-ingest = MqttIngest.new
+ingest = FabricIngest.new
 %w[INT TERM].each { |sig| Signal.trap(sig) { ingest.stop } }
 ingest.run

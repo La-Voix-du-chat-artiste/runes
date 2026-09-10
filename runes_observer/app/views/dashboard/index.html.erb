@@ -61,6 +61,7 @@
         <div class="panel__body">
           <dl class="kv">
             <dt>broker</dt><dd><%= @status.host %>:<%= @status.port %></dd>
+            <dt>transport</dt><dd><%= @status.transport.presence || "unknown (started before O0.1)" %></dd>
             <dt>connected</dt><dd><%= @status.connected? ? "yes" : "no" %></dd>
             <dt>last packet</dt><dd><%= @status.last_message_at.present? ? "#{ago_in_words_short(@status.last_message_at)} ago" : "—" %></dd>
             <dt>packets this run</dt><dd><%= @status.packets_total %></dd>

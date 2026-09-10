@@ -53,15 +53,23 @@ all classified and stored.
 ## How it works
 
 ```
-MQTT broker ──runes/#──▶ MqttIngest ──▶ PacketClassifier ──▶ PacketRecorder ──▶ SQLite
-(mosquitto/embedded)   (bin/runes-ingest)  (topic → kind/agent/request)          │
-                                                                                 ▼
-                       browser ◀── Stimulus /feed poller ◀── PacketsController ──▶ views
+   the fabric ──runes/#──▶ FabricIngest ──▶ PacketClassifier ──▶ PacketRecorder ──▶ SQLite
+(mosquitto / embedded /       (bin/runes-ingest)  (topic → kind/agent/request)      │
+ in-process hub)                                                                     ▼
+                      browser ◀── Stimulus /feed poller ◀── PacketsController ──▶ views
 ```
 
-- `MqttIngest` subscribes to `runes/#`, reconnects with backoff, and writes
-  its own health into `ingest_statuses` so the UI can show whether the bus
-  is being watched.
+- `FabricIngest` subscribes to `runes/#` and `$a2a/#` **through
+  `Runes::Transport`** — the same seam the fleet publishes through — so the
+  observer sees what the transport sees: MQTT 5 `correlation_id`,
+  `response_topic` and `user_properties`, plus `qos` and `retain`.
+  `RUNES_TRANSPORT` picks the adapter (`mqtt5`, `mqtt311`, `inproc`; default
+  `auto` = mqtt5 → mqtt311 → inproc) and `inproc` runs the whole observatory
+  with no broker at all, which is how its own tests drive it. It reconnects
+  with backoff — a drop shorter than `DISCONNECT_GRACE_S` is the adapter's own
+  business, mirrored from its `on_health` — and writes its health into
+  `ingest_statuses` so the UI can show whether, and via what, the bus is being
+  watched.
 - `PacketClassifier` maps a topic to a `kind` and extracts
   `agent_id` / `request_id` / `event` / `tool` from the topic and the JSON
   payload. It mirrors the Runes topic map; unknown topics are stored as

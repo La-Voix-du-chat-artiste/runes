@@ -76,57 +76,67 @@ O1.2; the read-only items are unaffected.
 Small, unglamorous, and the highest value per line. None of these change
 the UI's shape much, and all of them unblock the P1 work.
 
-### O0.1 Ingest through `Runes::Transport` (uses P0.1)
+### O0.1 Ingest through `Runes::Transport` (uses P0.1) — ✅ DONE (Phase 25)
 
 **Why.** The fabric now carries MQTT 5 properties — `response_topic`,
-`correlation_id`, `user_properties` — and the observer cannot see any of
-them, because `mqtt` 0.7 speaks 3.1.1. It is also a second, divergent MQTT
-implementation in a project whose P0.1 work was *deleting* exactly that.
-The observer should consume the fabric through the same seam as the fleet:
-that is the strongest possible dogfood of `Runes::Transport`.
+`correlation_id`, `user_properties` — and the observer could not see any of
+them, because `mqtt` 0.7 speaks 3.1.1. It was also a second, divergent MQTT
+implementation in a project whose P0.1 work was *deleting* exactly that. The
+observer should consume the fabric through the same seam as the fleet: that
+is the strongest possible dogfood of `Runes::Transport`.
 
-**How.** `MqttIngest#connect_and_consume` becomes:
+**How it landed.** `MqttIngest` is gone; `FabricIngest` subscribes through
+`Runes::Transport.build` to `runes/#` and `$a2a/#`, and hands each
+`Runes::Transport::Message` to `PacketRecorder.record(topic:, payload:,
+retained:, qos:, properties:)`:
 
 ```ruby
-transport = Runes::Transport.build(kind: ENV["RUNES_TRANSPORT"], settings: settings)
-transport.subscribe("runes/#") { |msg| PacketRecorder.record_message(msg) }
-transport.subscribe("$a2a/#")  { |msg| PacketRecorder.record_message(msg) }
+transport.subscribe(@topic)    { |message| consume(message) }
+transport.subscribe(A2A_TOPIC) { |message| consume(message) }
 ```
 
-`Runes::Transport::Message` already exposes `topic`, `payload`,
-`properties`, `qos`, `retain`, `response_topic`, `correlation_id` and
-`user_properties`, so `PacketRecorder.record_message` is a thin adapter
-over the existing `record(topic:, payload:)`.
+Two deliberate details beyond the sketch:
 
-**Bonus:** `RUNES_TRANSPORT=inproc` makes the observer work with **zero
-broker**, which is a much better demo and test story than "start
-mosquitto first".
+- **Layered reconnection, not duplicated.** A transient drop is the
+  adapter's business (MQTT 5 reconnects and re-subscribes on its own and
+  reports through `on_health`, which `FabricIngest` mirrors into
+  `IngestStatus` *and* into the retained-replay dedupe window); a drop that
+  outlasts `DISCONNECT_GRACE_S` is ours, and triggers the rebuild/backoff.
+  Without that split the observer's backoff would fight the adapter's.
+- **The harness is put on the load path by an initializer**
+  (`config/initializers/runes_transport.rb`), not by a gem dependency:
+  `runes` declares `mqtt ~> 0.7` as a runtime dep, and the observatory must
+  not pin — or be pinned by — the client its own transport may not use.
+  `RUNES_HARNESS_LIB` overrides the path.
 
-**Size** M · **Risk** low-medium (couples the ingest process to the
-harness; the web process is untouched) · **Acceptance** a live run shows
-`correlation_id`/`response_topic`/`user_properties` persisted for an A2A
-task, and `bundle exec ruby tmp/verify_mqtt5_live.rb` still passes.
+**Bonus, delivered:** `RUNES_TRANSPORT=inproc` runs the observatory with
+**zero broker**, and that is now how the ingest tests drive it — a real
+transport and a real recorder, no fake client.
 
-### O0.2 Widen the schema and the classifier
+**Acceptance, verified live** (mosquitto 2.1.2, `RUNES_TRANSPORT=mqtt5`):
+`tmp/mqtt5_observer_probe.rb` published one A2A-shaped message and the row
+came back with `correlation_id`, `response_topic`,
+`user_properties = {"a2a-status":"working","probe-tag":…}` and
+`ingest_statuses.transport = "MQTT5"`. The `qos` column stores the **delivery**
+QoS: the ingest subscribes at QoS 0, so a QoS 1 publish arrives as 0 and is
+stored as 0, which is the honest number for "what we received".
 
-New `packets` columns, all nullable and cheap:
+### O0.2 Widen the schema and the classifier — 🟡 MOSTLY DONE (Phase 25)
 
-| Column | Source | Why it matters |
+| Column | Source | Status |
 | --- | --- | --- |
-| `qos`, `retain` | `Message` | retained cards vs live traffic is a real distinction (the code already documents the card/state trap) |
-| `correlation_id`, `response_topic` | properties | request/reply reconstruction without guessing from topic grammar |
-| `user_properties` (JSON) | properties | `a2a-status`, trace ids the transport already carries |
-| `signature_state` | O0.3 | `unsigned` / `verified` / `untrusted` / `invalid` |
-| `key_fingerprint` | O0.3 | who *really* published |
-| `run_id`, `rune`, `step_index`, `duration_ms` | O1.1 | workflow steps become first-class |
-| `tokens_in`, `tokens_out`, `cost_usd` | O2.5 | spend, per run and per agent |
+| `qos`, `retain` | `Message` | ✅ |
+| `correlation_id`, `response_topic` | properties | ✅ (`correlation_id` indexed — it is the join key that survives an unparseable payload) |
+| `user_properties` (JSON) | properties | ✅ bounded: 32 pairs, 512 bytes per value, truncated per value so the stored JSON always parses |
+| `signature_state` | O0.3 | ⬜ |
+| `key_fingerprint` | O0.3 | ⬜ |
+| `run_id`, `rune`, `step_index`, `duration_ms` | O1.1 | ✅ (`run_id` in Phase 20; the rest live in `workflow_steps`) |
+| `tokens_in`, `tokens_out`, `cost_usd` | O2.5 | ✅ (`workflow_steps`) |
 
-`PacketClassifier` gains the workflow/rune topics (O1.1) and a `run_id`
-extraction, so the existing feed filters (`kind`, `agent_id`,
-`request_id`) keep working and gain `run_id`.
-
-**Size** S-M · **Acceptance** a migration test plus classifier unit tests
-for every new topic (the classifier is pure; this is cheap to pin down).
+The classifier still does not know the A2A task space: `runes/a2a/tasks/…`
+classifies as `other` (the live probe showed exactly that). `$a2a/#` topics
+are recognised; the `runes/a2a/…` spelling is not, and should be either
+classified or removed from the vocabulary.
 
 ### O0.3 Verify signatures, and catch impersonation (uses P1.5)
 

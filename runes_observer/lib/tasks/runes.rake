@@ -1,7 +1,7 @@
 namespace :runes do
-  desc "Subscribe to the Runes MQTT fabric and record every packet (long-running)"
+  desc "Subscribe to the Runes fabric via Runes::Transport and record every packet (long-running)"
   task ingest: :environment do
-    ingest = MqttIngest.new
+    ingest = FabricIngest.new
     %w[INT TERM].each { |sig| Signal.trap(sig) { ingest.stop } }
     ingest.run
   end

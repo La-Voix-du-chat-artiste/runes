@@ -1508,3 +1508,86 @@ exit 1, one unguarded success. Suites: parent **565 / 2590 / 0**, observatory
 **124 / 629 / 0**.
 
 Still open from the goal: `O0.1` (observatory ingest through `Runes::Transport`).
+
+---
+
+## Phase 25 — The observer reads the bus the way the fleet writes it (0.3.0)
+
+`docs/OBSERVATORY_ROADMAP.md` O0.1 asked for one thing: stop giving the
+observatory its own MQTT client. `MqttIngest` spoke MQTT 3.1.1 through `mqtt`
+0.7, so the observer could not see a single MQTT 5 property — not
+`response_topic`, not `correlation_id`, not `user_properties` — for the very
+messages its whole job is to explain. It was also a second, divergent MQTT
+implementation in a project that had just finished deleting one.
+
+`MqttIngest` is gone. `FabricIngest` subscribes through `Runes::Transport`, the
+same seam the fleet publishes through, and hands each `Runes::Transport::Message`
+to the recorder:
+
+```ruby
+transport.subscribe(@topic)    { |message| consume(message) }
+transport.subscribe(A2A_TOPIC) { |message| consume(message) }
+```
+
+`properties` is the transport-neutral subset (`response_topic`,
+`correlation_id`, `user_properties`), so the observer now stores what the
+transport saw: `properties` moves from the adapter's memory into columns.
+
+- **Two migrations.** `packets` gains `qos`, `retain`, `correlation_id`
+  (indexed: it is the join key that survives an unparseable payload),
+  `response_topic` and `user_properties` (JSON text); `ingest_statuses` gains
+  `transport`, because "connected" to `127.0.0.1:1883` is a lie when the ingest
+  is attached to a hub inside its own process.
+- **User properties are bounded on the way in** — 32 pairs, 512 bytes per
+  value, truncated *per value* and never on the encoded JSON, so what is stored
+  always parses. A publisher controls its headers; it must not be able to write
+  a megabyte per packet into the database.
+- **Reconnection is layered, not duplicated.** A transient drop is the
+  adapter's business: MQTT 5 reconnects and re-subscribes on its own and reports
+  through `on_health`, which the ingest mirrors into `IngestStatus` *and* into
+  the retained-replay dedupe window (otherwise a long outage stores every
+  retained card twice). A drop that outlasts `DISCONNECT_GRACE_S` is ours:
+  `FabricIngest` rebuilds the transport with exponential backoff. Without the
+  split, the observer's backoff and the adapter's reconnect would fight.
+- **`RUNES_TRANSPORT=inproc` runs the whole observatory with no broker.** That
+  is not a demo flag: it is how the ingest is now tested — a real transport, a
+  real recorder, no mosquitto and no fake client (one scripted transport
+  stands in only for the *outage* case, where a real one cannot be made to die
+  on cue). `RUNES_TRANSPORT=mqtt5` upgrades to properties; `auto` (the default) tries mqtt5 → mqtt311 → inproc
+  and warns loudly if it lands on inproc, because a process-local hub is deaf to
+  a broker-based fleet.
+- **No gem dependency on the harness.** `runes` declares `mqtt ~> 0.7` as a
+  runtime dependency, so depending on the gem would have re-introduced exactly
+  the client this change is about. An initializer puts the sibling checkout's
+  `lib` on the load path instead (`RUNES_HARNESS_LIB` overrides it); the web
+  process still boots if the harness is absent, and only the ingest fails,
+  loudly, if it needs it.
+
+**Verification.** `FabricIngestTest` drives a real `InProcess` hub end to end:
+a broker-free ingest records what a publisher puts on the fabric; MQTT 5
+properties (including a 5 000-byte value, truncated to 512 and still valid
+JSON) reach the database; a bad message is counted and dropped while the good
+one lands; a non-UTF-8 payload does not tear the subscription down; the retain
+flag reaches the recorder; and a dead transport is rebuilt with backoff instead
+of hanging forever. `FabricIngestLockTest` still reproduces O5-3 (a second
+connection holds `BEGIN EXCLUSIVE`) — and, being the suite's one
+non-transactional test, it now cleans up precisely the two request ids it owns:
+its first version deleted every packet, which silently ate the fixture rows
+every page test depends on and turned a green suite into 9 failures and 5
+errors.
+
+**Verified live** against mosquitto 2.1.2 with `RUNES_TRANSPORT=mqtt5`:
+`tmp/mqtt5_observer_probe.rb` published one A2A-shaped message, and the row came
+back with `correlation_id`, `response_topic`,
+`user_properties = {"a2a-status":"working","probe-tag":…}` and
+`ingest_statuses.transport = "MQTT5"`. The `qos` column stores the **delivery**
+QoS (the ingest subscribes at QoS 0, so a QoS 1 publish is stored as 0) — the
+honest number for "what we received".
+
+The live probe also surfaced a real gap, recorded in the roadmap rather than
+papered over: `runes/a2a/tasks/…` classifies as `other`. The observer recognises
+`$a2a/#`, not the `runes/a2a/…` spelling; one of the two should change.
+
+Suites: parent **565 / 2589 / 0** (the previous run measured 2 590 — the total
+moves by a few across runs, so treat the failure count as the contract and the
+assertion total as approximate), observatory **129 / 649 / 0**.

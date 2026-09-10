@@ -113,6 +113,31 @@ class PacketsControllerTest < ActionDispatch::IntegrationTest
     assert_match "runes/tools/echo/response", response.body
   end
 
+  # MQTT 5 properties are worth storing only if a human can see them: the
+  # packet page names the reply target and every user property (doc5.md O0.1).
+  test "show renders the MQTT 5 properties the transport carried" do
+    packet = Packet.create!(topic: "runes/a2a/tasks/agent-7", kind: "task", payload: "{}",
+                            payload_bytes: 2, occurred_at: Time.current, received_at: Time.current,
+                            qos: 1, retain: true, correlation_id: "corr-42",
+                            response_topic: "runes/a2a/replies/9",
+                            user_properties: JSON.generate("a2a-status" => "working"))
+
+    get packet_path(packet)
+
+    assert_response :success
+    assert_match "corr-42", response.body
+    assert_match "runes/a2a/replies/9", response.body
+    assert_match "a2a-status", response.body
+    assert_match "retained", response.body
+
+    # The list row is the same partial: the property must be legible there
+    # too, without expanding the packet.
+    get packets_path
+    assert_response :success
+    assert_match "a2a-status", response.body
+    assert_match "corr-42", response.body
+  end
+
   # The dead /feed/stats endpoint was removed (O5-7).
   test "the removed feed stats route is gone" do
     assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path("/feed/stats") }

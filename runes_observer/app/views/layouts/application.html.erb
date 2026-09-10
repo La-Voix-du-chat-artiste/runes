@@ -50,7 +50,7 @@
     </main>
 
     <footer class="footer">
-      <span>runes/# on <%= ingest_status.host %>:<%= ingest_status.port %></span>
+      <span>runes/# on <%= ingest_status.host %>:<%= ingest_status.port %><%= " via #{ingest_status.transport}" if ingest_status.transport.present? %></span>
       <span><%= observed_packet_count %> packets · <%= observed_agent_count %> agents observed</span>
     </footer>
   </body>

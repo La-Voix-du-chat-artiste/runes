@@ -84,6 +84,27 @@ class Packet < ApplicationRecord
     nil
   end
 
+  # MQTT 5 user properties (`a2a-status`, trace ids, …) as a Hash. Stored as
+  # JSON text because SQLite has no map type; a row written before the
+  # transport metadata existed, or a value the recorder refused to encode,
+  # simply has no properties.
+  def user_properties_hash
+    return @user_properties_hash if defined?(@user_properties_hash)
+
+    @user_properties_hash = begin
+      parsed = user_properties.blank? ? nil : JSON.parse(user_properties)
+      parsed.is_a?(Hash) ? parsed : {}
+    rescue JSON::ParserError
+      {}
+    end
+  end
+
+  # True when the packet carried something MQTT 3.1.1 could not have shown
+  # us: the observer used to store these packets and be unable to say so.
+  def transport_properties?
+    correlation_id.present? || response_topic.present? || user_properties_hash.any?
+  end
+
   # Roughly how long the payload is, for the "size" column.
   def size_label
     bytes = payload_bytes.to_i

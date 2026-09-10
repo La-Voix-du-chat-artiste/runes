@@ -32,6 +32,16 @@
         · received <%= ago_in_words_short(packet.received_at) %> ago
       </span>
     </div>
+    <% if packet.transport_properties? %>
+      <div class="packet__topic">
+        <span class="label">mqtt 5</span>
+        <% if packet.correlation_id.present? %><span class="faint small">correlation <code><%= packet.correlation_id %></code></span><% end %>
+        <% if packet.response_topic.present? %><span class="faint small">· reply to <code><%= packet.response_topic %></code></span><% end %>
+        <% if packet.user_properties_hash.any? %>
+          <span class="faint small">· <%= packet.user_properties_hash.map { |k, v| "#{k}=#{v}" }.join(" · ") %></span>
+        <% end %>
+      </div>
+    <% end %>
     <pre class="payload__body<%= " payload__body--raw" if packet.parsed.nil? %>"><%= json_pretty(packet.summary_payload) %></pre>
   </div>
 </details>

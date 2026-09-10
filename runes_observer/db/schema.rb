@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_10_090001) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_10_090003) do
   create_table "agents", force: :cascade do |t|
     t.string "agent_id", null: false
     t.text "card"
@@ -41,27 +41,34 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_090001) do
     t.integer "packets_total", default: 0, null: false
     t.integer "port"
     t.datetime "started_at"
+    t.string "transport"
     t.datetime "updated_at", null: false
   end
 
   create_table "packets", force: :cascade do |t|
     t.string "agent_id"
+    t.string "correlation_id"
     t.datetime "created_at", null: false
     t.string "event"
     t.string "kind", default: "other", null: false
     t.datetime "occurred_at", null: false
     t.text "payload"
     t.integer "payload_bytes", default: 0, null: false
+    t.integer "qos"
     t.datetime "received_at", null: false
     t.string "request_id"
+    t.string "response_topic"
+    t.boolean "retain"
     t.string "run_id"
     t.boolean "scrubbed", default: false, null: false
     t.string "tool"
     t.string "topic", null: false
     t.boolean "truncated", default: false, null: false
     t.datetime "updated_at", null: false
+    t.text "user_properties"
     t.index ["agent_id", "id"], name: "index_packets_on_agent_id_and_id"
     t.index ["agent_id"], name: "index_packets_on_agent_id"
+    t.index ["correlation_id"], name: "index_packets_on_correlation_id"
     t.index ["kind"], name: "index_packets_on_kind"
     t.index ["occurred_at"], name: "index_packets_on_occurred_at"
     t.index ["request_id", "id"], name: "index_packets_on_request_id_and_id"

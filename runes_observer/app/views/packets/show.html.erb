@@ -25,6 +25,15 @@
       <% end %>
       <% if @packet.event.present? %><dt>event</dt><dd><%= @packet.event %></dd><% end %>
       <% if @packet.tool.present? %><dt>tool</dt><dd><%= @packet.tool %></dd><% end %>
+      <% unless @packet.qos.nil? && @packet.retain.nil? %>
+        <dt>qos / retain</dt><dd><%= @packet.qos.nil? ? "—" : @packet.qos %><%= " · retained" if @packet.retain %></dd>
+      <% end %>
+      <% if @packet.correlation_id.present? %><dt>correlation</dt><dd class="mono"><%= @packet.correlation_id %></dd><% end %>
+      <% if @packet.response_topic.present? %><dt>reply to</dt><dd class="mono"><%= @packet.response_topic %></dd><% end %>
+      <% if @packet.user_properties_hash.any? %>
+        <dt>user properties</dt>
+        <dd><% @packet.user_properties_hash.each do |key, value| %><div class="mono small"><%= key %> = <%= value %></div><% end %></dd>
+      <% end %>
     </dl>
     <pre class="payload__body<%= " payload__body--raw" if @packet.parsed.nil? %>"><%= json_pretty(@packet.payload) %></pre>
   </div>

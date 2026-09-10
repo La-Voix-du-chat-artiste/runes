@@ -20,10 +20,14 @@ Where the current goal stands (it stays **active**):
   reconnect, envelope freshness + forgery test, W5-6..W5-9, retention backstop
   (Phase 19); the observatory became a console — workflow telemetry + runs
   timeline (Phase 20), topology + interaction waterfall + traffic dashboard
-  (Phase 21), and the publisher/observer topic contract (Phase 22).
-- **Next, in order:** `O0.1` observatory ingest through `Runes::Transport`
-  (MQTT 5 properties visible, the `mqtt` gem dropped, a broker-free `inproc`
-  mode) and `E5-6` guard-aware runes (opt-in policy for `bin/runes-workflow`).
+  (Phase 21), the publisher/observer topic contract (Phase 22), the guard is
+  opt-in for runes (Phase 24), and the observatory now ingests through
+  `Runes::Transport` — MQTT 5 properties visible, broker-free `inproc` mode,
+  no direct `mqtt` dependency (Phase 25, doc5.md O0.1 + most of O0.2).
+- **Next, in order:** `O0.2` leftovers (`signature_state`, `key_fingerprint` —
+  both need `O0.3`) and `O0.3` signature verification / impersonation
+  detection in the observer; then the P1/P2 roadmap in
+  `docs/OBSERVATORY_ROADMAP.md` (auth gates O1.2 — it is remote execution).
 - **Known open items:** at-least-once *execution* (handlers are not idempotent;
   a bounded request ledger is the fix), envelope replay is closed but **A2A peer
   cards are still unauthenticated**, token scanning is not a sandbox, the
@@ -36,8 +40,8 @@ Where the current goal stands (it stays **active**):
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 555 runs / 2551 assertions / 0 failures
-cd runes_observer && bin/rails test   # observatory: 124 runs / 629 assertions / 0 failures
+bundle exec rake test                 # parent harness: 565 runs / 2589 assertions / 0 failures
+cd runes_observer && bin/rails test   # observatory: 129 runs / 649 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
 
@@ -46,6 +50,15 @@ in one shared group received 25 messages **exactly once** (13/12 split, no
 dupes, no losses), Response Topic/Correlation Data/User Property round-tripped,
 a retained message reached a late subscriber, and keepalive held an idle
 session open.
+
+Observer ingest proof (Phase 25, doc5.md O0.1): with
+`RUNES_TRANSPORT=mqtt5 bin/runes-ingest` running, `ruby tmp/mqtt5_observer_probe.rb`
+published one A2A-shaped message and the stored row carried `correlation_id`,
+`response_topic`, `user_properties` and `ingest_statuses.transport = "MQTT5"`.
+`RUNES_TRANSPORT=inproc bin/runes-ingest` does the same with no broker at all
+(and is how `test/services/fabric_ingest_test.rb` drives the real recorder).
+Remember `bin/rails db:migrate` in `runes_observer/` after pulling: the ingest
+now writes `packets.qos/retain/correlation_id/response_topic/user_properties`.
 
 Current counts (2026-09-10, after Phase 22):
 parent **527 runs / 2419 assertions / 0 failures / 0 errors / 0 skips**,
