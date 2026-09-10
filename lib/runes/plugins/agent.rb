@@ -390,6 +390,12 @@ module Runes
 
         def run!
           display_prompt
+          # The agent CLI is a process launcher too: under a policy the command
+          # line must be named, exactly like `cmd`.
+          Runes::WorkflowPolicy.authorize!(
+            rune: "agent", action: :exec, resource: command_line,
+            hint: 'e.g. "agent": { "exec": ["pi *"] }'
+          )
           started = monotonic_ms
           result = self.class.runner.execute(
             command_line,

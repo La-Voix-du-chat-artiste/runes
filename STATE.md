@@ -191,15 +191,14 @@ runes_observer/        Rails 8.1 observatory (fleet + packet UI, A2A aware)
 
 ## Known gaps / next steps
 
-1. **Workflow runes bypass the guard** (Phase 17, narrowed in Phase 18):
-   `cmd`/`agent` still do not consult the capability guard, so a workflow
-   remains a way around it rather than through it. The *injection* half is
-   closed — a String command is `Shellwords.split` into argv, a one-element
-   argv never reaches `/bin/sh`, and a metacharacter token raises
-   `CommandRunner::ShellSyntaxError` unless `shell: true` is explicit
-   (`doc5.md` W5-1). What remains is making the runes guard-aware behind an
-   opt-in policy for `bin/runes-workflow`; default-on would break unmodified
-   Roast files. See `docs/WORKFLOWS.md`.
+1. **Workflow runes are guarded only when asked** (Phase 17, narrowed in
+   Phase 18 and 24): `cmd`/`agent`/`ruby` consult the capability guard when
+   `RUNES_WORKFLOW_POLICY` names a policy — a refusal happens *before* anything
+   spawns, an unreadable policy fails closed, and the message says how to fix
+   it. Two things remain: it is off by default (default-deny would break
+   unmodified Roast files), and the guard's `exec` patterns match the command
+   text exactly, so the useful policies are narrow allowlists rather than
+   wildcards. The injection half has been closed since Phase 18.
 2. **Tool-result feedback** for single build plans is still one-shot; the
    tool-mode prompt states the plan is one turn (DeepSeek plans
    iteratively). A bounded plan→execute→feed-back loop is the next real

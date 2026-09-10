@@ -79,6 +79,10 @@ module Runes
       protected
 
       def execute(input)
+        # A ruby rune is arbitrary code inside the harness process: under a
+        # policy it must be named explicitly.
+        Runes::WorkflowPolicy.authorize!(rune: "ruby", action: :execute, resource: name.to_s,
+                                           hint: 'e.g. "ruby": { "execute": ["*"] }')
         Output.new(input.value)
       end
     end

@@ -65,6 +65,7 @@ module RunesWorkflowCli
     params = Runes::WorkflowParams.new(targets, flags, kwargs)
 
     install_telemetry
+    install_workflow_policy
     change_directory
     workflow = Runes::Workflow.from_file(file, params)
     print_final_output(workflow.final_output) if print_output
@@ -116,6 +117,25 @@ module RunesWorkflowCli
     return if value.nil?
 
     $stdout.puts(value.is_a?(String) ? value : value.inspect)
+  end
+
+  # `RUNES_WORKFLOW_POLICY=path` subjects the process-spawning runes to the
+  # capability guard. Unset (the default) leaves runes unguarded so an
+  # unmodified Roast file keeps working.
+  def install_workflow_policy
+    guard = Runes::WorkflowPolicy.install
+    if guard.nil?
+      $stderr.puts "runes-workflow: workflow policy off (set RUNES_WORKFLOW_POLICY to enable)" if ENV["RUNES_WORKFLOW_POLICY"]
+      return
+    end
+
+    $stderr.puts "runes-workflow: workflow policy #{Runes::WorkflowPolicy.describe} " \
+                 "from #{ENV['RUNES_WORKFLOW_POLICY']}"
+  rescue StandardError => e
+    # A policy that cannot be loaded must not silently leave runes unguarded.
+    $stderr.puts "runes-workflow: refusing to run without the policy you asked for (#{e.class}: #{e.message})"
+    Runes::WorkflowPolicy.guard = Runes::Capabilities::Guard.new(nil)
+    Runes::WorkflowPolicy.guard.instance_variable_set(:@policy_unreadable, true)
   end
 
   # `RUNES_TELEMETRY=mqtt` (or 1/auto/inproc) publishes this run's events on

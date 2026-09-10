@@ -254,12 +254,12 @@ A pitch that hides the seams is a pitch you'll resent in a month. So:
   idempotent yet: a duplicate prompt or task can repeat its side effects. It is
   written down as the next security-correctness task (a bounded request ledger),
   not glossed over.
-- **Workflow runes don't consult the guard yet.** `cmd`/`agent` execute
-  directly. The *injection* half is closed — a String command is
-  `Shellwords.split` into argv, a one-element argv never reaches `/bin/sh`, and a
-  metacharacter token raises unless `shell: true` is explicit — but a rune is
-  still not asked for permission. Opt-in, because default-deny would break every
-  unmodified Roast file.
+- **Workflow runes ask permission only when asked to.** `RUNES_WORKFLOW_POLICY`
+  puts `cmd`, `agent` and `ruby` behind the capability guard, refusing *before*
+  anything spawns and failing closed on an unreadable policy. It is off by
+  default, because default-deny would break every unmodified Roast file, and its
+  patterns match the command text exactly — so it wants a narrow allowlist, not
+  a wildcard.
 - **Token scanning is not a sandbox.** `run_command` refuses interpreters and
   paths that leave the workspace, but an explicitly allowlisted binary can still
   escape. Real confinement needs `sandbox-exec`/`bwrap`.

@@ -24,6 +24,7 @@
 #   * `Workflow.from_file` deletes its tmpdir before returning (W5-13).
 require_relative "telemetry"
 require_relative "rune"
+require_relative "workflow_policy"
 require_relative "command_runner"
 
 require_relative "workflow/workflow_params"

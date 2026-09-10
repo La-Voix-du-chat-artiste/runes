@@ -146,75 +146,41 @@ Deliberate differences:
   `Map::Config#parallel(negative)` means "unlimited" in both, so its own
   negative check is unreachable.
 
-### Not yet done: the guard does not see runes
+### The guard, opt-in (doc5.md E5-6)
 
-This is the honest gap. A workflow file is trusted code, and today `cmd`
-and `agent` execute directly: `RUNES_CMD_ALLOWLIST`, the path-containment
-checks and the capability guard all live on the dispatcher/MCP tool path
-(`Runes::Core::Dispatcher`, `bin/runes-mcp`), not on the rune path. So a
-workflow is currently a way *around* the guard rather than through it.
-Making runes guard-aware (an opt-in policy for the workflow runner, mapping
-`cmd` to a `:exec` action and `agent` to its CLI) is the next step; it is
-not on by default because a default-deny guard would break unmodified Roast
-files.
-
-**`cmd` does not run a command String through a shell.** A String is split
-with `Shellwords.split` and executed as argv, and a split token containing a
-shell metacharacter (``| & ; < > ( ) $ ` \ * ? [ ]``) is refused with
-`CommandRunner::ShellSyntaxError`; a one-element argv (including a
-one-element Array) is never handed to `/bin/sh`. This means
-`cmd(:recent_changes) { "git diff --name-only HEAD~5..HEAD" }` still works
-(it becomes argv), but `"git log #{kwarg(:ref)}"` can no longer execute a CLI
-argument. A workflow that genuinely wants pipes or redirection opts in with
-`config { cmd { shell! } }` (or `CommandRunner.execute(..., shell: true)`).
-This is a deliberate security deviation from Roast, whose `cmd` passes a
-single-element argv to the shell.
-
-Command runes also accept a `timeout(seconds)` config, `repeat` accepts
-`max_iterations(n)` / `timeout(seconds)` and has a `RUNES_REPEAT_MAX_ITERATIONS`
-safety net (default 10 000; `no_iteration_limit!` or `0` opts out), and a run
-can be bounded with `Workflow.from_file(path, params, timeout:)` or
-`RUNES_WORKFLOW_TIMEOUT_S`.
-
-## Why this is a good fit for Runes
-
-- The workflow file becomes the *plan* in a form a human can read and a
-  repository can review, while the harness keeps what it is good at:
-  sandboxed execution, a capability guard, an audit journal and a fleet
-  observatory.
-- Because a Rune is just a `:rune` plugin, the same mechanism that adds the
-  seven built-ins lets a team add `deploy`, `notify`, `jira` — and the
-  existing `tools/` manifests, MCP servers and dispatcher missions remain
-  available to those runes as ordinary capabilities.
-- It gives the Ruby community the ergonomics it is actually good at
-  (readable DSL, blocks, plain objects) on top of a hardened execution core.
-
-## Watching a run
-
-A workflow executes in-process, so until Phase 20 it published nothing: a run
-was invisible to everything except its own stdout. The engine now emits a small
-event stream and a **sink** decides where it goes:
-
-```ruby
-Runes::Telemetry.sink = ->(event) { ... }                     # anything
-Runes::Telemetry.sink = Runes::Telemetry::TransportSink.new(transport: t)
-```
+A workflow used to be a way *around* the capability guard: `cmd`, `agent` and
+`ruby` execute without asking. They can ask now:
 
 ```bash
-RUNES_TELEMETRY=mqtt bin/runes-workflow execute examples/analyze_codebase.rb
+RUNES_WORKFLOW_POLICY=config/workflow-policy.json \
+  bin/runes-workflow execute examples/analyze_codebase.rb
 ```
 
-Events (JSON on `runes/workflows/<run_id>/<kind>`):
+The policy is the same shape as the tool guard, keyed by **rune name**:
 
-| Kind | Carries |
-| --- | --- |
-| `run_started` | workflow path, params, planned step count |
-| `step_started` | rune, name, scope, run index, `async?` |
-| `step_finished` | status (`ok`/`skipped`/`failed`), duration, output, error |
-| `run_finished` | status (`ok`/`failed`/`timeout`), duration, error, step count |
+```json
+{
+  "tools": {
+    "cmd":   { "exec":    ["echo hello", "git diff --name-only HEAD~5..HEAD"] },
+    "agent": { "exec":    ["pi --mode json -p"] },
+    "ruby":  { "execute": ["#"] }
+  }
+}
+```
 
-Emitting is best-effort — a broken sink is a broken observer, never a broken
-run — and long outputs are truncated with a marker rather than flooding the
-bus. The observatory projects these into `workflow_runs`/`workflow_steps`, so
-`/runs` draws each run as a timeline (bars positioned by start offset, scaled to
-the run) with per-step output and error.
+Three things worth knowing before you turn it on:
+
+- **It is off by default**, and must stay that way for the layer to be Roast
+  compatible: a default-deny policy would break every unmodified workflow file.
+- **A pattern matches the command TEXT**, with the guard's existing semantics:
+  an exact string, or `#` to allow everything. There are no globs — so a narrow
+  policy is genuinely narrow, and `"cmd": { "exec": ["#"] }` is the honest way to
+  say "I trust this file".
+- **A policy that cannot be parsed fails closed** (the guard refuses everything
+  rather than silently allowing), and the runner says so on stderr.
+
+What is still *not* guarded: a rune does not confine paths itself — the guard
+decides, and `cmd` runs through the argv path so a policy that allows a
+command allows that entire command. Treat the policy as the boundary, and keep
+`RUNES_WORKFLOW_POLICY` set wherever a workflow is not written by you.
+

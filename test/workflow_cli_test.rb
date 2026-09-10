@@ -180,6 +180,30 @@ class WorkflowCliTest < Minitest::Test
     assert print_output, "flags after `--` belong to the workflow"
   end
 
+  # E5-6: the policy is wired to the real entry point, not just the seam.
+  # Without this, `RUNES_WORKFLOW_POLICY` could be documented and inert.
+  def test_the_cli_refuses_a_command_the_policy_denies
+    policy_path = File.join(@dir, "policy.json")
+    File.write(policy_path, JSON.generate("tools" => {}))
+    workflow = write_workflow(%(execute { cmd(:x) { "echo should-not-run" } }))
+    @env["RUNES_WORKFLOW_POLICY"] = policy_path
+
+    status, out, err = run_cli("execute", workflow)
+
+    assert_equal 1, status, "a refused rune must fail the process"
+    assert_includes err, "policy"
+    assert_includes err, "cmd"
+    refute_includes out, "should-not-run", "the command must not have executed"
+  end
+
+  def test_the_cli_runs_normally_when_no_policy_is_configured
+    workflow = write_workflow(%(execute { cmd(:x) { "echo fine" } }))
+
+    status, _out, err = run_cli("execute", workflow)
+
+    assert_equal 0, status, "unguarded is still the default: #{err}"
+  end
+
   private
 
   # The binstub is not a `.rb` file, so `require` cannot find it; `load` can,

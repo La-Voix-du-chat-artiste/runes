@@ -1468,3 +1468,43 @@ entities) while `<id>` placeholders survived. Both suites stayed green
 throughout: parent **555 / 2551 / 0**, observatory **124 / 629 / 0**. README
 and STATE were aligned (the PDF is linked from the intro, the observatory
 section names the new views, STATE carries the counts and a handoff block).
+
+---
+
+## Phase 24 — the guard, opt-in, for workflow runes (E5-6)
+
+Driver: the last item of the standing Phase 17 gap. A workflow was a way
+*around* the capability guard rather than through it, because `cmd`, `agent`
+and `ruby` all execute without asking — and `ruby` is arbitrary code inside the
+harness process, which is the largest hazard of the three.
+
+`Runes::WorkflowPolicy` is the seam. It is a separate **top-level** module, not
+`Runes::Workflow::Policy`, because `Runes::Workflow` is a class: opening it as a
+module first made the class definition fail with "Workflow is not a class" — the
+kind of naming collision that only shows up when the load order is wrong.
+
+```bash
+RUNES_WORKFLOW_POLICY=config/workflow-policy.json bin/runes-workflow execute w.rb
+```
+
+- `cmd` asks with the **command text** as the resource, `agent` with the command
+  line it is about to spawn, `ruby` with the rune's name — all before anything
+  executes.
+- A refusal is `Runes::WorkflowPolicy::Denied` and names the rune, the resource
+  and `RUNES_WORKFLOW_POLICY`, so the fix is in the message.
+- **Off by default**, because default-deny would break every unmodified Roast
+  file: that compatibility is the point of the layer.
+- An **unreadable policy fails closed** — the guard refuses everything, and the
+  CLI says so on stderr instead of quietly running unguarded.
+- Patterns keep the guard's existing semantics: an exact string, or `#` for
+  everything. No globs, which makes a narrow policy genuinely narrow.
+
+**Verification:** 8 seam tests (off by default; the environment switch; a denied
+`cmd` provably does not create its marker file; a narrow policy allows the
+command it names and refuses another; the agent CLI is never spawned; `ruby` is
+covered; an unreadable policy refuses with "could not be parsed"; the message
+names the env var) plus 2 CLI tests that run the real binstub — one refusal with
+exit 1, one unguarded success. Suites: parent **565 / 2590 / 0**, observatory
+**124 / 629 / 0**.
+
+Still open from the goal: `O0.1` (observatory ingest through `Runes::Transport`).

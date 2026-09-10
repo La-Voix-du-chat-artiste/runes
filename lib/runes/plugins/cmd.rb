@@ -174,6 +174,12 @@ module Runes
 
       def execute(input)
         config = @config
+        # The guard is off unless a policy was installed; when it is on, the
+        # command TEXT is what a policy matches (like the dispatcher's rules),
+        # so a narrow policy is a narrow policy.
+        command_line = ([input.command] + Array(input.args)).join(" ")
+        Runes::WorkflowPolicy.authorize!(rune: "cmd", action: :exec, resource: command_line,
+                                           hint: 'e.g. "cmd": { "exec": ["echo *"] }')
         stdout_handler = config.show_stdout? ? ->(line) { $stdout.print(line) } : nil
         stderr_handler = config.show_stderr? ? ->(line) { $stderr.print(line) } : nil
 
