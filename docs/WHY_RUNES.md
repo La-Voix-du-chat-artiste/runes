@@ -161,7 +161,11 @@ should *look* like that), a **fleet topology** with delegation edges whose width
 is task volume and colour is failure rate, an **interaction waterfall** where
 the bars are the *gaps* — so a 30-second planner call looks like 30 seconds
 instead of hiding in a list of timestamps — and a dashboard with a traffic
-sparkline. All of it from telemetry, none of it guessed. Since then the face
+sparkline, and a **fleet board** that folds the packet stream into Planned /
+Working / Done and renders it as a Mermaid `kanban` diagram — with
+`GET /board.mmd` handing the same text to an agent, because a board a program
+cannot read is a screenshot. All of it from telemetry, none of it guessed.
+Since then the face
 learned the two questions a shared bus actually poses: **who really published
 this** (every packet carries a signature verdict and the signing key's
 fingerprint, and one `agent_id` under two keys is a finding) and **what was
@@ -248,7 +252,7 @@ today:
 | `lib/` | **14 745 lines** across 62 files |
 | `test/` | **11 187 lines** across 45 files |
 | Suite | **600 runs, 2 696 assertions, 0 failures** — no keys, no provider calls, no broker required |
-| Observatory | **188 runs, 890 assertions**, **4 314 lines** of Rails 8.1 app code — fleet, runs, topology, traces, who published, and what was refused, all fed through the fleet's own `Runes::Transport` |
+| Observatory | **215 runs, 1 069 assertions**, **4 860 lines** of Rails 8.1 app code — fleet, runs, topology, traces, who published, and what was refused, all fed through the fleet's own `Runes::Transport` |
 | Executables | **7**: `runes` (TUI), `runes-daemon`, `runes-client`, `runes-mcp`, `runes-replay`, `runes-acl`, `runes-workflow` |
 | Workflow engine | **4 600 lines** (engine, the seven runes, and the rune/cog/plugin support classes), stdlib only — no `async`, no `ruby_llm` |
 | The seven runes | `agent` 728, `chat` 503, `repeat` 202, `cmd` 205, `map` 183, `ruby` 90, `call` 68 |

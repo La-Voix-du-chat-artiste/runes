@@ -567,6 +567,10 @@ bin/rails runes:demo
 
 Architecture: `FabricIngest → PacketClassifier → PacketRecorder → SQLite`, with
 the web process polling `GET /feed?after_id=…` (Stimulus) for the live tail.
+`/board` folds the same packets into a **Planned / Working / Done** fleet board
+rendered as a Mermaid `kanban` diagram (vendored, so it works offline), and
+`GET /board.mmd` returns that diagram as text so an agent can read the board
+without a browser.
 The ingest subscribes through `Runes::Transport` — the same seam the fleet
 publishes through — so it sees MQTT 5 `correlation_id`, `response_topic` and
 `user_properties`, and `RUNES_TRANSPORT=inproc` runs it with no broker at all.

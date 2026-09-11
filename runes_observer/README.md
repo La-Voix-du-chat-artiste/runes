@@ -91,6 +91,21 @@ all classified and stored.
   The ingest drops a single message it cannot store — counted in
   `ingest_statuses.packets_dropped` — instead of tearing down the
   connection.
+- `BoardController` (`/board`) is the **fleet board**: three columns —
+  Planned / Working / Done — folded from the packet stream by
+  `Board::Kanban`. No new ingestion and no guessing: `plan_ready` announces N
+  steps (cards named `step N`, because the planner does not publish their names
+  until each starts), a written mission and an addressed A2A task are planned
+  work, `prompt_received`/`step_start`/`mission_step_start` are Working,
+  `step_end`/`prompt_complete`/mission verdicts and every journal entry are
+  Done. A card keeps one identity across its life, so a planned step *moves*;
+  a card quiet for over 30 minutes stays in Working, flagged — quiet is not
+  finished. The board is generated as **Mermaid `kanban` text** and rendered by
+  a vendored Mermaid (`vendor/assets/mermaid.min.js`, MIT; see
+  `mermaid.LICENSE.txt`), with the server-rendered HTML board left in place
+  when JavaScript is off or Mermaid fails. `GET /board.mmd` returns the same
+  diagram as `text/plain`, which is the point: an agent, a harness or
+  `bin/runes-replay` can read the fleet's work state without a browser.
 - `SecurityController` (`/security`) answers *what was refused*: every
   capability denial the fleet publishes on `runes/guard/denied`, counted by
   hour/24 h/all-time, grouped by tool and agent with filters, each row linking
@@ -176,7 +191,7 @@ bin/rails runes:reset                # delete every observed packet and agent
 ## Tests
 
 ```bash
-bin/rails test     # 188 runs, 890 assertions
+bin/rails test     # 215 runs, 1 069 assertions
 ```
 
 Covers the topic classifier (every Runes topic shape, including the A2A

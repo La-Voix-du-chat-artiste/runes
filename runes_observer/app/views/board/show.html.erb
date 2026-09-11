@@ -1,0 +1,123 @@
+<% content_for :title, "Board — Runes Observatory" %>
+<%# Mermaid is vendored (vendor/assets/mermaid.min.js) so the diagram renders
+    with no network; the server-rendered board below is the fallback. %>
+<% content_for :head do %>
+  <%= javascript_include_tag "mermaid.min", defer: true %>
+<% end %>
+
+<div class="page-head">
+  <h1>Board</h1>
+  <span class="sub">
+    planned · working · done — folded from packets, last <%= @window.inspect.gsub("hours", "h") %>
+  </span>
+  <%= link_to "board.mmd →", board_mmd_path(agent_id: params[:agent_id], hours: params[:hours]), class: "sub" %>
+  <a class="sub" href="/packets?kind=progress">Progress packets →</a>
+</div>
+
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel__body">
+    <form class="filters" action="<%= board_path %>" method="get">
+      <div class="field">
+        <label for="agent_id">Agent</label>
+        <select name="agent_id" id="agent_id">
+          <option value="">all agents</option>
+          <% @agents.each do |agent| %>
+            <option value="<%= agent %>" <%= "selected" if params[:agent_id] == agent %>><%= agent %></option>
+          <% end %>
+        </select>
+      </div>
+      <div class="field">
+        <label for="hours">Window (hours)</label>
+        <input type="number" min="1" max="168" name="hours" id="hours" value="<%= params[:hours].presence || (@window.to_i / 3600) %>">
+      </div>
+      <div class="field">
+        <label for="limit">Cards per column</label>
+        <input type="number" min="1" max="200" name="limit" id="limit" value="<%= params[:limit].presence || @board.limit %>">
+      </div>
+      <input type="submit" value="Apply" class="btn">
+      <%= link_to "Clear", board_path, class: "btn btn--ghost" %>
+      <button type="button" class="btn btn--ghost" data-action="kanban#toggle">diagram / list</button>
+    </form>
+  </div>
+</div>
+
+<div data-controller="kanban" data-kanban-layout-value="diagram">
+  <%# The diagram text is the artifact: `GET /board.mmd` returns exactly this. %>
+  <script type="text/plain" data-kanban-target="source"><%= @diagram %></script>
+
+  <%# Rendered by Mermaid when it is available; this HTML is what a no-JS
+      browser, or a Mermaid failure, leaves on screen. %>
+  <div data-kanban-target="canvas" class="kanban-canvas"></div>
+
+  <div class="kanban-board">
+    <% Board::Kanban::COLUMNS.each do |column| %>
+      <% cards = @columns[column] || [] %>
+      <section class="kanban-col" data-column="<%= column.downcase %>">
+        <div class="kanban-col__head">
+          <span class="kanban-col__title"><%= column %></span>
+          <span class="kanban-col__count">
+            <%= cards.size %><%= " of #{cards.size + @truncated[column].to_i}" if @truncated[column].to_i.positive? %>
+          </span>
+        </div>
+        <% if cards.empty? %>
+          <p class="kanban-col__empty">
+            <%= column == Board::Kanban::PLANNED ? "Nothing announced yet." :
+                column == Board::Kanban::WORKING ? "Nothing running." : "Nothing finished in this window." %>
+          </p>
+        <% else %>
+          <% cards.each do |card| %>
+            <article class="kanban-card kanban-card--<%= column.downcase %><%= " kanban-card--flagged" if card.error || card.stale %>">
+              <div class="kanban-card__title">
+                <% if card.packet_id.present? %>
+                  <%= link_to card.title.presence || card.key, packet_path(card.packet_id) %>
+                <% else %>
+                  <%= card.title.presence || card.key %>
+                <% end %>
+              </div>
+              <div class="kanban-card__meta">
+                <% if card.agent.present? %>
+                  <%= link_to card.agent, agent_path(card.agent), class: "kanban-card__agent" %>
+                <% else %>
+                  <span class="kanban-card__agent faint">unattributed</span>
+                <% end %>
+                <span class="faint small"><%= ago_in_words_short(card.at) %> ago</span>
+              </div>
+              <% if card.detail.present? %>
+                <div class="kanban-card__detail faint small"><%= card.detail %></div>
+              <% end %>
+              <% if card.stale %>
+                <div class="kanban-card__flag">no signal for over <%= (Board::Kanban::STALE_AFTER / 60).to_i %> min</div>
+              <% end %>
+            </article>
+          <% end %>
+          <% if @truncated[column].to_i.positive? %>
+            <p class="kanban-col__empty">
+              <%= @truncated[column] %> more not shown —
+              <%= link_to "raise the limit", board_path(agent_id: params[:agent_id], hours: params[:hours], limit: 200) %>
+              or filter by agent.
+            </p>
+          <% end %>
+        <% end %>
+      </section>
+    <% end %>
+  </div>
+</div>
+
+<section class="panel" style="margin-top:14px">
+  <div class="panel__body">
+    <p class="faint small">
+      Cards are units of work folded from the packet stream, newest first:
+      <strong>Planned</strong> from a plan's announced steps, a written mission or an
+      addressed A2A task; <strong>Working</strong> from <code>prompt_received</code>,
+      <code>step_start</code> and <code>mission_step_start</code>;
+      <strong>Done</strong> from <code>step_end</code>, <code>prompt_complete</code>,
+      mission verdicts and every journal entry. A card that has been quiet for
+      < <%= (Board::Kanban::STALE_AFTER / 60).to_i %> minutes stays in Working, flagged — quiet is not
+      finished. The diagram is generated as Mermaid <code>kanban</code> text
+      (<%= link_to "board.mmd", board_mmd_path(agent_id: params[:agent_id], hours: params[:hours]) %>),
+      so an agent can read the board without a browser; Mermaid itself is vendored
+      in <code>vendor/assets/mermaid.min.js</code> (MIT) and the HTML above is the
+      fallback if it is ever missing.
+    </p>
+  </div>
+</section>

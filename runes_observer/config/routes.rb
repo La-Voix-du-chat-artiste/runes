@@ -7,6 +7,12 @@ Rails.application.routes.draw do
   get "topology", to: "topology#show", as: :topology
   # What was refused, next to the dashboard's "who published what" (doc5.md O2.3).
   get "security", to: "security#show", as: :security
+  # The fleet board: planned / working / done, as a Mermaid kanban plus the
+  # same data as HTML. `board.mmd` is the artifact an agent can read.
+  # `board.mmd` must come BEFORE `board`, or `GET /board.mmd` matches
+  # `/board(.:format)` and lands on the HTML action with format=mmd.
+  get "board.mmd", to: "board#mmd", as: :board_mmd, format: false
+  get "board", to: "board#show", as: :board
   resources :interactions, only: %i[show], param: :id
 
   # JSON feed used by the Stimulus poller (?after_id=&agent_id=&kind=&request_id=).

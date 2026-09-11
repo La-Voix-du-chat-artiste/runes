@@ -324,6 +324,46 @@ pre.payload__body--raw { color: var(--text-dim); }
   background: var(--bg-elevated-2); border: 1px solid var(--border); color: var(--text-dim);
 }
 .kv__section { margin: 12px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); }
+/* --- fleet board (Mermaid kanban + its HTML fallback) ------------------- */
+
+.kanban-canvas:not(:empty) { margin-bottom: 14px; }
+.kanban-canvas svg { max-width: 100%; height: auto; }
+.kanban--diagram .kanban-board { display: none; }
+.kanban--list .kanban-canvas { display: none; }
+
+.kanban-board {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
+}
+@media (max-width: 900px) { .kanban-board { grid-template-columns: 1fr; } }
+
+.kanban-col {
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px; min-height: 120px;
+}
+.kanban-col__head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.kanban-col__title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-dim); }
+.kanban-col__count { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.kanban-col__empty { margin: 8px 2px; font-size: 12px; color: var(--text-faint); }
+
+.kanban-card {
+  background: var(--bg-elevated-2); border: 1px solid var(--border);
+  border-left: 3px solid var(--text-faint); border-radius: 6px;
+  padding: 7px 9px; margin-bottom: 8px; overflow-wrap: anywhere;
+}
+.kanban-card:last-child { margin-bottom: 0; }
+.kanban-card--planned { border-left-color: #6b7280; }
+.kanban-card--working { border-left-color: var(--primary, #58c4dd); }
+.kanban-card--done    { border-left-color: var(--good, #7bdcb5); }
+.kanban-card--flagged { border-left-color: var(--offline, #ff6b6b); }
+.kanban-card__title { font-size: 13px; }
+.kanban-card__meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; font-size: 11px; }
+.kanban-card__agent { color: var(--text-dim); }
+.kanban-card__detail { margin-top: 3px; }
+.kanban-card__flag { margin-top: 3px; font-size: 11px; color: var(--offline, #ff6b6b); }
+
 /* A health number an operator should actually look at (ingest lag, drops). */
 .kv__warn { color: var(--offline); }
 

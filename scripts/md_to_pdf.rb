@@ -44,6 +44,16 @@ SUBSTITUTIONS = {
   "±" => "+/-", "×" => "x", "“" => '"', "”" => '"', "’" => "'", "‘" => "'"
 }.freeze
 
+# Prawn flows plain text across page breaks, but bounding boxes, tables and
+# code panels do not: drawn too low they clip off the page and leave a page
+# carrying nothing but the footer (found by rendering this document and reading
+# it back). Break *before* drawing when the room is not there.
+def ensure_room(pdf, needed)
+  return if pdf.cursor >= needed && pdf.cursor.positive?
+
+  pdf.start_new_page
+end
+
 def scrub(text)
   out = text.to_s.dup
   SUBSTITUTIONS.each { |from, to| out = out.gsub(from, to) }
@@ -184,6 +194,8 @@ def render(markdown, out_path)
           next
         end
 
+        # Keep a heading with at least a couple of lines under it.
+        ensure_room(pdf, 64)
         case block.level
         when 2
           pdf.move_down 14
@@ -210,11 +222,13 @@ def render(markdown, out_path)
       when :para
         next if block.text.strip.empty?
 
+        ensure_room(pdf, 38)
         pdf.fill_color INK
         pdf.text(inline(block.text), size: 10, leading: 2.5, inline_format: true)
         pdf.move_down 5
 
       when :bullet
+        ensure_room(pdf, 34)
         pdf.fill_color PRIMARY
         pdf.bounding_box([0, pdf.cursor], width: 10, height: 12) { pdf.text("-", size: 10, style: :bold) }
         pdf.bounding_box([12, pdf.cursor + 12], width: pdf.bounds.width - 12) do
@@ -224,6 +238,7 @@ def render(markdown, out_path)
         pdf.move_down 3
 
       when :quote
+        ensure_room(pdf, 60)
         pdf.move_down 4
         pdf.table([[inline(block.text)]],
                   width: pdf.bounds.width, cell_style: {
@@ -234,6 +249,7 @@ def render(markdown, out_path)
         pdf.move_down 8
 
       when :code
+        ensure_room(pdf, 70)
         pdf.move_down 4
         pdf.table([[scrub(block.lines.join("\n"))]],
                   width: pdf.bounds.width, cell_style: {
@@ -246,6 +262,7 @@ def render(markdown, out_path)
       when :table
         next if block.rows.empty?
 
+        ensure_room(pdf, 80)
         pdf.move_down 4
         pdf.table(block.rows, width: pdf.bounds.width, header: true, cell_style: {
                     size: 9, padding: [6, 8, 6, 8], border_color: BORDER, borders: [:bottom],
@@ -270,7 +287,27 @@ def render(markdown, out_path)
     pdf.number_pages("<color rgb='#{MUTED}'>Why Runes - page <page> of <total></color>",
                      at: [0, -32], align: :center, size: 8.5, inline_format: true)
   end
+  check_blank_pages(out_path)
   out_path
+end
+
+# A page with nothing but the footer is a rendering bug, not a style choice:
+# the text was drawn past the bottom and clipped. Fail loudly rather than ship
+# a PDF with holes in it.
+def check_blank_pages(path)
+  require "pdf-reader"
+  reader = PDF::Reader.new(path)
+  blank = reader.pages.each_with_index.select do |page, _index|
+    page.text.to_s.gsub(/Why Runes - page \d+ of \d+/, "").strip.empty?
+  end.map { |_page, index| index + 1 }
+  warn "md_to_pdf: WARNING blank page(s) #{blank.inspect} in #{path}" unless blank.empty?
+  blank
+rescue LoadError
+  warn "md_to_pdf: pdf-reader not installed; skipping the blank-page check"
+  []
+rescue StandardError => e
+  warn "md_to_pdf: could not check #{path} (#{e.class}: #{e.message})"
+  []
 end
 
 if $PROGRAM_NAME == __FILE__

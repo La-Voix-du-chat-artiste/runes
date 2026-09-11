@@ -42,16 +42,21 @@ Where the current goal stands (it stays **active**):
   capability/`WorkflowPolicy` refusal on `runes/guard/denied` (rate-capped,
   one event per refusal), the dispatcher and `bin/runes-workflow` attach sinks
   automatically, and `/security` shows refusals over time, top tools/agents and
-  drill-down next to the signature findings. Phase 29 closed the honesty list's
+  drill-down next to the signature findings. Phase 31 added the fleet board
+  (`/board`, `Board::Kanban`): packets folded into Planned / Working / Done and
+  rendered as a **Mermaid `kanban`** diagram over a server-rendered HTML board,
+  with `GET /board.mmd` as the machine-readable artifact and Mermaid vendored
+  (MIT) so it works offline. Phase 29 closed the honesty list's
   first item: `Runes::RequestLedger` claims every inbound request by
   `request_id` before any work is queued, so a redelivered QoS 1 PUBLISH, a
   session replay or a publisher retry runs the planner once and gets the first
   copy's outcome back — prompts, A2A tasks, delegations and tool RPCs.
-- **Next, in order:** the P1 views (`O1.6` plugin catalog, `O1.7` plan chain,
-  `O1.5` alerts — impersonation and guard denials are already detected and
-  waiting for an `Alert` row); then `O0.4` retention/rollups at real volume;
-  optionally a durable request ledger if anyone turns MQTT session expiry on.
-  Auth gates O1.2: it is remote execution.
+- **Next, in order:** the P1 views — `O1.6` plugin catalog, `O1.7` plan chain,
+  `O1.5` alerts (impersonation and guard denials are already detected and
+  waiting for an `Alert` row; `O1.8`, the fleet board, landed in Phase 31) —
+  then `O0.4` retention/rollups at real volume; optionally a durable request
+  ledger if anyone turns MQTT session expiry on. Auth gates O1.2: it is remote
+  execution.
 - **Known open items:** execution is deduped in-process now
   (`Runes::RequestLedger`, Phase 29) — the residue is that a request with **no**
   `request_id` (a plain prompt) has no identity to dedupe on, and the ledger
@@ -71,7 +76,7 @@ Where the current goal stands (it stays **active**):
 
 ```
 bundle exec rake test                 # parent harness: 600 runs / 2696 assertions / 0 failures
-cd runes_observer && bin/rails test   # observatory: 188 runs / 890 assertions / 0 failures
+cd runes_observer && bin/rails test   # observatory: 215 runs / 1069 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
 

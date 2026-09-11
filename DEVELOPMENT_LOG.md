@@ -1897,3 +1897,80 @@ it first — which the lazy-`mqtt`-gem change had quietly broken. `test_helper`
 now requires it once.
 
 Suites: parent **600 / 2696 / 0**, observatory **188 / 890 / 0**.
+
+---
+
+## Phase 31 — The fleet board: planned / working / done, as Mermaid (0.3.0)
+
+The idea came from `pipeline_prospect`, where a mission's kanban *is* a `.mmd`
+file shared between the Rails app and external harnesses. Two things there are
+worth stealing, and one is worth fixing:
+
+- **the diagram text is the artifact** — it renders in a browser *and* it is
+  readable by a program;
+- **the board must survive Mermaid being unavailable** — their JS falls back to
+  an HTML board;
+- **but the CDN is not**: Runes' doctrine is local-first, so Mermaid is vendored
+  (`vendor/assets/mermaid.min.js`, 3.57 MB, MIT, with `mermaid.LICENSE.txt`).
+
+`Board::Kanban` folds the packet stream the observer already stores into three
+columns. No new ingestion, and no invention:
+
+| Column | Folded from |
+| --- | --- |
+| Planned | `plan_ready` (N steps announced), `mission_written`, an addressed `a2a_task` |
+| Working | `prompt_received`, `step_start <tool>`, `mission_step_start <title>` |
+| Done | `step_end`, `prompt_complete`, `mission_step_done/failed`, `mission_complete`, every journal entry |
+
+The fold is chronological and **keyed**, which is the whole point of a board: a
+step announced as `step 2` becomes the same card when it starts (now titled with
+its tool) and when it ends (with its outcome). Three honesty rules fell out of
+writing it:
+
+- **A planned step has no name yet.** The dispatcher publishes the *count*
+  (`plan_ready {steps: n}`) and only names each step when it starts, so a planned
+  card is honestly "step N" until then.
+- **Quiet is not finished.** A Working card with no signal for over
+  `STALE_AFTER` (30 min) stays in Working and is flagged (⚠), because a wedged
+  request is exactly what a board should surface.
+- **Closing is not doing.** When a request ends, steps still open are closed
+  ("closed with the request") and steps never reached are closed *and* flagged
+  ("not started when the request finished") — leaving either in Working/Planned
+  for ever would be the board lying.
+
+A journal entry is also the board's best source of titled finished work: it is
+written at the end of a lifecycle and carries the prompt text, so history shows
+up even for a request whose progress events the observer never saw. A
+`mission_step` entry closes *that todo* and deliberately leaves the mission
+running.
+
+`/board` renders the diagram with the vendored Mermaid **over** a
+server-rendered HTML board, so the page is correct with JavaScript disabled and
+a Mermaid failure costs nothing (the controller keeps the list). `GET /board.mmd`
+returns the same text as `text/plain; charset=utf-8` — that is the artifact an
+agent, a harness or `bin/runes-replay` can read without a browser. The generated
+diagram is grammar-checked by `Board::Kanban.validate` in the suite, so a
+malformed diagram fails CI rather than rendering an error box in a browser
+nobody is watching.
+
+**Verified live**, not just in tests: seeded the demo session
+(`bin/rails runes:demo`), ran the dev server, and `GET /board.mmd` returned 8
+Done cards with real titles ("runes-studio-4013 · write_file — Wrote
+CHANGELOG.md (489B)"), `GET /board` carried the Stimulus container, the three
+columns and 8 cards, and the vendored bundle served as
+`/assets/mermaid.min-3295a0a6.js` (3 572 661 bytes, `text/javascript`). The one
+thing I could not verify without a browser is the *rendered SVG*; that is
+precisely why the HTML board is server-rendered rather than drawn in JS.
+
+Suites: parent **600 / 2696 / 0**, observatory **215 / 1069 / 0** (+27 tests).
+
+One thing the board work surfaced in the *pitch tooling*: regenerating
+`docs/WHY_RUNES.pdf` produced two pages carrying nothing but the footer. The
+cause was in `scripts/md_to_pdf.rb`, not the document: bullets are drawn inside
+a Prawn `bounding_box`, and a bounding box does not flow across a page break —
+drawn at a cursor below the page bottom, the text is clipped and the page is
+left blank. Every non-flowing block (bullets, paragraphs, headings, quotes,
+code panels, tables) now calls `ensure_room` and breaks *before* drawing, and
+the renderer checks its own output for pages that carry only the footer and
+warns instead of shipping a PDF with holes. 9 pages (2 blank) → **7 pages, 0
+blank**.

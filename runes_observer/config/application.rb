@@ -26,6 +26,10 @@ module RunesObserver
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
+
+    # Mermaid is vendored (vendor/assets/mermaid.min.js) so the board renders
+    # with no network; Propshaft does not look in vendor/ by default.
+    config.assets.paths << Rails.root.join("vendor/assets")
     config.autoload_lib(ignore: %w[assets tasks])
 
     # Configuration for the application, engines, and railties goes here.

@@ -415,6 +415,33 @@ Dedupe by `(kind, subject)`, count occurrences, ack from the UI, and a badge
 in the layout. **Size** M · **Acceptance** each detector has a fixture that
 fires it and one that must not.
 
+### O1.8 The fleet board (Mermaid kanban) — ✅ DONE (Phase 31)
+
+Idea borrowed from `pipeline_prospect`, where a mission's kanban *is* a `.mmd`
+file shared between the app and external harnesses. The lesson worth copying is
+that the diagram **text** is the artifact — it renders in a browser, and it is
+also readable by a program — plus their robustness rule: the board must stay
+visible when Mermaid is missing.
+
+`Board::Kanban` folds the packet stream into Planned / Working / Done and emits
+Mermaid `kanban` text; `/board` renders it with a vendored Mermaid (offline,
+MIT) over a server-rendered HTML board, and `GET /board.mmd` returns the text
+for agents and tooling. Cards keep one identity across their life, so a planned
+step moves rather than being re-created; a card quiet for over
+`STALE_AFTER` (30 min) stays in Working and is flagged, because quiet is not
+finished; steps the plan announced but never reached are closed *and* flagged
+("not started when the request finished") rather than quietly disappearing. The
+generated diagram is grammar-checked by `Board::Kanban.validate` in the suite,
+so a malformed diagram fails CI instead of rendering an error box in a browser
+nobody is watching.
+
+**Acceptance met:** 18 service tests (the planned→working→done motion, mission
+flow with real todo titles, journal-only history, a failed step, staleness,
+agent filter, window, per-column bound and truncation note, label escaping, and
+the validator's own failure modes) and 9 controller tests (both renderings,
+`.mmd` as `text/plain`, the vendored asset with no CDN, filtering, the empty
+state).
+
 ### O1.6 Plugin and rune catalog, generated from the registry
 
 A `/plugins` page that renders `Runes::Plugin.all(kind:)` — name, kind,
