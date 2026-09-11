@@ -396,7 +396,9 @@ module Runes
 
         # Inbound dedupe, before any work is queued: a redelivered QoS 1
         # PUBLISH or a publisher retry must not run the same request twice
-        # (lib/runes/request_ledger.rb).
+        # (lib/runes/request_ledger.rb). Deliberately AFTER the signature gate
+        # above: keying on an unverified request_id would let a publisher
+        # suppress someone else's request.
         key = ledger_key(env)
         if key && !@request_ledger.claim(key)
           handle_duplicate_prompt(publisher, env, reply_topic, key)

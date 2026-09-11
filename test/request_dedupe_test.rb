@@ -35,7 +35,9 @@ class RequestDedupeTest < Minitest::Test
   end
 
   def teardown
-    [@tmp, @tools].each { |dir| FileUtils.remove_entry(dir) if dir && Dir.exist?(dir) }
+    # force: workers may still be writing inside the workspace when the test
+    # ends, and a flaky ENOTEMPTY is not a finding.
+    [@tmp, @tools].each { |dir| FileUtils.remove_entry(dir, true) if dir && Dir.exist?(dir) }
     ENV.delete("RUNES_WORKSPACE")
   end
 
@@ -199,5 +201,40 @@ class RequestDedupeTest < Minitest::Test
     d.handle_a2a_task(message)
 
     assert_equal 1, @llm.calls, "an A2A redelivery must not run the task twice"
+  end
+  # Everything above calls `handle_prompt` directly. This one goes through a
+  # real transport subscription, so the guarantee is pinned where a redelivery
+  # actually arrives — a future refactor that moves the claim out of the
+  # delivery path fails here, not in production.
+  def test_a_duplicate_delivered_by_the_transport_runs_once
+    hub = Runes::Transport::InProcess.new.connect
+    ledger = Runes::RequestLedger.new
+    d = Runes::Core::Dispatcher.new(
+      { host: "127.0.0.1", port: 0 }, nil, nil,
+      settings: @settings, agent_id: "wire-agent",
+      tool_registry: Runes::Core::ToolRegistry.new(tools_dir: @tools),
+      transport: hub,
+      request_ledger: ledger
+    )
+    @llm = CountingLLM.new
+    d.instance_variable_set(:@llm, @llm)
+    d.subscribe_topics
+
+    payload = JSON.generate("request_id" => "wire-1", "prompt" => "write a greeting file")
+    hub.publish("runes/prompts", payload)
+    hub.publish("runes/prompts", payload)
+
+    # The claim is synchronous, so the ledger already knows; the planner runs on
+    # the worker pool, so wait for it before counting.
+    # Prompts are claimed on the worker pool, not on the transport thread: the
+    # claim has to live *after* the signature gate, or unverified traffic could
+    # poison the ledger with someone else's request id. So wait for both
+    # deliveries to be handled before counting.
+    Timeout.timeout(10) { sleep 0.02 while ledger.claimed + ledger.duplicates < 2 }
+    assert_equal 1, ledger.claimed, "the subscription path must claim, not just handle_prompt"
+    assert_equal 1, ledger.duplicates
+    Timeout.timeout(10) { sleep 0.02 while @llm.calls.zero? }
+    sleep 0.2 # a wrongly queued second job would have landed by now
+    assert_equal 1, @llm.calls, "a transport-level redelivery must run the planner once"
   end
 end

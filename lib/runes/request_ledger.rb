@@ -21,6 +21,15 @@ module Runes
   #   ledger.complete(RequestLedger.prompt_key("abc"), "complete: wrote lib/x.rb")
   #   ledger.outcome(RequestLedger.prompt_key("abc")) # for a replay, not a re-run
   #
+  # ## Where the claim goes, and why
+  #
+  # The claim is made *after* the envelope has passed the signature gate and
+  # before any work is queued. After, because keying on unverified data would
+  # let any publisher poison the ledger with someone else's `request_id` and
+  # suppress the legitimate request that follows — a denial of service dressed
+  # as a dedupe. Before the queue, because a redelivery must not consume a
+  # worker slot the first copy could use.
+  #
   # ## Scope, stated rather than implied
   #
   # The ledger is in-process, bounded and TTL'd. It covers redelivery and

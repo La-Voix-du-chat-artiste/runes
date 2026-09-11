@@ -1860,6 +1860,15 @@ One claim covers every inbound path, because prompts, A2A tasks and delegations
 all funnel through `handle_prompt`; the opt-in direct tool RPC claims separately
 on `(tool, request_id)`.
 
+The claim sits **after the signature gate and before the work queue** on
+purpose: after, because keying on an unverified `request_id` would let any
+publisher poison the ledger with someone else's id and suppress the legitimate
+request that follows; before, because a redelivery must not consume a worker
+slot the first copy could use. A test drives a real `InProcess` transport and
+publishes the same envelope twice through the subscription — the dedupe is
+pinned where a redelivery actually arrives, not only where the method is
+called.
+
 Three things this phase is honest about:
 
 - **A plain prompt is not deduped.** Its id is a digest of its text, so two
@@ -1887,4 +1896,4 @@ the 3.1.1 adapter, so six suites only worked when another file happened to load
 it first — which the lazy-`mqtt`-gem change had quietly broken. `test_helper`
 now requires it once.
 
-Suites: parent **599 / 2693 / 0**, observatory **188 / 890 / 0**.
+Suites: parent **600 / 2696 / 0**, observatory **188 / 890 / 0**.

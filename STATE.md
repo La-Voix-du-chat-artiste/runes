@@ -68,7 +68,7 @@ Where the current goal stands (it stays **active**):
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 599 runs / 2693 assertions / 0 failures
+bundle exec rake test                 # parent harness: 600 runs / 2696 assertions / 0 failures
 cd runes_observer && bin/rails test   # observatory: 188 runs / 890 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
