@@ -42,18 +42,25 @@ Where the current goal stands (it stays **active**):
   capability/`WorkflowPolicy` refusal on `runes/guard/denied` (rate-capped,
   one event per refusal), the dispatcher and `bin/runes-workflow` attach sinks
   automatically, and `/security` shows refusals over time, top tools/agents and
-  drill-down next to the signature findings.
-- **Next, in order:** the at-least-once execution ledger in the harness (the
-  headline honesty gap: redelivery can run a handler twice); then the P1 views
-  (`O1.6` plugin catalog, `O1.7` plan chain, `O1.5` alerts — impersonation and
-  guard denials are already detected and waiting for an `Alert` row); then
-  `O0.4` retention/rollups at real volume. Auth gates O1.2: it is remote
-  execution.
-- **Known open items:** at-least-once *execution* (handlers are not idempotent;
-  a bounded request ledger is the fix), envelope replay is closed but **A2A peer
-  cards are still unauthenticated**, token scanning is not a sandbox, the
-  observatory has no auth, and one-shot tool feedback. All are in the "What
-  we're honest about" list in `docs/WHY_RUNES.md` and in `doc5.md`.
+  drill-down next to the signature findings. Phase 29 closed the honesty list's
+  first item: `Runes::RequestLedger` claims every inbound request by
+  `request_id` before any work is queued, so a redelivered QoS 1 PUBLISH, a
+  session replay or a publisher retry runs the planner once and gets the first
+  copy's outcome back — prompts, A2A tasks, delegations and tool RPCs.
+- **Next, in order:** the P1 views (`O1.6` plugin catalog, `O1.7` plan chain,
+  `O1.5` alerts — impersonation and guard denials are already detected and
+  waiting for an `Alert` row); then `O0.4` retention/rollups at real volume;
+  optionally a durable request ledger if anyone turns MQTT session expiry on.
+  Auth gates O1.2: it is remote execution.
+- **Known open items:** execution is deduped in-process now
+  (`Runes::RequestLedger`, Phase 29) — the residue is that a request with **no**
+  `request_id` (a plain prompt) has no identity to dedupe on, and the ledger
+  does not survive a restart (clean sessions mean the broker does not replay
+  either; a durable ledger is the next step only if session expiry is turned
+  on). Envelope replay is closed but **A2A peer cards are still
+  unauthenticated**, token scanning is not a sandbox, the observatory has no
+  auth, and one-shot tool feedback remains. All are in the "What we're honest
+  about" list in `docs/WHY_RUNES.md` and in `doc5.md`.
 - **Regenerate the pitch PDF:** `ruby scripts/md_to_pdf.rb docs/WHY_RUNES.md
   docs/WHY_RUNES.pdf` (plain `ruby`, not `bundle exec`: prawn is a system gem).
 - Working tree is a git repo with one commit per batch; `git log --oneline`.
@@ -61,7 +68,7 @@ Where the current goal stands (it stays **active**):
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 578 runs / 2632 assertions / 0 failures
+bundle exec rake test                 # parent harness: 599 runs / 2693 assertions / 0 failures
 cd runes_observer && bin/rails test   # observatory: 188 runs / 890 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```

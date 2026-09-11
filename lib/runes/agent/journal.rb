@@ -1,3 +1,5 @@
+require_relative '../request_ledger'
+
 module Runes
   module Agent
     # Durable prompt log: JSONL journal append plus rotation.
@@ -23,6 +25,12 @@ module Runes
         publisher.publish(PROMPT_LOG_TOPIC, payload)
         publisher.publish("#{PROMPT_LOG_TOPIC}/latest", payload, retain: true)
         append_journal(payload)
+        # The request is finished: remember what it did, so a redelivered copy
+        # can be answered from the ledger instead of run again (doc5.md /
+        # lib/runes/request_ledger.rb). `&.` because this module is mixed into
+        # things that have no ledger.
+        @request_ledger&.complete(Runes::RequestLedger.prompt_key(request_id),
+                                  [status, summary || error].compact.join(': '))
       rescue => e
         log "Prompt log failed: #{e.message}"
       end

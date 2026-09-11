@@ -1821,3 +1821,70 @@ published a real refusal through the real seam, and the observer stored
 clock (the Phase 26 work, doing its job one phase later).
 
 Suites: parent **578 / 2632 / 0**, observatory **188 / 890 / 0**.
+
+---
+
+## Phase 29 — Execution is deduped now (0.3.0)
+
+The honesty list in `docs/WHY_RUNES.md` led with this one: *"distribution is
+exactly-once; execution is at-least-once... a duplicate prompt or task can
+repeat its side effects."* Shared subscriptions made MQTT 5 hand each prompt to
+one group member, but nothing deduped what arrived:
+
+- a QoS 1 PUBLISH whose PUBACK is lost is retransmitted, and the adapter
+  delivers it to the handler a second time;
+- a client configured with a session expiry gets unacknowledged messages back
+  after a reconnect;
+- any publisher that retries on timeout sends the same request again.
+
+Each of those could run one prompt twice: two LLM bills and two sets of tool
+side effects from one request. `Runes::RequestLedger` closes the window:
+
+```ruby
+ledger.claim(RequestLedger.prompt_key("abc"))   # true the first time only
+ledger.complete(RequestLedger.prompt_key("abc"), "complete: wrote lib/x.rb")
+ledger.outcome(RequestLedger.prompt_key("abc")) # for a replay, not a re-run
+```
+
+`claim` is atomic (two transport threads delivering the same message cannot both
+win — there is a 16-thread test), bounded (`max`, oldest evicted first), TTL'd
+(900 s default, `max` and `ttl` injectable, and a fake clock so the tests never
+sleep). `handle_prompt` claims **before** any work is queued, so a duplicate
+never reaches the worker pool; the duplicate is announced on the progress topic
+(`duplicate_ignored`) with the first copy's outcome, and — once the first copy
+has finished — the reply topic is answered from the ledger instead of being
+silently dropped. `record_prompt_log` is the completion hook, which every mode
+already calls with a status and summary.
+
+One claim covers every inbound path, because prompts, A2A tasks and delegations
+all funnel through `handle_prompt`; the opt-in direct tool RPC claims separately
+on `(tool, request_id)`.
+
+Three things this phase is honest about:
+
+- **A plain prompt is not deduped.** Its id is a digest of its text, so two
+  deliberate repeats are indistinguishable from one retry, and eating a user's
+  second identical prompt is worse than re-running it. Only an envelope that
+  names a `request_id` has an identity to dedupe on.
+- **The ledger is in-process.** It covers redelivery and retries inside one
+  process lifetime, which is where the exposure lives: the MQTT 5 adapter
+  connects with `session_expiry: 0` (a clean session), so the broker does not
+  replay messages from before a disconnect. A deployment that turns session
+  expiry on *and* restarts should expect re-runs; a durable ledger (the
+  `sqlite3` the harness already depends on) is the next step if that matters.
+- **A reused `request_id` is a new request once the TTL lapses**, which is what
+  makes a long-lived agent's memory bounded.
+
+Two bugs of my own, both caught by the suite rather than by review. Adopting the
+delegation's `request_id` for dedupe first set `from_envelope: true` on the inner
+envelope — but that flag *also* derives a conventional reply topic, so a
+delegation with an unsafe `from` (which must have its reply suppressed, the D10
+regression test) got one anyway. The fabric now sets an explicit
+`dedupe_key`, which is exactly the statement "this envelope has a verified
+identity but must not derive a reply topic from it". And the parent suite
+revealed that "all green" had been order-dependent: `test_helper` never loaded
+the 3.1.1 adapter, so six suites only worked when another file happened to load
+it first — which the lazy-`mqtt`-gem change had quietly broken. `test_helper`
+now requires it once.
+
+Suites: parent **599 / 2693 / 0**, observatory **188 / 890 / 0**.

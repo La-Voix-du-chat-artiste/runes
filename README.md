@@ -82,7 +82,11 @@ and why it matters — is [`docs/WHY_RUNES.md`](docs/WHY_RUNES.md).
   (`RUNES_REQUIRE_SHARED_SUBSCRIPTIONS=1`) or runs as the fleet's **single
   consumer** with a loud warning. Prompts run on a fixed worker pool and
   are **never** executed on the transport's receive thread; a saturated
-  queue answers `busy` instead.
+  queue answers `busy` instead. Execution itself is deduped:
+  `Runes::RequestLedger` refuses to run the same `request_id` twice inside its
+  TTL — a redelivered PUBLISH, a session replay or a publisher retry gets the
+  first copy's outcome instead of a second run — across prompts, A2A tasks,
+  delegations and direct tool RPCs.
 - **A2A-over-MQTT** — each agent publishes a retained A2A Agent Card on
   `$a2a/v1/discovery/<org>/<unit>/<agent_id>` carrying an `a2a-status`
   user property; tasks arrive on `$a2a/v1/tasks/...` and are answered via

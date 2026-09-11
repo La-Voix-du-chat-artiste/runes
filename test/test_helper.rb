@@ -29,6 +29,11 @@ require_relative '../lib/runes/mqtt/broker'
 require_relative '../lib/runes/wasm/vm_manager'
 require_relative '../lib/runes/capabilities/guard'
 require_relative '../lib/runes/core/dispatcher'
+# The 3.1.1 adapter is loaded on demand by the transport seam, and several
+# suites drive `Runes::Transport::MQTT311` directly. Without this they only
+# worked when another test file happened to load it first — order-dependent,
+# and it broke the moment the seam stopped requiring it eagerly.
+require_relative '../lib/runes/transport/mqtt311'
 
 # A publisher double. The pipeline takes its transport as a positional
 # argument, so a test can assert on what an agent would have published

@@ -18,6 +18,7 @@ require_relative '../version'
 require_relative '../transport'
 require_relative '../a2a'
 require_relative '../security'
+require_relative '../request_ledger'
 require_relative '../agent/fabric'
 require_relative '../agent/journal'
 require_relative '../agent/session_store'
@@ -108,7 +109,8 @@ module Runes
                      settings: nil,
                      agent_id: nil,
                      tool_registry: nil,
-                     transport: nil)
+                     transport: nil,
+                     request_ledger: nil)
         @broker_config = broker_config || {}
         @ui = ui
         @settings = settings || Runes::Core::Settings.new
@@ -119,6 +121,10 @@ module Runes
         # S5-4: accepted tool-RPC nonces (replay window), created lazily
         # when RPC is enabled.
         @rpc_nonces = nil
+        # Inbound dedupe: distribution is exactly-once via shared
+        # subscriptions, but redelivery/retries could run one request twice
+        # (lib/runes/request_ledger.rb). Injectable for tests.
+        @request_ledger = request_ledger || Runes::RequestLedger.new
         @llm = Runes::Core::LLMClient.new(@settings)
         @vm_manager = Runes::WASM::VMManager.new(
           wasm_path || File.join(@settings.root, 'ruby.wasm'),
@@ -293,6 +299,21 @@ module Runes
       # Tool RPCs get their own small allowance and never run on a transport
       # thread; at saturation the caller gets a visible busy error.
       def dispatch_tool_request(tool_id, payload)
+        # Same dedupe as a prompt, for the opt-in direct tool RPC: an RPC that
+        # arrives twice must not run a tool (and its side effects) twice.
+        if (key = tool_ledger_key(tool_id, payload))
+          unless @request_ledger.claim(key)
+            log "[Ledger] duplicate tool request #{tool_id} ignored"
+            begin
+              @transport.publish("runes/tools/#{tool_id}/error",
+                                 'Error: duplicate request ignored (already handled)')
+            rescue StandardError
+              nil
+            end
+            return
+          end
+        end
+
         take_slot = @tool_in_flight_mutex.synchronize do
           if @tool_in_flight >= max_tool_concurrent
             false
@@ -317,6 +338,16 @@ module Runes
             @tool_in_flight_mutex.synchronize { @tool_in_flight -= 1 }
           end
         end
+      end
+
+      # A tool RPC payload may name its request; without one there is nothing
+      # to dedupe on (see ledger_key).
+      def tool_ledger_key(tool_id, payload)
+        data = safe_parse_args(payload.is_a?(String) ? payload : JSON.generate(payload))
+        request_id = data.is_a?(Hash) ? data['request_id'].to_s : ''
+        return nil unless request_id.match?(REQUEST_ID_RE)
+
+        Runes::RequestLedger.tool_key(tool_id, request_id)
       end
 
       def max_concurrent_prompts
@@ -363,12 +394,65 @@ module Runes
         end
         reply_topic ||= "runes/prompts/#{env[:request_id]}/response" if env[:from_envelope]
 
+        # Inbound dedupe, before any work is queued: a redelivered QoS 1
+        # PUBLISH or a publisher retry must not run the same request twice
+        # (lib/runes/request_ledger.rb).
+        key = ledger_key(env)
+        if key && !@request_ledger.claim(key)
+          handle_duplicate_prompt(publisher, env, reply_topic, key)
+          return
+        end
+
         case env[:mode]
         when 'goal' then handle_goal_turn(publisher, env, reply_topic)
         when 'plan' then handle_plan(publisher, env, reply_topic)
         when 'mission' then handle_mission(publisher, env, reply_topic)
         else handle_build_prompt(publisher, env, reply_topic)
         end
+      end
+
+      # Only an envelope that names its request can be deduped. A plain
+      # prompt's id is a digest of its text, so two deliberate repeats are
+      # indistinguishable from one retry — and eating a user's second identical
+      # prompt is worse than re-running it.
+      def ledger_key(env)
+        # An explicit key is the fabric saying "this envelope has a verified
+        # identity even though it must not derive a reply topic from it" — the
+        # delegated-task case, where an unsafe `from` suppresses the reply topic
+        # but the request id is still the peer's identity for dedupe.
+        return env[:dedupe_key] if env[:dedupe_key]
+
+        return nil unless env[:from_envelope]
+
+        request_id = env[:request_id].to_s
+        return nil unless request_id.match?(REQUEST_ID_RE)
+
+        Runes::RequestLedger.prompt_key(request_id)
+      end
+
+      # A duplicate is not an error the sender needs to fix; it is the same
+      # request. Say so on the progress topic, and — if the first copy already
+      # finished — answer the reply topic from the ledger instead of running
+      # anything again. That is what makes a retry safe: it costs one message,
+      # not one LLM call and one set of tool side effects.
+      def handle_duplicate_prompt(publisher, env, reply_topic, key)
+        request_id = env[:request_id]
+        outcome = @request_ledger.outcome(key)
+        log "[Ledger] duplicate request #{request_id} ignored " \
+            "(#{outcome ? 'already complete' : 'still in flight'})"
+        begin
+          publisher.publish("runes/prompts/#{request_id}/progress",
+                            JSON.generate(event: 'duplicate_ignored', request_id: request_id,
+                                          at: Time.now.utc.iso8601,
+                                          first_outcome: outcome))
+          if outcome && reply_topic
+            publisher.publish(reply_topic,
+                              "Duplicate request ignored — already #{outcome}")
+          end
+        rescue StandardError => e
+          log "Could not report a duplicate request: #{e.class}: #{e.message}"
+        end
+        nil
       end
 
       # Convenience for embeds/tests: parse a raw payload and run it.

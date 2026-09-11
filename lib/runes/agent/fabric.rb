@@ -312,6 +312,23 @@ module Runes
           prompt = env['prompt'] || env['_raw'].to_s
           reply_topic = delegation_reply_topic(env)
           inner = parse_envelope(prompt.to_s)
+          # The delegation envelope's `request_id` is verified and already
+          # decides the reply topic; when the delegation carried a plain
+          # prompt, the inner envelope has no identity of its own, so adopt the
+          # outer one. Without this a redelivered delegation could not be
+          # deduped (and its progress would key off a text digest instead of
+          # the request the peer is waiting on).
+          unless inner[:from_envelope]
+            delegated_id = env['request_id'].to_s
+            if delegated_id.match?(REQUEST_ID_RE)
+              inner[:request_id] = delegated_id
+              # Dedupe identity, NOT `from_envelope`: that flag also derives a
+              # conventional reply topic, and an unsafe `from` must keep its
+              # reply suppressed (D10). Progress and journal correlation follow
+              # the delegation's request id, which is what the peer waits on.
+              inner[:dedupe_key] = Runes::RequestLedger.prompt_key(delegated_id)
+            end
+          end
           inner[:verified] = true
           handle_prompt(@transport, inner, reply_topic: reply_topic)
         end

@@ -227,7 +227,7 @@ today:
 | --- | --- |
 | `lib/` | **14 265 lines** across 60 files |
 | `test/` | **10 646 lines** across 42 files |
-| Suite | **578 runs, 2 632 assertions, 0 failures** — no keys, no provider calls, no broker required |
+| Suite | **599 runs, 2 693 assertions, 0 failures** — no keys, no provider calls, no broker required |
 | Observatory | **188 runs, 890 assertions**, **4 314 lines** of Rails 8.1 app code — fleet, runs, topology, traces, who published, and what was refused, all fed through the fleet's own `Runes::Transport` |
 | Executables | **7**: `runes` (TUI), `runes-daemon`, `runes-client`, `runes-mcp`, `runes-replay`, `runes-acl`, `runes-workflow` |
 | Workflow engine | **4 491 lines** total (engine + the seven runes + command runner), stdlib only — no `async`, no `ruby_llm` |
@@ -248,12 +248,17 @@ Run it yourself: `bundle exec rake test`, then
 
 A pitch that hides the seams is a pitch you'll resent in a month. So:
 
-- **Distribution is exactly-once; execution is at-least-once.** MQTT 5 shared
-  subscriptions put a prompt in front of exactly one group member, but QoS 1 is
-  at-least-once and a reconnect can redeliver work in flight. Handlers are not
-  idempotent yet: a duplicate prompt or task can repeat its side effects. It is
-  written down as the next security-correctness task (a bounded request ledger),
-  not glossed over.
+- **Distribution is exactly-once; execution is now deduped, in-process.** MQTT 5
+  shared subscriptions put a prompt in front of exactly one group member, and
+  `Runes::RequestLedger` closes the other half: a redelivered QoS 1 PUBLISH, a
+  session-expiry replay or a publisher retry with the same `request_id` runs the
+  planner **once**, and the replay is answered from the first copy's recorded
+  outcome instead of being silently dropped. Covers prompts, A2A tasks,
+  delegations and direct tool RPCs. The remaining seam is stated, not implied: a
+  request with no `request_id` (a plain prompt) has no identity to dedupe on, the
+  ledger is in-process (a restart forgets it — the MQTT 5 client connects with a
+  clean session, so the broker does not replay either), and a durable ledger is
+  the next step if a deployment turns session expiry on.
 - **Workflow runes ask permission only when asked to.** `RUNES_WORKFLOW_POLICY`
   puts `cmd`, `agent` and `ruby` behind the capability guard, refusing *before*
   anything spawns and failing closed on an unreadable policy. It is off by
