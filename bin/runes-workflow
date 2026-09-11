@@ -151,6 +151,11 @@ module RunesWorkflowCli
     end
 
     Runes::Telemetry.sink = sink
+    # A workflow refused by RUNES_WORKFLOW_POLICY is exactly the kind of
+    # refusal the observatory should see (doc5.md O2.3). It rides the same
+    # transport the run's events do: one connection, one spec.
+    Runes::GuardTelemetry.sink =
+      Runes::GuardTelemetry::TransportSink.new(transport: sink.transport)
     $stderr.puts "runes-workflow: telemetry -> #{sink.topic('<run_id>', '<kind>')}"
   rescue StandardError => e
     $stderr.puts "runes-workflow: telemetry unavailable (#{e.class}: #{e.message})"

@@ -1764,3 +1764,60 @@ alongside the MQTT 5 properties from Phase 25. The probe now does both checks,
 and can write the public key into a trust directory for the ingest to read.
 
 Suites: parent **567 / 2592 / 0**, observatory **178 / 835 / 0** (+26 tests).
+
+---
+
+## Phase 28 — Refusals are visible now (0.3.0, O2.3)
+
+The last piece of the security story. Phase 27 answered *who published this*;
+what was *refused* still never left the process — a warning line in a log
+nobody keeps. Every S4-1/S4-2 class finding in the round-5 audit was about
+refusals that did not happen, and a refusal you cannot see is a refusal you
+cannot notice.
+
+`Runes::GuardTelemetry` is the seam, shaped deliberately like
+`Runes::Telemetry`: a **sink** decides what a decision is worth.
+
+```ruby
+Runes::GuardTelemetry.sink = ->(decision) { ... }
+Runes::GuardTelemetry.sink = Runes::GuardTelemetry::TransportSink.new(
+  transport: t, agent_id: 'a1'
+)
+```
+
+A decision is `{tool, action, resource, phase, agent, at}`; the transport sink
+publishes it on `runes/guard/denied`. Wiring:
+
+- the capability guard reports from `log_deny` — the *log line* stays
+  deduplicated (a repeated identical line is noise) while the *event* does not
+  (how often a refusal happens is exactly what an operator wants to see);
+- the dispatcher attaches a sink to its transport automatically, so every
+  agent publishes its own refusals without configuration;
+- `bin/runes-workflow` reports `RUNES_WORKFLOW_POLICY` refusals on the same
+  topic, through the same transport its run telemetry already uses.
+
+Two decisions worth recording. `Guard#allowed?` grew `report:` because the
+workflow policy knows it refused a *rune* and reports that itself with
+`phase: "workflow"` — without the flag one refusal produced two events, which
+the new test caught immediately. And emitting is rate-capped at
+`MAX_PER_MINUTE` with a single warning, because a planner in a loop must not be
+able to turn the guard into a fabric flood: a telemetry seam that can be
+weaponised is a worse bug than a missing event. A raising sink is swallowed,
+like every other telemetry path.
+
+`/security` is the page: refusals per hour / 24 h / all-time, a 30-minute
+refusal sparkline, top tools and agents (each one a filter), every row linking
+to the packet that recorded it, and — beside it, because they are two halves of
+one question — the signature verdicts and impersonation findings from Phase 27.
+The dashboard keeps a compact summary and links here. `PacketClassifier` maps
+the topic to `guard_denied`, and the parent suite's topic-contract test carries
+a representative topic for it, so the publisher and the observer cannot drift.
+
+**Verified live** against mosquitto 2.1.2: with the ingest attached,
+`RUNES_PROBE_RESOURCE="rm -rf /tmp/live-$$" ruby scripts/guard_denial_probe.rb`
+published a real refusal through the real seam, and the observer stored
+`kind: guard_denied`, `tool: run_command`, `event: exec`,
+`agent_id: probe-agent`, with `occurred_at` taken from the publisher's own
+clock (the Phase 26 work, doing its job one phase later).
+
+Suites: parent **578 / 2632 / 0**, observatory **188 / 890 / 0**.

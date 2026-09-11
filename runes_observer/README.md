@@ -91,6 +91,14 @@ all classified and stored.
   The ingest drops a single message it cannot store — counted in
   `ingest_statuses.packets_dropped` — instead of tearing down the
   connection.
+- `SecurityController` (`/security`) answers *what was refused*: every
+  capability denial the fleet publishes on `runes/guard/denied`, counted by
+  hour/24 h/all-time, grouped by tool and agent with filters, each row linking
+  to the packet that recorded it. Together with the signature panel beside it,
+  the page is the whole security question — who published, and what was
+  blocked. The dispatcher attaches a `Runes::GuardTelemetry` sink to its
+  transport automatically; `bin/runes-workflow` does the same for
+  `RUNES_WORKFLOW_POLICY` refusals when `RUNES_TELEMETRY` is set.
 - `ObserverSignature` answers *who really published this*: every payload is
   checked against `Runes::Security::Envelope` + `TrustStore` and stored as
   `unsigned`, `verified`, `untrusted` or `invalid` with the signing key's
@@ -135,6 +143,10 @@ the observer classifies those topics into the same feed and agent views:
 MQTT wildcards never match `$`-prefixed topics, so the ingest must subscribe
 to `$a2a/#` in addition to `runes/#` for these packets to be seen.
 
+`runes/guard/denied` is classified as `guard_denied` and is the only topic that
+carries a refusal: `{tool, action, resource, agent, phase, at}`. The `/security`
+page groups those into tools, agents and actions.
+
 ## Rake tasks
 
 ```bash
@@ -164,7 +176,7 @@ bin/rails runes:reset                # delete every observed packet and agent
 ## Tests
 
 ```bash
-bin/rails test     # 178 runs, 835 assertions
+bin/rails test     # 188 runs, 890 assertions
 ```
 
 Covers the topic classifier (every Runes topic shape, including the A2A

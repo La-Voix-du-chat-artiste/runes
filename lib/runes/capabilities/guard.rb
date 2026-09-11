@@ -1,4 +1,5 @@
 require 'json'
+require_relative '../guard_telemetry'
 require_relative '../transport/topic_filter'
 
 module Runes
@@ -98,8 +99,14 @@ module Runes
         end
       end
 
-      def allowed?(tool_id, action, resource)
-        return deny(tool_id, action, resource) if tool_id.nil? || action.nil? || resource.nil?
+      # @param report [Boolean] publish a refusal through GuardTelemetry. A
+      #   caller that reports the denial itself (the workflow policy, which
+      #   knows it refused a *rune*) passes false so one refusal produces one
+      #   event rather than two.
+      def allowed?(tool_id, action, resource, report: true)
+        if tool_id.nil? || action.nil? || resource.nil?
+          return deny(tool_id, action, resource, report: report)
+        end
 
         tool_policy = tools_policy[tool_id]
         return allow_by_default? if tool_policy.nil?
@@ -108,11 +115,13 @@ module Runes
         # Fail closed for KNOWN tools whose action is missing or explicitly
         # revoked (S-D4): an empty/absent pattern list must never fall
         # through to default_allow.
-        return deny(tool_id, action, resource) if patterns.nil? || patterns.empty?
+        if patterns.nil? || patterns.empty?
+          return deny(tool_id, action, resource, report: report)
+        end
 
         return true if patterns.any? { |pattern| topic_matches?(pattern, resource) }
 
-        deny(tool_id, action, resource)
+        deny(tool_id, action, resource, report: report)
       rescue => e
         warn "[Guard] policy error for #{tool_id}/#{action}/#{resource}: #{e.message}"
         false
@@ -120,8 +129,8 @@ module Runes
 
       private
 
-      def deny(tool_id, action, resource)
-        log_deny(tool_id, action, resource)
+      def deny(tool_id, action, resource, report: true)
+        log_deny(tool_id, action, resource, report: report)
         false
       end
 
@@ -211,7 +220,17 @@ module Runes
 
       # Structured deny logging so operators can audit guard behavior.
       # Deduplicated (bounded) — one line per distinct tool/action/resource.
-      def log_deny(tool_id, action, resource)
+      #
+      # The *log line* is deduplicated because a repeated identical line is
+      # noise; the telemetry event is not, because how often a refusal happens
+      # is exactly what an operator wants to see (doc5.md O2.3). The event is
+      # rate-capped inside GuardTelemetry instead, so a denial loop cannot
+      # become a fabric flood.
+      def log_deny(tool_id, action, resource, report: true)
+        if report
+          Runes::GuardTelemetry.record(tool: tool_id, action: action_key(action),
+                                       resource: resource, phase: 'tool')
+        end
         key = "#{tool_id}/#{action_key(action)}/#{resource.to_s[0, 120]}"
         return if @deny_logged.key?(key)
         return if @deny_logged.size >= MAX_DENY_LOG

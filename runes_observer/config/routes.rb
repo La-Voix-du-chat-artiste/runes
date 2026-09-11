@@ -5,6 +5,8 @@ Rails.application.routes.draw do
   resources :packets, only: %i[index show]
   resources :runs, only: %i[index show], param: :run_id
   get "topology", to: "topology#show", as: :topology
+  # What was refused, next to the dashboard's "who published what" (doc5.md O2.3).
+  get "security", to: "security#show", as: :security
   resources :interactions, only: %i[show], param: :id
 
   # JSON feed used by the Stimulus poller (?after_id=&agent_id=&kind=&request_id=).

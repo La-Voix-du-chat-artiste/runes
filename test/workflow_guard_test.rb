@@ -12,10 +12,15 @@ class WorkflowGuardTest < Minitest::Test
     @dir = Dir.mktmpdir("runes-wfguard-")
     @policy_path = File.join(@dir, "policy.json")
     Runes::WorkflowPolicy.reset!
+    @original_sink = Runes::GuardTelemetry.sink
+    Runes::GuardTelemetry.sink = nil
+    Runes::GuardTelemetry.reset_window!
   end
 
   def teardown
     Runes::WorkflowPolicy.reset!
+    Runes::GuardTelemetry.sink = @original_sink
+    Runes::GuardTelemetry.reset_window!
     Runes::Plugins::Cmd.reset_command_runner!
     FileUtils.remove_entry(@dir) if @dir && Dir.exist?(@dir) && @dir.start_with?(Dir.tmpdir)
   end
@@ -136,5 +141,32 @@ class WorkflowGuardTest < Minitest::Test
   class FakeStatus
     def success? = true
     def exitstatus = 0
+  end
+  # doc5.md O2.3: a refused workflow is a refusal like any other, and it must
+  # reach whatever sink the process installed.
+  def test_a_refused_rune_is_reported_to_the_telemetry_sink
+    seen = []
+    Runes::GuardTelemetry.sink = ->(decision) { seen << decision }
+    install("tools" => { "cmd" => { "exec" => ["ls"] } })
+
+    assert_raises(Runes::WorkflowPolicy::Denied) do
+      run_workflow(%(execute { cmd(:x) { "echo forbidden" } }))
+    end
+
+    assert_equal 1, seen.size
+    assert_equal "workflow", seen.first["phase"]
+    assert_equal "cmd", seen.first["tool"]
+    assert_equal "exec", seen.first["action"]
+    assert_equal "echo forbidden", seen.first["resource"]
+  end
+
+  def test_an_allowed_rune_reports_nothing
+    seen = []
+    Runes::GuardTelemetry.sink = ->(decision) { seen << decision }
+    install("tools" => { "cmd" => { "exec" => ["echo hi"] } })
+
+    run_workflow(%(execute { cmd(:ok) { "echo hi" } }))
+
+    assert_empty seen
   end
 end

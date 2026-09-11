@@ -30,19 +30,6 @@ class DashboardController < ApplicationController
 
   private
 
-  # Packets per minute for the last N minutes. A gap is a zero, not a missing
-  # bar: "the fleet went quiet" is information, and it should look like it.
-  def packet_volume(minutes:)
-    window_start = minutes.minutes.ago.beginning_of_minute
-    counts = Packet.where("occurred_at >= ?", window_start)
-                   .group("strftime('%Y-%m-%d %H:%M', occurred_at)").count
-
-    (0...minutes).map do |offset|
-      slot = window_start + offset.minutes
-      { at: slot, count: counts[slot.strftime("%Y-%m-%d %H:%M")].to_i }
-    end
-  end
-
   # The mix over the last hour, as shares, so the panel answers "what is this
   # bus actually carrying?" rather than only "how much".
   def kind_mix

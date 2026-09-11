@@ -7,6 +7,7 @@
 # the WASM sandbox needs; it is not a gemspec runtime dependency, so the
 # requires that transitively pull it in are guarded (see GEM_PACKAGING.md).
 require_relative 'runes/telemetry'
+require_relative 'runes/guard_telemetry'
 require_relative 'runes/transport'
 # The `mqtt` gem is a gemspec runtime dependency, so for a gem install this
 # always resolves. It is guarded anyway for the embed case (a checkout put on

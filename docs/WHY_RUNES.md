@@ -227,8 +227,8 @@ today:
 | --- | --- |
 | `lib/` | **14 265 lines** across 60 files |
 | `test/` | **10 646 lines** across 42 files |
-| Suite | **567 runs, 2 592 assertions, 0 failures** — no keys, no provider calls, no broker required |
-| Observatory | **178 runs, 835 assertions**, **3 334 lines** of Rails 8.1 app code — fleet, runs, topology, traces, and it ingests through the fleet's own `Runes::Transport` |
+| Suite | **578 runs, 2 632 assertions, 0 failures** — no keys, no provider calls, no broker required |
+| Observatory | **188 runs, 890 assertions**, **4 314 lines** of Rails 8.1 app code — fleet, runs, topology, traces, who published, and what was refused, all fed through the fleet's own `Runes::Transport` |
 | Executables | **7**: `runes` (TUI), `runes-daemon`, `runes-client`, `runes-mcp`, `runes-replay`, `runes-acl`, `runes-workflow` |
 | Workflow engine | **4 491 lines** total (engine + the seven runes + command runner), stdlib only — no `async`, no `ruby_llm` |
 | The seven runes | `agent` 719, `chat` 503, `repeat` 202, `cmd` 199, `map` 183, `ruby` 86, `call` 68 |

@@ -33,6 +33,7 @@ class TopicContractTest < Minitest::Test
     "PROMPT_RESPONSE" => ["runes/prompts/r1/response", "response"],
     "TOOL" => ["runes/tools/read_file/request", "tool_request"],
     "JOURNAL" => ["runes/_log/prompts", "journal"],
+    "GUARD" => ["runes/guard/denied", "guard_denied"],
     "WORKFLOW" => ["runes/workflows/abc123/step_finished", "workflow_event"],
     "A2A_CARD" => ["$a2a/v1/discovery/runes/host/runes-a", "a2a_card"],
     "A2A_TASK" => ["$a2a/v1/tasks/runes/host/runes-a", "a2a_task"]

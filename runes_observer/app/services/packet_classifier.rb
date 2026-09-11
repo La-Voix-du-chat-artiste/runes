@@ -10,6 +10,7 @@
 #   runes/prompts/response              (global fan-out summary)
 #   runes/tools/<tool>/request|response|error
 #   runes/_log/prompts                  (journal entry; carries the agent)
+#   runes/guard/denied                  (capability refusal; who/what/on-what)
 #
 # Phase 16 deleted the claim/lease protocol, so there is no
 # `runes/prompts/<req>/claim|started` and no `runes/sessions/…` vocabulary.
@@ -28,7 +29,7 @@ module PacketClassifier
     card status task task_response a2a_card a2a_task
     prompt progress response response_global
     tool_request tool_response tool_error
-    journal workflow_event other
+    journal workflow_event guard_denied other
   ].freeze
 
   Result = Struct.new(:kind, :agent_id, :request_id, :event, :tool, :run_id,
@@ -43,6 +44,9 @@ module PacketClassifier
   PROMPT_PROGRESS   = %r{\Arunes/prompts/([^/]+)/progress\z}
   PROMPT_RESPONSE   = %r{\Arunes/prompts/([^/]+)/response\z}
   TOOL              = %r{\Arunes/tools/([^/]+)/(request|response|error)\z}
+  # A capability refusal published by the guard (doc5.md O2.3): the topic is
+  # fixed and the payload carries who/what/on-what.
+  GUARD             = %r{\Arunes/guard/denied\z}
   JOURNAL           = %r{\Arunes/_log/prompts(?:/latest)?\z}
 
   # Workflow telemetry: runes/workflows/<run_id>/<run_started|step_started|
@@ -90,6 +94,11 @@ module PacketClassifier
     when JOURNAL
       Result.new(kind: "journal", agent_id: dig(data, "agent"),
                  request_id: dig(data, "request_id"))
+    when GUARD
+      # `event` is the denied action, `tool` the tool or rune that asked; the
+      # resource is in the payload and shown in the headline.
+      Result.new(kind: "guard_denied", tool: dig(data, "tool"),
+                 agent_id: dig(data, "agent"), event: dig(data, "action"))
     when WORKFLOW
       Result.new(kind: "workflow_event", run_id: $1, event: $2)
     when A2A_CARD

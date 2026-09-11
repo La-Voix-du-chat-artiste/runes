@@ -55,6 +55,8 @@ class Packet < ApplicationRecord
     when "response", "response_global", "task_response", "tool_response", "tool_error"
       payload.to_s.gsub(/\s+/, " ")[0, 160]
     when "journal"       then [data&.dig("status"), data&.dig("summary")].compact.join(" — ")[0, 160]
+    when "guard_denied"
+      [data&.dig("tool"), data&.dig("action"), data&.dig("resource")].compact.join(" ") [0, 160]
     when "workflow_event"
       [event, data&.dig("rune"), data&.dig("name"), data&.dig("status")].compact.join(" ")[0, 160]
     when "card"          then [name_from_card(data), Array(data&.dig("tools")).join(", ")].compact.join(" — ")[0, 160]

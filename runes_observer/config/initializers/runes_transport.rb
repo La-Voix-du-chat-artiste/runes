@@ -31,6 +31,9 @@ begin
   # envelope is backed by a key we trust. Only stdlib OpenSSL, so this cannot
   # pull a client library in.
   require "runes/security"
+  # The security page states the denial rate cap; loading the seam also keeps the
+  # constant in one place instead of a number copied into a view.
+  require "runes/guard_telemetry"
 rescue LoadError => e
   # Not fatal: the web UI must still boot without the harness (it is
   # read-only over the database). `FabricIngest` fails loudly if it is

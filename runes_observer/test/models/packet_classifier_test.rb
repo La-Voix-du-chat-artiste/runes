@@ -158,4 +158,28 @@ class PacketClassifierTest < ActiveSupport::TestCase
     assert_nil classify("runes/prompts", "[1,2,3]").request_id
     assert_nil classify("runes/prompts", "").request_id
   end
+  # doc5.md O2.3: a refusal is a packet like any other, and the fields the
+  # security page groups by (tool, action, agent) come from the payload.
+  test "a guard denial carries who was refused, for what, by whom" do
+    result = classify("runes/guard/denied",
+                      JSON.generate("tool" => "run_command", "action" => "exec",
+                                    "resource" => "/etc/passwd", "agent" => "runes-a",
+                                    "decision" => "denied"))
+
+    assert_equal "guard_denied", result.kind
+    assert_equal "run_command", result.tool
+    assert_equal "exec", result.event
+    assert_equal "runes-a", result.agent_id
+    assert_includes Packet::KINDS, "guard_denied"
+  end
+
+  test "a guard denial with no payload still classifies" do
+    assert_equal "guard_denied", classify("runes/guard/denied", "not json").kind
+    assert_equal "guard_denied", classify("runes/guard/denied", "").kind
+  end
+
+  test "the guard topic is exact: a deeper topic is not a denial" do
+    assert_equal "other", classify("runes/guard/denied/extra").kind
+    assert_equal "other", classify("runes/guard/allowed").kind
+  end
 end

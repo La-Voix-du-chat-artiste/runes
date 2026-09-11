@@ -396,6 +396,7 @@ runes/prompts/<req>/response            correlated reply
 runes/prompts/response                  global fan-out summary
 runes/_log/prompts                      journal feed (+ /latest retained)
 runes/tools/<t>/request|response|error  direct tool RPC (opt-in)
+runes/guard/denied                      capability refusal (tool, action, resource, agent)
 $a2a/v1/discovery/<org>/<unit>/<agent>  retained A2A Agent Card (+ a2a-status property)
 $a2a/v1/tasks/<org>/<unit>/<agent>      A2A task (answered via Response Topic/Correlation Data)
 ```
@@ -403,6 +404,15 @@ $a2a/v1/tasks/<org>/<unit>/<agent>      A2A task (answered via Response Topic/Co
 `claim` / `started` topics are gone with the claim protocol. Note that
 MQTT wildcards never match `$`-prefixed topics: an observer must subscribe
 to `$a2a/v1/...` (or `$a2a/#`) separately from `runes/#`.
+
+`runes/guard/denied` is the one topic that carries a **refusal**: the
+dispatcher attaches a `Runes::GuardTelemetry` sink to its transport, so every
+capability denial (`{tool, action, resource, agent, phase, at}`) is published
+where the observatory can count it — refusals are the security-relevant half of
+what a fleet does, and they used to exist only as a log line. Publishing is
+rate-capped (`Runes::GuardTelemetry::MAX_PER_MINUTE`), and
+`bin/runes-workflow` reports `RUNES_WORKFLOW_POLICY` refusals on the same topic
+whenever `RUNES_TELEMETRY` is set.
 
 Progress events: `prompt_received`, `plan_ready`, `plan_truncated`,
 `prompt_truncated`, `step_start`, `step_end`, `prompt_complete`,

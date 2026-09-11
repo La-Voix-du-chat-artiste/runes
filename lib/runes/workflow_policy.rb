@@ -62,8 +62,15 @@ module Runes
         def authorize!(rune:, action:, resource:, hint: nil)
           return true if guard.nil?
 
-          return true if guard.allowed?(rune.to_s, action, resource)
+          # report: false — this refusal is reported below with its own context
+          return true if guard.allowed?(rune.to_s, action, resource, report: false)
 
+          # A refusal nobody can see is half a control (doc5.md O2.3): the
+          # event carries the rune, the action and the resource, and the sink
+          # decides whether it reaches the fabric.
+          Runes::GuardTelemetry.record(tool: rune.to_s, action: action, resource: resource,
+                                       rule: guard.respond_to?(:policy_unreadable) && guard.policy_unreadable ? 'unreadable policy' : nil,
+                                       phase: 'workflow')
           detail = guard.respond_to?(:policy_unreadable) && guard.policy_unreadable ?
                      "the configured policy could not be parsed, so nothing is allowed" :
                      "#{rune}(#{action}) is not permitted for #{resource.inspect}"

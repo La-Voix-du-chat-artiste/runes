@@ -149,6 +149,11 @@ module Runes
         @peers = {}
         @peers_mutex = Mutex.new
         @transport = transport
+        # Refusals belong on the fabric, not only in this process's log: the
+        # observer can show what was blocked only if someone publishes it
+        # (doc5.md O2.3). A sink someone already set (a test, the workflow CLI)
+        # wins — GuardTelemetry.attach never overrides it.
+        Runes::GuardTelemetry.attach(transport: @transport, agent_id: @agent_id) if @transport
         # Optional message signing (P1.5): OFF by default. When enabled,
         # inbound envelopes must carry a valid signature from a trusted key
         # and outbound delegation envelopes are signed.

@@ -474,15 +474,44 @@ redaction by default) gives the observer an MCP inspector — the "MCP, both
 directions" feature becomes observable. **Size** M · **Risk** low-medium
 (new seam; must default to off).
 
-### O2.3 Guard-decision telemetry
+### O2.3 Guard-decision telemetry — ✅ DONE (Phase 28)
 
-The observatory can show what was *published* but not what was *refused* —
+The observatory could show what was *published* but not what was *refused* —
 which is the more security-relevant half (S4-1/S4-2 class findings were all
-about refusals that did not happen). Publish `runes/guard/denied`
-(tool, agent, action, resolved path, rule, decision) from the guard or the
-dispatcher, and add a **Security** page: denials over time, top subjects,
-drill-down to the packet that triggered them. Together with O0.3 this closes
-the loop: *who published* + *what was blocked*. **Size** M · **Risk** low.
+about refusals that did not happen).
+
+**How it landed.** `Runes::GuardTelemetry` is the seam, shaped exactly like
+`Runes::Telemetry`: a *sink* decides what a decision is worth, `record` builds
+`{tool, action, resource, phase, agent, at}`, and the `TransportSink` publishes
+it on `runes/guard/denied`. The capability guard reports every denial from
+`log_deny` (the *log line* stays deduplicated; the event does not, because how
+often a refusal happens is the thing an operator wants to see), the dispatcher
+attaches a sink to its transport automatically, and `bin/runes-workflow`
+reports `RUNES_WORKFLOW_POLICY` refusals on the same topic through the same
+transport its run telemetry uses.
+
+Two decisions worth naming: `Guard#allowed?` takes `report:` so the workflow
+policy — which knows it refused a *rune* and reports that itself with
+`phase: "workflow"` — does not produce two events for one refusal; and
+emitting is rate-capped at `MAX_PER_MINUTE` because a guard that can be turned
+into a denial amplifier is a worse bug than a missing event. A raising sink is
+swallowed like every other telemetry path.
+
+`/security` is the page: refusals per hour/24 h/all-time, a 30-minute refusal
+sparkline, top tools and agents with filters, every row linking to the packet
+that recorded it, and the signature verdicts/impersonation findings from O0.3
+beside them — *who published* and *what was blocked* on one page. The dashboard
+keeps a compact summary and links here. The classifier maps the topic to
+`guard_denied` and the parent suite's topic-contract test carries a
+representative topic for it, so the two halves cannot drift.
+
+**Acceptance met:** telemetry unit tests (payload shape, truncation, raising
+sink, the flood cap, guard integration, workflow-policy integration, `attach`
+not overriding a chosen sink), classifier tests for the new topic including the
+exact-match edge cases, and controller tests for the page (counts, filters,
+drill-down links, empty state, signature findings). **Verified live:** with the
+ingest on mosquitto, `scripts/guard_denial_probe.rb` published a refusal that
+the observer stored as `guard_denied`. **Size** M · **Risk** low.
 
 ### O2.4 Flight recorder: replay a whole fleet conversation offline
 

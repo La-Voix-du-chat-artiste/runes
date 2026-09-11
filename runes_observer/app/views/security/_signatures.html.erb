@@ -1,0 +1,46 @@
+<%#
+  Who published, and what backs it (doc5.md O0.3). Shared by the dashboard and
+  the security page so the two can never disagree about the same hour.
+  Locals: compact (boolean, dashboard) — the security page passes false and
+  adds the refusal tables around it.
+%>
+<% compact = local_assigns.fetch(:compact, false) %>
+<dl class="kv">
+  <dt>verified</dt><dd><%= @signature_counts["verified"].to_i %> <span class="faint small">last hour</span></dd>
+  <dt>untrusted</dt><dd class="<%= "kv__warn" if @signature_counts["untrusted"].to_i.positive? %>"><%= @signature_counts["untrusted"].to_i %></dd>
+  <dt>invalid</dt><dd class="<%= "kv__warn" if @signature_counts["invalid"].to_i.positive? %>"><%= @signature_counts["invalid"].to_i %></dd>
+  <dt>unsigned</dt><dd><%= @unsigned_recent %></dd>
+</dl>
+
+<% if @require_signatures && @unsigned_recent.positive? %>
+  <div class="alert alert--error" style="margin-top:10px">
+    RUNES_OBSERVER_REQUIRE_SIGNATURES is on and <%= @unsigned_recent %>
+    unsigned packet<%= "s" unless @unsigned_recent == 1 %> arrived in the last hour:
+    their <code>agent</code> field is a claim, not proof.
+  </div>
+<% end %>
+
+<% if @impersonations.any? %>
+  <div class="kv__section">Impersonation</div>
+  <% @impersonations.first(5).each do |finding| %>
+    <div class="alert alert--error">
+      <strong><%= finding.agent_id %></strong> — <%= finding.description %>
+      (<%= finding.packets %> packets, last <%= ago_in_words_short(finding.last_seen) %> ago)
+      <div class="faint small mono">
+        saw <%= finding.fingerprints.map { |f| f[0, 16] }.join(", ") %>
+        <% if finding.trusted_fingerprint.present? %>
+          · trust store holds <%= finding.trusted_fingerprint[0, 16] %>
+        <% else %>
+          · trust store holds no key for this agent
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+<% end %>
+
+<% if compact %>
+  <p class="faint small" style="margin-top:8px">
+    Signature state comes from <code>Runes::Security::Envelope</code> against
+    <code>Runes::Security::TrustStore</code>; an unsigned packet is stored, not trusted.
+  </p>
+<% end %>

@@ -1,0 +1,173 @@
+<% content_for :title, "Security — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Security</h1>
+  <span class="sub">who published, and what was refused · last 24 h</span>
+  <a class="sub" href="/packets?kind=guard_denied">Open in the packet log →</a>
+</div>
+
+<div class="stats">
+  <div class="stat <%= "stat--ended" if @denials_last_hour.count.positive? %>">
+    <div class="stat__value"><%= @denials_last_hour.count %></div>
+    <div class="stat__label">refusals / hour</div>
+  </div>
+  <div class="stat">
+    <div class="stat__value"><%= @denials.count %></div>
+    <div class="stat__label">refusals / 24h</div>
+  </div>
+  <div class="stat">
+    <div class="stat__value"><%= @all_time %></div>
+    <div class="stat__label">refusals observed</div>
+  </div>
+  <div class="stat <%= "stat--ended" if @signature_counts["invalid"].to_i.positive? %>">
+    <div class="stat__value"><%= @signature_counts["invalid"].to_i + @signature_counts["untrusted"].to_i %></div>
+    <div class="stat__label">unproven signatures / hour</div>
+  </div>
+</div>
+
+<div class="grid grid--dash">
+  <div class="grid">
+    <section class="panel">
+      <div class="panel__head">
+        <span class="panel__title">Published identity</span>
+        <span class="panel__count">
+          <%= @impersonations.any? ? "#{@impersonations.size} finding(s)" : "no findings" %>
+        </span>
+      </div>
+      <div class="panel__body">
+        <%= render "security/signatures" %>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__head">
+        <span class="panel__title">Refused · last 30 min</span>
+        <span class="panel__count"><%= @volume.sum { |slot| slot[:count] } %> refusal(s)</span>
+      </div>
+      <div class="panel__body">
+        <% peak = [@volume.map { |slot| slot[:count] }.max.to_i, 1].max %>
+        <div class="spark" role="img" aria-label="Refusals per minute over the last 30 minutes">
+          <% @volume.each do |slot| %>
+            <span class="spark__bar <%= "spark__bar--empty" if slot[:count].zero? %>"
+                  style="height: <%= [(slot[:count].to_f / peak * 100).round(1), slot[:count].zero? ? 2.0 : 6.0].max %>%"
+                  title="<%= slot[:at].strftime("%H:%M") %> · <%= slot[:count] %> refusal<%= "s" unless slot[:count] == 1 %>"></span>
+          <% end %>
+        </div>
+        <div class="spark__axis faint small">
+          <span><%= @volume.first[:at].strftime("%H:%M") %></span>
+          <span>peak <%= peak %>/min</span>
+          <span>now</span>
+        </div>
+
+        <% if @by_tool.any? %>
+          <div class="kv__section">who was refused · last 24h</div>
+          <% total = @by_tool.sum { |_tool, count| count } %>
+          <% @by_tool.each do |tool, count| %>
+            <div class="mix__row">
+              <span class="mono small"><%= link_to tool, security_path(tool: tool) %></span>
+              <span class="mix__track"><span class="mix__bar" style="width: <%= (count.to_f / total * 100).round(1) %>%"></span></span>
+              <span class="mix__num mono small"><%= count %></span>
+            </div>
+          <% end %>
+        <% end %>
+
+        <% if @by_action.any? || @by_agent.any? %>
+          <div class="kv__section">by action and agent</div>
+          <div class="faint small">
+            <% @by_action.each do |action, count| %>
+              <%= link_to action, security_path(denied_action: action) %> <span class="mono"><%= count %></span>
+            <% end %>
+            <% @by_agent.each do |agent, count| %>
+              · <%= link_to agent, security_path(agent_id: agent) %> <span class="mono"><%= count %></span>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Refusals</span>
+      <span class="panel__count">
+        showing <%= @recent.size %><%= " of #{@denials.count}" if @denials.count > @recent.size %>
+      </span>
+    </div>
+    <div class="panel__body">
+      <form class="filters" action="<%= security_path %>" method="get">
+        <div class="field">
+          <label for="tool">Tool / rune</label>
+          <input list="denied-tools" type="text" name="tool" id="tool" value="<%= params[:tool] %>" placeholder="run_command">
+          <datalist id="denied-tools">
+            <% @tools.each do |tool| %><option value="<%= tool %>"></option><% end %>
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="agent_id">Agent</label>
+          <input list="denied-agents" type="text" name="agent_id" id="agent_id" value="<%= params[:agent_id] %>" placeholder="agent id">
+          <datalist id="denied-agents">
+            <% @agents.each do |agent| %><option value="<%= agent %>"></option><% end %>
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="denied_action">Action</label>
+          <input type="text" name="denied_action" id="denied_action" value="<%= params[:denied_action] %>" placeholder="fs_write">
+        </div>
+        <input type="submit" value="Filter" class="btn">
+        <%= link_to "Clear", security_path, class: "btn btn--ghost" %>
+      </form>
+    </div>
+
+    <div class="panel__body panel__body--flush">
+      <% if @recent.any? %>
+        <table class="data">
+          <thead>
+            <tr>
+              <th>when</th>
+              <th>tool / rune</th>
+              <th>action</th>
+              <th>resource</th>
+              <th>agent</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @recent.each do |packet| %>
+              <% data = packet.parsed || {} %>
+              <tr>
+                <td class="mono small"><%= clock_time(packet.occurred_at) %></td>
+                <td class="mono"><%= data["tool"] %></td>
+                <td class="mono small"><%= data["action"] %></td>
+                <td class="mono small" title="<%= data["resource"] %>"><%= truncate(data["resource"].to_s, length: 60) %></td>
+                <td class="mono small"><%= link_to data["agent"], agent_path(data["agent"]) if data["agent"].present? %></td>
+                <td><%= link_to "packet →", packet_path(packet), class: "small" %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% else %>
+        <p class="panel__empty">
+          No refusal <%- if params[:tool] || params[:agent_id] || params[:denied_action] -%>
+            matches these filters. <a href="<%= security_path %>">All refusals</a>.
+          <%- else -%>
+            has been observed. The capability guard publishes one on
+            <code>runes/guard/denied</code> when it blocks a tool, and
+            <code>RUNES_WORKFLOW_POLICY</code> refusals ride the same topic — so an
+            empty page means nothing was refused, or nobody is publishing.
+          <%- end -%>
+        </p>
+      <% end %>
+    </div>
+
+    <div class="panel__body">
+      <p class="faint small">
+        A refusal is only visible if the process that refused publishes it: the
+        dispatcher attaches a <code>Runes::GuardTelemetry</code> sink to its transport
+        automatically, and <code>bin/runes-workflow</code> does the same when
+        <code>RUNES_TELEMETRY</code> is set. Denials are rate-capped at
+        <%= Runes::GuardTelemetry::MAX_PER_MINUTE %>/minute so a call in a loop cannot
+        become a flood.
+      </p>
+    </div>
+  </section>
+</div>
