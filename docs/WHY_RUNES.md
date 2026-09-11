@@ -12,7 +12,7 @@ building right now.*
   (in-process ↔ MQTT 3.1.1 ↔ MQTT 5), with A2A for discovery and MCP for
   tools.
 - **Every workflow verb is a plugin.** `cmd`, `ruby`, `chat`, `agent`,
-  `map`, `repeat`, `call` — seven runes, between 68 and 693 lines each, all
+  `map`, `repeat`, `call` — seven runes, between 68 and 728 lines each, all
   replaceable, and a new one takes about thirty lines.
 - **It runs Shopify [Roast](https://github.com/shopify/roast) workflows
   unmodified.** The shipped example is Roast's README example, byte for
@@ -20,7 +20,11 @@ building right now.*
 - **It treats the boring parts as the product**: capability guard, signed
   envelopes, a durable journal, verify-and-resume, and a Rails observatory
   that watches the whole fleet.
-- **14 265 lines of `lib`, 10 646 lines of tests, 567 tests, zero network in
+- **Execution is deduped, not just distributed.** MQTT 5 shared subscriptions
+  hand each prompt to one agent; `Runes::RequestLedger` makes a redelivery or a
+  retry a no-op that still gets an answer — and a refusal is a published event
+  the observatory can count, not a line in a log.
+- **14 745 lines of `lib`, 11 187 lines of tests, 600 tests, zero network in
   the suite.** Ruby 4.0.4, Rails 8.1.3.1, SQLite, mosquitto on localhost.
 
 ---
@@ -63,13 +67,14 @@ runes/prompts                     ← broadcast work
 runes/prompts/<req>/progress → response   ← one shared group, no claim race
 runes/tools/<tool>/request | response | error
 runes/_log/prompts                ← durable journal
+runes/guard/denied                ← refusals (who, what, on what)
 $a2a/v1/discovery/<org>/<unit>/<agent_id>
 $a2a/v1/tasks/<org>/<unit>/<agent_id>
 ```
 
 ---
 
-## Ten things that make this genuinely fun to build
+## Eleven things that make this genuinely fun to build
 
 **1. Deleting the clever part made it stronger.** 0.3 removed the entire
 claim/lease consensus protocol — about 250 lines of "who gets this work?"
@@ -79,7 +84,7 @@ messages, two clients in one shared group, 100/100 each, no dupes, no
 losses. **The lesson is the fun part: the best distributed-systems code is
 the code you get to delete.**
 
-**2. A hand-rolled MQTT 5 client, and it's only 899 lines.** The whole
+**2. A hand-rolled MQTT 5 client, and it's only 1 149 lines.** The whole
 adapter — CONNECT/CONNACK property probing, PUBLISH properties, `$share`
 subscriptions, keepalive, reason codes — fits in one readable file with a
 33-test codec suite behind it. Writing a wire protocol from the spec and
@@ -128,7 +133,7 @@ you built.
 HTTP is faked with a real `Net::HTTPResponse` over a dup transport; the
 agent CLI is replaced at a factory seam; the chat backend is injected; the
 whole workflow suite runs with `command_runner=`, `provider_factory=` and
-`backend=`. Consequence: **567 tests, 2 593 assertions, no API key, no
+`backend=`. Consequence: **600 tests, 2 696 assertions, no API key, no
 network, no broker required** — you can run the entire harness on a plane.
 *(Round-5 audit found this was false: `test/second_audit_test.rb` dialled the
 default MQTT port 1883. Fixed — it now spawns its own broker on a free port,
@@ -156,7 +161,22 @@ should *look* like that), a **fleet topology** with delegation edges whose width
 is task volume and colour is failure rate, an **interaction waterfall** where
 the bars are the *gaps* — so a 30-second planner call looks like 30 seconds
 instead of hiding in a list of timestamps — and a dashboard with a traffic
-sparkline. All of it from telemetry, none of it guessed.
+sparkline. All of it from telemetry, none of it guessed. Since then the face
+learned the two questions a shared bus actually poses: **who really published
+this** (every packet carries a signature verdict and the signing key's
+fingerprint, and one `agent_id` under two keys is a finding) and **what was
+refused** (the guard publishes its denials, so the page draws refusals over
+time instead of pointing at a log nobody reads).
+
+**11. At-least-once is a bug you can make boring.** For a while the honesty
+list below led with *"distribution is exactly-once, execution is at-least-once,
+and nothing dedupes inbound"* — a sentence that quietly means one prompt can be
+billed twice. The fix is 187 lines (`lib/runes/request_ledger.rb`): claim the
+`request_id` before any work is queued, remember what the first copy did, answer
+a replay from that. Bounded, TTL'd, one TTL (a per-claim window reads as
+flexibility and behaves as a trap), atomic — sixteen threads, one winner. The
+satisfying part is not the ledger; it is watching a whole genre of
+distributed-systems anxiety collapse into a hash with a clock.
 
 ---
 
@@ -225,18 +245,24 @@ today:
 
 | | |
 | --- | --- |
-| `lib/` | **14 265 lines** across 60 files |
-| `test/` | **10 646 lines** across 42 files |
+| `lib/` | **14 745 lines** across 62 files |
+| `test/` | **11 187 lines** across 45 files |
 | Suite | **600 runs, 2 696 assertions, 0 failures** — no keys, no provider calls, no broker required |
 | Observatory | **188 runs, 890 assertions**, **4 314 lines** of Rails 8.1 app code — fleet, runs, topology, traces, who published, and what was refused, all fed through the fleet's own `Runes::Transport` |
 | Executables | **7**: `runes` (TUI), `runes-daemon`, `runes-client`, `runes-mcp`, `runes-replay`, `runes-acl`, `runes-workflow` |
-| Workflow engine | **4 491 lines** total (engine + the seven runes + command runner), stdlib only — no `async`, no `ruby_llm` |
-| The seven runes | `agent` 719, `chat` 503, `repeat` 202, `cmd` 199, `map` 183, `ruby` 86, `call` 68 |
+| Workflow engine | **4 600 lines** (engine, the seven runes, and the rune/cog/plugin support classes), stdlib only — no `async`, no `ruby_llm` |
+| The seven runes | `agent` 728, `chat` 503, `repeat` 202, `cmd` 205, `map` 183, `ruby` 90, `call` 68 |
 | MQTT 5 adapter | **1 149 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects and re-subscribes* |
-| Security | **462 lines** of command policy, RPC freshness and a shared nonce cache |
-| Dispatcher | **1 565 lines**, down from 1 968 after the fabric/journal/session split |
-| Gem | builds clean — no secrets, no local state, seven binstubs, MIT `LICENSE` shipped |
-| Live proof | 200 messages, one MQTT 5 shared group, **exactly-once distribution**; plus a dropped-socket proof that the adapter heals and keeps its subscriptions |
+| Security surfaces | **1 716 lines**: command policy 309, envelopes 323, identities 240, trust store 184, capability guard 243, guard telemetry 149, credentials 115, RPC auth 99, nonce cache 54 |
+| Request ledger | **187 lines** — the execution half of exactly-once (see item 11) |
+| Dispatcher | **1 656 lines**, down from 1 968 after the fabric/journal/session split |
+| Gem | builds clean — 64 library files, no secrets, no local state, seven binstubs, MIT `LICENSE` shipped |
+| Live proof | **200 messages, one shared group, 100/100 split, no dupes, no losses** (re-verified 2026-09-11 against mosquitto 2.1.2), plus a dropped-socket proof that the adapter heals and keeps its subscriptions |
+
+Every number above is measured, not remembered — `ruby scripts/receipts.rb`
+prints all of them (add `--suites` to run the two suites as well). This file is
+also the source of `docs/WHY_RUNES.pdf`, so a stale number here is a
+one-command bug.
 
 Run it yourself: `bundle exec rake test`, then
 `bundle exec ruby demo/smoke.rb` (offline, no key), then
@@ -276,11 +302,47 @@ A pitch that hides the seams is a pitch you'll resent in a month. So:
   refuses loudly, and it now reconnects like MQTT 5 does.
 - **The observatory has no auth**, so read access is a disclosure surface. Fine
   on localhost; a prerequisite for the "launch workflows from the browser" idea.
+- **The observatory reaches the harness by load path, not by gem
+  dependency.** `runes_observer/` puts the sibling checkout's `lib` on the path
+  (`RUNES_HARNESS_LIB`) rather than adding `gem "runes"`, because the harness
+  declares `mqtt` as a runtime dependency and the observer's own transport may
+  not use it. That is a deliberate coupling with a sharp edge: move the app away
+  from the checkout and you must point the variable at a harness.
 - **One-shot tool feedback**: a single build plan does not yet loop
   plan→execute→feed-back. Missions compensate with verify-and-resume.
 
 Every one of those is a `git grep` away from a doc and a test, which is the
 point.
+
+---
+
+## Ten minutes in the code
+
+If you read one file, read `lib/runes/request_ledger.rb` (187 lines): a
+distributed-systems problem met with a hash, a clock and a mutex, plus a comment
+that admits exactly what it does not cover. After that, in order:
+
+1. **`lib/runes/transport.rb` and `lib/runes/transport/mqtt5.rb`** — the seam
+   and the hand-rolled protocol behind it. Start at `subscribe` with `group:`;
+   that line replaced 250 lines of claim/lease consensus.
+2. **`lib/runes/core/dispatcher.rb`, around `handle_prompt`** — the inbound
+   choke point: signature gate, then ledger claim, then the work queue. The
+   order of those three *is* the security design.
+3. **`lib/runes/capabilities/guard.rb` with `lib/runes/guard_telemetry.rb`** —
+   what is allowed, and what happens when it is not: a refusal becomes an event
+   on the bus.
+4. **`runes_observer/app/services/fabric_ingest.rb`** — the same seam from the
+   consumer's side, including the retained-replay window and the refusal to
+   ever subscribe as a work-group member.
+5. **`test/request_ledger_test.rb` and `test/request_dedupe_test.rb`** — how
+   the ledger is proved: sixteen threads and one winner; a redelivery through a
+   real transport; and two deliberate plain prompts that both run anyway.
+
+```bash
+bundle exec ruby demo/smoke.rb                     # offline, no key, no broker
+bin/runes-workflow execute examples/analyze_codebase.rb
+cd runes_observer && bin/rails server -p 3100      # then: bin/runes-ingest
+```
 
 ---
 
@@ -317,21 +379,35 @@ observatory's plugin catalogue as soon as that lands.
 
 ## Where this goes next
 
-The console's first half shipped (runs, topology, traces, dashboard). The rest
-of the plan is to finish making the observatory the fleet's **memory,
-participant and oracle**:
+Four things this document used to promise as future work have shipped, which is
+the honest version of a roadmap:
 
-- **Workflow runs, diffed and replayed** — two runs of the same file side by
-  side, and "re-run just the step that failed".
-- **Identity badges and impersonation alerts** — signed envelopes already exist;
-  the observatory should prove who published what and shout when one `agent_id`
-  shows up with two keys.
+- ~~Identity badges and impersonation alerts~~ — done: every packet carries a
+  signature verdict and a key fingerprint, and one `agent_id` under two keys is
+  a finding.
+- ~~Guard-decision telemetry~~ — done: `Runes::GuardTelemetry` publishes every
+  refusal on `runes/guard/denied`, and `/security` counts them by tool, agent
+  and action.
+- ~~A broker-free mode for the observer~~ — done: ingest goes through
+  `Runes::Transport`, so MQTT 5 properties are visible and `inproc` needs no
+  broker at all.
+- ~~A bounded request ledger~~ — done, and it is no longer the first line of
+  the honesty list above.
+
+What is actually left, roughly in the order I would build it:
+
+- **A plugin catalogue** (`/plugins`) generated from `Runes::Plugin.names`, so
+  the "a rune is a plugin" claim is a page rather than a paragraph.
+- **Alerts** — impersonation and refusals are already detected; they need a row
+  an operator can acknowledge, not just a panel.
+- **The plan chain**: prompt → plan → tool calls → evidence → verifier verdict
+  on one page, which is the debugging tool for the one-shot-feedback gap.
+- **Runs, diffed and replayed** — two runs of the same file side by side, and
+  "re-run just the step that failed".
 - **An observatory that is an agent** — its own A2A card and an MCP server, so
   any agent can ask *"what happened on the bus?"* mid-task.
-- **Guard-decision telemetry** — see what the guard *refused*, not just what was
-  published.
-- **A broker-free mode** — ingest through the same `Runes::Transport` seam the
-  fleet uses, which also makes MQTT 5 properties visible to the UI.
+- **Retention and rollups at real volume**, and **a flight recorder** that can
+  replay a recorded conversation offline.
 
 The full proposal, with costs and risks, is in
 [`docs/OBSERVATORY_ROADMAP.md`](OBSERVATORY_ROADMAP.md).
@@ -347,5 +423,5 @@ The full proposal, with costs and risks, is in
 > journal with verify-and-resume, and a Rails observatory that watches the
 > whole fleet. Its workflow DSL is Roast-compatible — a Roast file runs
 > unmodified — and every one of its seven verbs is a plugin you can replace
-> in about thirty lines. Twelve thousand lines of library, eight thousand
-> lines of hermetic tests, no network required, no vendor in the path.
+> in about thirty lines. Nearly fifteen thousand lines of library, eleven
+> thousand lines of hermetic tests, no network required, no vendor in the path.
