@@ -51,6 +51,12 @@ module Runes
       "status" => "Statut"
     }.freeze
 
+    # The one place a title becomes a line. Model output arrives here, so it is
+    # sanitised rather than trusted: a newline, a forged checkbox, a leading
+    # list marker or a literal "(Assigné: …)" would otherwise restructure the
+    # file a human and another app read.
+    TITLE_LIMIT = 160
+
     Task = Struct.new(:title, :assignee, :done, :column, keyword_init: true) do
       # Free text after the assignee suffix is preserved verbatim (it is how a
       # verdict reason survives a round-trip; see #advance).
@@ -117,7 +123,8 @@ module Runes
 
         lines = HEADER_FIELDS.filter_map do |key, label|
           value = out[key]
-          "%% #{label}: #{value}" unless value.nil?
+          value = value.to_s.gsub(/[\r\n]+/, " ").squeeze(" ").strip unless key == "created_at"
+          "%% #{label}: #{value}" unless value.nil? || value.to_s.empty?
         end
         lines << ""
         lines << "kanban"
@@ -195,11 +202,46 @@ module Runes
         render_parsed(parsed, rederive: true)
       end
 
-      # Convenience for a workflow: read the file, move the task, write it back.
-      def advance_file(path, title:, to:, note: nil)
-        write(path, advance(File.read(path), title: title, to: to, note: note))
+      # Read-modify-write under an exclusive lock.
+      #
+      # The mission file is shared: a workflow, a human in `$EDITOR` and the app
+      # that syncs from it all hold the same file. `pipeline_prospect` learned
+      # this the hard way (two rotators clobbered each other's archive); the same
+      # rule applies here, so every mutation takes `flock` for the whole
+      # read-modify-write and writes in place rather than truncating first.
+      def update_file(path)
+        require "fileutils"
+        # Opening with CREAT would leave an empty mission behind when the caller
+        # has the path wrong — a file that then validates as "no columns" and
+        # reads like a bug in the app. Refuse instead.
+        raise Error, "kanban: #{path} does not exist" unless File.file?(path)
+
+        FileUtils.mkdir_p(File.dirname(path))
+        File.open(path, File::RDWR) do |file|
+          file.flock(File::LOCK_EX)
+          begin
+            file.rewind
+            updated = yield(file.read)
+            file.rewind
+            file.write(updated)
+            file.truncate(file.pos)
+            file.flush
+            updated
+          ensure
+            file.flock(File::LOCK_UN)
+          end
+        end
       end
 
+      def advance_file(path, title:, to:, note: nil)
+        update_file(path) { |text| advance(text, title: title, to: to, note: note) }
+      end
+
+      def add_file(path, title:, column: "todo", assignee: nil)
+        update_file(path) { |text| add(text, title: title, column: column, assignee: assignee) }
+      end
+
+      # A fresh file (no read-modify-write to protect).
       def write(path, text)
         require "fileutils"
         FileUtils.mkdir_p(File.dirname(path))
@@ -254,17 +296,35 @@ module Runes
       end
 
       def coerce_task(entry, column)
-        case entry
-        when Task then entry
-        when String then Task.new(title: entry, done: column == "done", column: column)
-        when Hash
-          Task.new(title: entry[:title] || entry["title"],
-                   assignee: entry[:assignee] || entry["assignee"],
-                   done: entry.key?(:done) ? entry[:done] : column == "done",
-                   column: column)
-        else
-          raise Error, "kanban: cannot render a #{entry.class} as a task"
-        end
+        task = case entry
+               when Task then entry
+               when String then Task.new(title: entry, done: column == "done", column: column)
+               when Hash
+                 Task.new(title: entry[:title] || entry["title"],
+                          assignee: entry[:assignee] || entry["assignee"],
+                          done: entry.key?(:done) ? entry[:done] : column == "done",
+                          column: column)
+               else
+                 raise Error, "kanban: cannot render a #{entry.class} as a task"
+               end
+
+        task.title = sanitize(task.title)
+        task.assignee = sanitize(task.assignee, limit: 80) if task.assignee
+        task
+      end
+
+      # Model output becomes a file line: collapse it to one line, refuse to let
+      # it forge a checkbox or an assignee suffix, and bound its length. An empty
+      # title is a programming error, not a task.
+      def sanitize(text, limit: TITLE_LIMIT)
+        value = text.to_s.gsub(/[\r\n\t]+/, " ")
+                    .gsub(/\(Assigné\s*:/i, "(")
+                    .squeeze(" ").strip
+        value = value.sub(/\A[-*+]\s+/, "").sub(/\A\[[ xX]\]\s*/, "").strip
+        value = "#{value.byteslice(0, limit).to_s.scrub}…" if value.bytesize > limit
+        raise Error, "kanban: a task title cannot be empty" if value.empty?
+
+        value
       end
 
       # The mission's status follows its tasks: someone has to be able to see

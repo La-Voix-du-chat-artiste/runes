@@ -244,7 +244,7 @@ touches a company's source code, that is not a nice-to-have.
 what a small team buys a subscription for is an *engine*: turn an idea into a
 plan, run the plan, verify it, tell someone what to do next, keep the receipts.
 That engine fits in one workflow you can read (`examples/prospect_pipeline.rb`,
-431 lines): it writes a goal, plans a mission kanban, advances every todo
+463 lines): it writes a goal, plans a mission kanban, advances every todo
 through a verifier, computes who to contact next by a rule, drafts the outreach
 without sending it, and reports. The parts worth paying a SaaS for — identity,
 tenancy, money, law — stay where they belong, in an app; the part that is
@@ -262,9 +262,9 @@ today:
 
 | | |
 | --- | --- |
-| `lib/` | **15 046 lines** across 63 files |
-| `test/` | **11 545 lines** across 47 files |
-| Suite | **618 runs, 2 802 assertions, 0 failures** — no keys, no provider calls, no broker required |
+| `lib/` | **15 319 lines** across 65 files |
+| `test/` | **11 773 lines** across 48 files |
+| Suite | **636 runs, 2 879 assertions, 0 failures** — no keys, no provider calls, no broker required |
 | Observatory | **215 runs, 1 069 assertions**, **4 860 lines** of Rails 8.1 app code — fleet, runs, topology, traces, who published, and what was refused, all fed through the fleet's own `Runes::Transport` |
 | Executables | **7**: `runes` (TUI), `runes-daemon`, `runes-client`, `runes-mcp`, `runes-replay`, `runes-acl`, `runes-workflow` |
 | Workflow engine | **4 600 lines** (engine, the seven runes, and the rune/cog/plugin support classes), stdlib only — no `async`, no `ruby_llm` |
@@ -272,7 +272,8 @@ today:
 | MQTT 5 adapter | **1 149 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects and re-subscribes* |
 | Security surfaces | **1 716 lines**: command policy 309, envelopes 323, identities 240, trust store 184, capability guard 243, guard telemetry 149, credentials 115, RPC auth 99, nonce cache 54 |
 | Request ledger | **187 lines** — the execution half of exactly-once (see item 11) |
-| CRM pipeline example | **431 lines** of DSL writing a real pipeline into interoperable files (see item 8) |
+| CRM pipeline example | **463 lines** of DSL writing a real pipeline into interoperable files (see item 8) |
+| Companion guide | `docs/DSL_POWER.md` — the DSL in one page, the pipeline scope by scope, and its sharp edges (also a PDF) |
 | Dispatcher | **1 656 lines**, down from 1 968 after the fabric/journal/session split |
 | Gem | builds clean — 64 library files, no secrets, no local state, seven binstubs, MIT `LICENSE` shipped |
 | Live proof | **200 messages, one shared group, 100/100 split, no dupes, no losses** (re-verified 2026-09-11 against mosquitto 2.1.2), plus a dropped-socket proof that the adapter heals and keeps its subscriptions |
@@ -286,7 +287,7 @@ Run it yourself: `bundle exec rake test`, then
 `bundle exec ruby demo/smoke.rb` (offline, no key), then
 `bin/runes-workflow execute examples/analyze_codebase.rb`.
 
-For real work, `examples/prospect_pipeline.rb` (431 lines) is a complete
+For real work, `examples/prospect_pipeline.rb` (463 lines) is a complete
 CRM/product pipeline — idea → goal → mission kanban → every todo executed and
 verified → next actions per contact → drafted (never sent) outreach → weekly
 report — writing files a human, an agent and a Rails app can all read. See

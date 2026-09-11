@@ -79,7 +79,11 @@ execute do
       advanced: collect(map!(:advanced)),
       next_actions: from(call!(:crm))[:next_actions],
       drafts: from(call!(:crm))[:drafts],
-      report_path: from(call!(:report))[:report_path]
+      report_path: from(call!(:report))[:report_path],
+      # The run reports its own link check: every `#E-`/`#M-` reference it
+      # wrote resolved, or a list of the ones that did not.
+      references: from(call!(:report))[:references],
+      missing_refs: from(call!(:report))[:missing_refs]
     }
   end
 end
@@ -114,6 +118,13 @@ execute(:prepare) do
     require "fileutils"
     epics_dir = File.join(config[:root], "epics")
     FileUtils.mkdir_p(epics_dir)
+
+    # The raw idea is stored as a content-addressed document (ab/cd/<sha>.txt),
+    # the layout a harness and their app both read — so the goal can reference
+    # it by path instead of quoting it, and two identical ideas cost one file.
+    doc = Runes::DocStore.new(root: File.join(config[:root], "documents"))
+                       .put(config[:idea], ext: "txt")
+    config = config.merge(doc_path: doc[:path], doc_sha: doc[:sha])
 
     existing = Dir.glob(File.join(epics_dir, "*", "goal.md")).map { |path| File.read(path) }
     code = Runes::Kanban.next_code(existing, prefix: "E")
@@ -155,7 +166,10 @@ execute(:brainstorm) do
     body = <<~MD
       # #{config[:idea]}
 
+      <!-- code: #{config[:epic_code]} -->
+
       > Épic #{Runes::Kanban.reference(config[:epic_code])} · créé le #{config[:today]} · porté par #{config[:owner]}
+      > Idée d'origine : `#{config[:doc_path]}` (sha256 #{config[:doc_sha][0, 12]}…)
 
       #{goal}
 
@@ -165,7 +179,11 @@ execute(:brainstorm) do
     MD
     path = File.join(config[:epic_dir], "goal.md")
     File.write(path, body)
-    { goal_path: path, goal: goal }
+
+    # The marker above is what `Runes::Index` resolves `#E-001` to; a reference
+    # that points nowhere is worth knowing about at write time, not at read.
+    linked = Runes::Index.new(root: config[:root]).link(body, from: path)
+    { goal_path: path, goal: goal, missing_refs: linked[:missing] }
   end
 
   outputs do |_value, _index|
@@ -219,6 +237,10 @@ execute(:plan) do
       columns: { "todo" => plan[:todos].map { |t| { title: t[:title], assignee: t[:assignee] } } }
     )
     Runes::Kanban.write(file, text)
+    # Trust but verify: the file goes to a human, an editor and their app, so a
+    # grammar error is a failure now, not a surprise later.
+    errors = Runes::Kanban.validate(text)
+    fail!("wrote an invalid mission: #{errors.first}") unless errors.empty?
 
     { mission_path: file, mission_code: code, mission: mission, todos: plan[:todos],
       epic_dir: input[:epic_dir], epic_code: input[:epic_code], root: input[:root] }
@@ -274,10 +296,12 @@ execute(:advance_todo) do
 
     # The kanban is moved, not rewritten: the same file an editor or their app
     # may be holding, with the reason kept as free text.
-    Runes::Kanban.advance_file(todo[:mission_path], title: todo[:title],
-                                                    to: passed ? "done" : "blocked",
-                                                    note: "#{verdict[:verdict]}: #{verdict[:reason]}")
-    status = Runes::Kanban.parse(File.read(todo[:mission_path]))[:header]["status"]
+    updated = Runes::Kanban.advance_file(todo[:mission_path], title: todo[:title],
+                                                             to: passed ? "done" : "blocked",
+                                                             note: "#{verdict[:verdict]}: #{verdict[:reason]}")
+    errors = Runes::Kanban.validate(updated)
+    fail!("the mission file no longer validates: #{errors.first}") unless errors.empty?
+    status = Runes::Kanban.parse(updated)[:header]["status"]
 
     { title: todo[:title], assignee: todo[:assignee], verdict: verdict[:verdict],
       reason: verdict[:reason], mission_status: status }
@@ -330,8 +354,8 @@ execute(:crm_actions) do
     end.sort_by { |person| -person[:days_since_touch] }
 
     { crm_dir: crm_dir, people_path: people_path, next_actions: actions,
-      mission_path: input[:mission_path], epic_code: input[:epic_code],
-      advanced: input[:advanced], root: input[:root] }
+      mission_path: input[:mission_path], mission_code: input[:mission_code],
+      epic_code: input[:epic_code], advanced: input[:advanced], root: input[:root] }
   end
 
   # Then the wording, one draft per contact — written to disk, never sent.
@@ -346,6 +370,7 @@ execute(:crm_actions) do
       advanced: ruby!(:next_actions).advanced,
       people_path: ruby!(:next_actions).people_path,
       mission_path: ruby!(:next_actions).mission_path,
+      mission_code: ruby!(:next_actions).mission_code,
       epic_code: ruby!(:next_actions).epic_code,
       drafts: collect(map!(:drafts)),
       root: ruby!(:next_actions).root }
@@ -421,10 +446,17 @@ execute(:weekly_report) do
       #{summary}
 
       ---
-      _Généré par `examples/prospect_pipeline.rb` · mission `#{File.basename(crm[:mission_path].to_s)}` · épic #{crm[:epic_code]}_
+      _Généré par `examples/prospect_pipeline.rb` — épic ##{crm[:epic_code]} · mission ##{crm[:mission_code]}_
     MD
+
+    # The report names its epic and mission by code. Resolving those references
+    # through the files (not a database) is what lets a human trust the pointer,
+    # and a reference that resolves nowhere is reported rather than hidden.
+    linked = Runes::Index.new(root: crm[:root]).link(body, from: crm[:mission_path])
+    body += linked[:missing].empty? ? "" : "\n> Références non résolues : #{linked[:missing].join(', ')}\n"
     File.write(path, body)
-    { report_path: path, summary: summary }
+    { report_path: path, summary: summary, references: linked[:resolved].keys,
+      missing_refs: linked[:missing] }
   end
 
   outputs { |_value, _index| ruby!(:write_report).value.merge(next_actions: ruby!(:input).next_actions) }

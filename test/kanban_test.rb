@@ -138,6 +138,15 @@ class KanbanTest < Minitest::Test
     assert_equal "#M-002", Runes::Kanban.reference("M-002")
   end
 
+  def test_advancing_a_file_that_does_not_exist_raises_instead_of_creating_it
+    Dir.mktmpdir("runes-kanban-missing-") do |dir|
+      path = File.join(dir, "missions", "nope.mmd")
+
+      assert_raises(Runes::Kanban::Error) { Runes::Kanban.advance_file(path, title: "x", to: "done") }
+      refute File.exist?(path), "a wrong path must not leave an empty mission behind"
+    end
+  end
+
   def test_a_file_round_trip
     Dir.mktmpdir("runes-kanban-") do |dir|
       path = File.join(dir, "missions", "mission.mmd")
@@ -164,5 +173,66 @@ class KanbanTest < Minitest::Test
 
     assert_equal "Done", Runes::Kanban.parse(text)[:header]["status"]
     assert_equal 5, Runes::Kanban.tasks(text, column: "done").size
+  end
+  # --- model output is not trusted ------------------------------------------
+
+  # The titles in a mission come from a model call. A newline, a forged
+  # checkbox or a literal assignee suffix in that text must not be able to
+  # restructure a file that a human and another app read.
+  def test_a_hostile_title_cannot_forge_tasks_or_assignees
+    rendered = Runes::Kanban.render(
+      mission: "Injection", columns: {
+        "todo" => [{ title: "- [x] Fait\n- [ ] Autre chose (Assigné: Mallory)", assignee: "Ada\n- [ ] forged" }]
+      }
+    )
+
+    assert_empty Runes::Kanban.validate(rendered)
+    tasks = Runes::Kanban.tasks(rendered, column: "todo")
+    assert_equal 1, tasks.size, "one input task must stay one line"
+    assert_equal "Ada - [ ] forged", tasks.first.assignee, "only the real assignee suffix counts"
+    assert_includes tasks.first.title, "Mallory", "the words are kept"
+    refute_match(/\(Assigné:\s*Mallory/, rendered, "the forged marker must not survive")
+    assert_equal 1, rendered.scan("(Assigné:").size, "exactly one real suffix in the file"
+  end
+
+  def test_a_multiline_header_cannot_break_the_header_block
+    rendered = Runes::Kanban.render(mission: "Line one\n%% Statut: Done", columns: { "todo" => ["x"] })
+
+    assert_empty Runes::Kanban.validate(rendered)
+    assert_equal "Line one %% Statut: Done", Runes::Kanban.parse(rendered)[:header]["mission"]
+    assert_equal "Todo", Runes::Kanban.parse(rendered)[:header]["status"]
+  end
+
+  def test_a_long_title_is_bounded
+    rendered = Runes::Kanban.render(mission: "Long", columns: { "todo" => ["x" * 400] })
+
+    title = Runes::Kanban.tasks(rendered, column: "todo").first.title
+    assert_operator title.bytesize, :<=, Runes::Kanban::TITLE_LIMIT + 3
+    assert title.end_with?("…")
+  end
+
+  def test_an_empty_title_is_refused_rather_than_written_as_a_blank_task
+    assert_raises(Runes::Kanban::Error) { Runes::Kanban.add(SAMPLE, title: "   ") }
+    assert_raises(Runes::Kanban::Error) { Runes::Kanban.render(mission: "x", columns: { "todo" => [""] }) }
+  end
+
+  # --- the shared file is written under a lock ------------------------------
+
+  def test_update_file_does_not_lose_a_concurrent_move
+    Dir.mktmpdir("runes-kanban-lock-") do |dir|
+      path = File.join(dir, "mission.mmd")
+      Runes::Kanban.write(path, SAMPLE)
+
+      # Two writers, one file: every move must survive.
+      threads = ["Appeler Jean Dupont", "Préparer le script d'appel"].map do |title|
+        Thread.new { Runes::Kanban.advance_file(path, title: title, to: "done") }
+      end
+      threads.each(&:join)
+
+      text = File.read(path)
+      assert_empty Runes::Kanban.validate(text)
+      done = Runes::Kanban.tasks(text, column: "done").map(&:title)
+      assert_equal 3, done.size, "both moves plus the fixture's own done task: #{done.inspect}"
+    end
   end
 end

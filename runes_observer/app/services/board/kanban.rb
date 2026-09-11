@@ -16,6 +16,13 @@
 #             mission_complete, and every journal entry (which is written at
 #             the end of a lifecycle and carries the prompt text)
 #
+# A run of `bin/runes-workflow` is folded in too, from the projected
+# WorkflowRun/WorkflowStep rows: its steps are the cards, which is what makes a
+# pipeline run watchable on this board instead of only in a terminal. The
+# engine announces a step when it *starts*, so a workflow contributes Working
+# and Done cards and no Planned ones — the same honesty as `plan_ready`, which
+# publishes a count rather than the step names.
+#
 # The fold is chronological and keyed, so a step that was planned becomes the
 # same card when it starts and when it finishes: that motion is the point of a
 # board. A card whose last signal is old stays in Working with its age shown —
@@ -34,6 +41,8 @@ module Board
     STALE_AFTER = 30.minutes
     # Folding is O(packets): cap the read, and say so in the header.
     MAX_PACKETS = 5_000
+    # A busy board should show recent runs, not every run of the window.
+    MAX_RUNS = 25
     LABEL_BYTES = 90
 
     # One unit of work. `key` is stable across its whole life, which is what
@@ -160,6 +169,7 @@ module Board
                    .to_a
       @packets_read = rows.size
       rows.each { |packet| fold(packet) }
+      fold_workflow_runs
 
       selected = @items.values
       selected = selected.select { |card| card.agent == agent_id } if agent_id
@@ -171,6 +181,46 @@ module Board
         grouped[column] = list.first(limit)
       end
       @cards = COLUMNS.flat_map { |column| grouped[column] || [] }
+    end
+
+    # One card per workflow step, newest signal wins. Statuses come from the
+    # projector (`running` while in flight, then the engine's own status).
+    def fold_workflow_runs
+      runs = WorkflowRun.where("created_at >= ?", now - window)
+                        .includes(:workflow_steps)
+                        .order(:created_at)
+                        .limit(MAX_RUNS)
+      runs.each do |run|
+        run.workflow_steps.each { |step| fold_workflow_step(run, step) }
+      end
+    end
+
+    def fold_workflow_step(run, step)
+      status = step.status.to_s
+      column = case status
+               when "pending", "queued" then PLANNED
+               when "running" then WORKING
+               else DONE
+               end
+      failed = step.error.present? || status.match?(/fail|error|cancel|timeout/i)
+      key = "run:#{run.run_id}:#{step.position}:#{step.id}"
+      card = @items[key] ||= Card.new(key: key)
+      card.column = column
+      card.title = step.name.presence || step.rune.presence || "step #{step.position.to_i + 1}"
+      card.detail = [run.workflow, step.rune, duration_label(step.duration_ms),
+                     first_line(step.error)].compact.join(" · ")
+      card.at = step.finished_at || step.started_at || run.created_at
+      card.agent = run.agent_id.presence
+      card.request_id = run.run_id
+      card.error = failed
+      card
+    end
+
+    def duration_label(duration_ms)
+      ms = duration_ms.to_f
+      return nil unless ms.positive?
+
+      ms < 1_000 ? "#{ms.round} ms" : "#{(ms / 1000.0).round(1)} s"
     end
 
     def fold(packet)

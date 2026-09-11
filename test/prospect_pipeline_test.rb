@@ -139,6 +139,19 @@ class ProspectPipelineTest < Minitest::Test
     assert_equal 2, output[:drafts].size
     assert_equal 3, output[:next_actions].size
     assert_equal File.join(@root, "crm", "weekly-report.md"), output[:report_path]
+
+    # 5. the data layer: the idea is a content-addressed document, the goal
+    # carries the machine-readable code marker, and the run resolves its own
+    # references through the files rather than a database.
+    docs = Dir.glob(File.join(@root, "documents", "*", "*", "*"))
+    assert_equal 1, docs.size, "the idea is stored once, by content"
+    assert_equal "txt", File.basename(docs.first).split(".", 2).last
+    assert_includes goal, "<!-- code: E-001 -->"
+    assert_includes goal, docs.first, "the goal references the document by path"
+
+    assert_empty output[:missing_refs], "every reference the report wrote must resolve"
+    assert_equal ["E-001", "M-001"], output[:references].sort
+    refute_includes report, "Références non résolues"
   end
 
   def test_the_prompts_ask_the_questions_the_pipeline_needs

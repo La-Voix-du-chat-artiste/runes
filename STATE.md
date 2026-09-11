@@ -50,8 +50,15 @@ Where the current goal stands (it stays **active**):
   `Runes::Kanban` (the `.mmd` format `pipeline_prospect` publishes, 297 lines /
   14 tests) and `examples/prospect_pipeline.rb` (431 lines of DSL: idea → goal →
   mission kanban → verified todos → CRM next actions → drafted outreach →
-  report), proven end to end offline by `test/prospect_pipeline_test.rb`. The
-  framing doc is `docs/EXAMPLE_CRM_PIPELINE.md`: engine = DSL, surface = Rails. Phase 29 closed the honesty list's
+  report), proven end to end offline by `test/prospect_pipeline_test.rb`. Phase
+  33 completed D1 (`Runes::DocStore` content-addressed documents +
+  `Runes::Index` for `#E-001` codes — libraries, not new verbs, to keep Roast
+  compatibility) and D3 (the board folds workflow runs), and hardened what the
+  review found: title/header sanitising, `flock` around the shared `.mmd`,
+  validate-after-write, and a reference-boundary regex bug. Docs:
+  `docs/EXAMPLE_CRM_PIPELINE.md` (engine = DSL, surface = Rails) and
+  `docs/DSL_POWER.md` + PDF (the DSL on one page, the pipeline scope by scope,
+  the three sharp edges). D0–D4 are all in the tree. Phase 29 closed the honesty list's
   first item: `Runes::RequestLedger` claims every inbound request by
   `request_id` before any work is queued, so a redelivered QoS 1 PUBLISH, a
   session replay or a publisher retry runs the planner once and gets the first
@@ -62,10 +69,10 @@ Where the current goal stands (it stays **active**):
   then `O0.4` retention/rollups at real volume; optionally a durable request
   ledger if anyone turns MQTT session expiry on. Auth gates O1.2: it is remote
   execution.
-- **Next (the pipeline story):** decide whether the workflow or the Rails app
-  owns writes to a shared `.mmd` (one writer, or a lock), then promote the
-  example: an MCP tool surface so any harness can query the CRM, and a
-  `Runes::Kanban` CLI for validating a tree the way their
+- **Next (the pipeline story):** the write-ownership question is answered in
+  code (`Runes::Kanban.update_file` locks the read-modify-write), so what is
+  left is promotion: an MCP tool surface so any harness can *query* the CRM
+  mid-task, and a `Runes::Kanban` CLI for validating a whole tree the way their
   `scripts/harness/validate_mermaid.rb` does. Both are small; neither is needed
   to tell the story.
 - **Known open items:** execution is deduped in-process now
@@ -86,8 +93,8 @@ Where the current goal stands (it stays **active**):
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 618 runs / 2802 assertions / 0 failures
-cd runes_observer && bin/rails test   # observatory: 215 runs / 1069 assertions / 0 failures
+bundle exec rake test                 # parent harness: 636 runs / 2879 assertions / 0 failures
+cd runes_observer && bin/rails test   # observatory: 219 runs / 1085 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
 

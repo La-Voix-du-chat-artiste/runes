@@ -11,9 +11,10 @@ idea → goal.md → mission .mmd → advance every todo with a verifier
      → next actions per contact + drafted (never sent) outreach → weekly report
 ```
 
-It is 431 lines of workflow plus a 297-line format library, it runs offline in
-the test suite in about 50 ms, and every artifact it writes is a file a human,
-an agent or a Rails app can read. It is **not** a SaaS: it has no auth, no
+It is 463 lines of workflow plus a 297-line format library and a 213-line data
+layer (content-addressed documents, code index), it runs offline in the test
+suite in about 60 ms, and every artifact it writes is a file a human, an agent
+or a Rails app can read. It is **not** a SaaS: it has no auth, no
 tenancy, no billing, no landing page. It has the part that usually hides in
 controllers, services and background jobs — and it has it in one place.
 
@@ -39,8 +40,9 @@ the example the docs point at is the file the suite executes.
 
 ```
 $PROSPECT_ROOT/
+├── documents/ab/cd/<sha256>.txt      # the raw idea, content-addressed (deduped)
 ├── epics/<slug>_<date>/
-│   ├── goal.md                       # the decided goal, with #E-001 in prose
+│   ├── goal.md                       # the decided goal, <!-- code: E-001 -->
 │   └── missions/<mission>.mmd        # the Mermaid kanban, their format
 └── crm/
     ├── people.json                   # contacts + stage + last touch
@@ -71,9 +73,10 @@ identity, tenancy, money, law.
 
 | | Lines |
 |---|---|
-| The workflow | **431** (one file, `examples/prospect_pipeline.rb`) |
+| The workflow | **463** (one file, `examples/prospect_pipeline.rb`) |
 | The kanban format library it shares | **297** (`lib/runes/kanban.rb`) |
-| Its tests (4 workflow + 14 format) | **348** |
+| The data layer (documents + code index) | **213** (`lib/runes/doc_store.rb`, `lib/runes/index.rb`) |
+| Its tests (4 workflow + 20 format + 12 data layer) | **556** |
 | The Rails app it borrows its format from | **3 758** of app code (`app/{models,controllers,services,jobs,serializers,views}`), plus **1 819** of RSpec |
 
 Those two columns are not the same thing, and the difference is the honest
@@ -90,7 +93,7 @@ PoC usually gets wrong — and that its own review flagged:
 | A redelivered or retried step cannot run twice | `Runes::RequestLedger` |
 | A crash mid-run is resumable, and every lifecycle is on disk | the journal |
 | A refusal is visible, not silent | `Runes::GuardTelemetry` + `/security` |
-| The run is watchable as planned/working/done | `/board` (Mermaid kanban) |
+| The run is watchable on a board | `/board` folds the run's step telemetry into Working/Done cards (`RUNES_TELEMETRY=mqtt`); Planned comes from the fleet's `plan_ready`, since the engine names a step when it starts |
 | The whole run can be replayed offline | `bin/runes-replay` |
 
 ## What it is not

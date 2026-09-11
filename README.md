@@ -186,6 +186,12 @@ same file is readable by a human, an agent and that Rails app. This is the
 "we did not build you a SaaS, we built the engine you can tweak in one line"
 argument, in code — with its boundaries written down.
 
+Then read [`docs/DSL_POWER.md`](docs/DSL_POWER.md)
+([PDF](docs/DSL_POWER.pdf)): the whole DSL on one page, the pipeline scope by
+scope, the three sharp edges worth knowing before you find them, and why the
+loop is fun. [`docs/WHY_RUNES.md`](docs/WHY_RUNES.md)
+([PDF](docs/WHY_RUNES.pdf)) is the why; the DSL guide is the how it feels.
+
 ## 🧩 Runes (Roast-compatible workflows)
 
 Runes can run [Shopify Roast](https://github.com/shopify/roast) workflows

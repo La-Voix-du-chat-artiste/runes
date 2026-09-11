@@ -284,4 +284,63 @@ class BoardKanbanTest < ActiveSupport::TestCase
   def title_of(board, title_fragment)
     board.cards.find { |c| c.title.to_s.include?(title_fragment) }&.label.to_s
   end
+  # --- a workflow run is visible on the same board -------------------------
+
+  # `RUNES_TELEMETRY=mqtt bin/runes-workflow execute examples/prospect_pipeline.rb`
+  # projects run + step rows; those are cards here, which is what makes a
+  # pipeline run watchable rather than only grep-able.
+  test "workflow steps appear as cards, placed by their status" do
+    run = WorkflowRun.create!(run_id: "run-1", workflow: "prospect_pipeline.rb",
+                              status: "running", started_at: @now - 3.minutes,
+                              step_count: 3)
+    WorkflowStep.create!(workflow_run: run, position: 0, name: "brainstorm", rune: "agent",
+                         status: "ok", started_at: @now - 3.minutes,
+                         finished_at: @now - 2.minutes, duration_ms: 1_200)
+    WorkflowStep.create!(workflow_run: run, position: 1, name: "plan", rune: "agent",
+                         status: "running", started_at: @now - 1.minute)
+    WorkflowStep.create!(workflow_run: run, position: 2, name: "crm", rune: "ruby",
+                         status: "failed", started_at: @now - 30.seconds,
+                         finished_at: @now - 20.seconds, error: "index exploded")
+
+    board = board_for
+
+    assert_equal ["brainstorm"], titles(board, Board::Kanban::DONE).grep(/brainstorm/)
+    assert_equal ["plan"], titles(board, Board::Kanban::WORKING)
+    crm = board.cards.find { |card| card.title == "crm" }
+    assert_equal Board::Kanban::DONE, crm.column
+    assert crm.error
+    assert_includes crm.detail, "index exploded"
+    assert_includes crm.detail, "prospect_pipeline.rb"
+    assert_includes crm.detail, "ruby", "the rune is named"
+  end
+
+  test "a workflow run is not a planned board: the engine names a step when it starts" do
+    run = WorkflowRun.create!(run_id: "run-2", workflow: "w.rb", status: "running",
+                              started_at: @now)
+    WorkflowStep.create!(workflow_run: run, position: 0, name: "only", rune: "ruby",
+                         status: "running", started_at: @now)
+
+    board = board_for
+    assert_empty board.columns[Board::Kanban::PLANNED]
+    assert_equal ["only"], board.columns[Board::Kanban::WORKING].map(&:title)
+  end
+
+  test "a workflow card is badged with its agent when the run has one" do
+    run = WorkflowRun.create!(run_id: "run-3", workflow: "w.rb", status: "running",
+                              agent_id: "runes-alpha", started_at: @now)
+    WorkflowStep.create!(workflow_run: run, position: 0, name: "step", rune: "agent",
+                         status: "running", started_at: @now)
+
+    card = board_for.cards.find { |c| c.title == "step" }
+    assert_equal "runes-alpha", card.agent
+  end
+
+  test "workflow cards keep the diagram valid" do
+    run = WorkflowRun.create!(run_id: "run-4", workflow: "w.rb", status: "running",
+                              started_at: @now)
+    WorkflowStep.create!(workflow_run: run, position: 0, name: %(weird "name" [x]),
+                         rune: "ruby", status: "running", started_at: @now)
+
+    assert_empty Board::Kanban.validate(board_for.to_mmd)
+  end
 end
