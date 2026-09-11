@@ -66,6 +66,11 @@ section "Observatory"
 app_files = glob("runes_observer/app/**/*.rb") + glob("runes_observer/app/**/*.erb")
 puts format("%-22s %s lines of app code across %s files", "", lines(app_files), app_files.size)
 
+section "Examples"
+glob("examples/*.rb").each do |path|
+  puts format("%-22s %s lines", File.basename(path), lines([path]))
+end
+
 section "Executables"
 puts glob("bin/*").select { |path| File.file?(path) }.map { |path| File.basename(path) }.join(", ")
 

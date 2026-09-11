@@ -240,6 +240,19 @@ the request path. You can run the whole thing on a laptop on a plane, and
 you can run it on your own broker with your own ACLs. For anything that
 touches a company's source code, that is not a nice-to-have.
 
+**8. The alternative to a SaaS is not a smaller SaaS — it is a file.** Most of
+what a small team buys a subscription for is an *engine*: turn an idea into a
+plan, run the plan, verify it, tell someone what to do next, keep the receipts.
+That engine fits in one workflow you can read (`examples/prospect_pipeline.rb`,
+431 lines): it writes a goal, plans a mission kanban, advances every todo
+through a verifier, computes who to contact next by a rule, drafts the outreach
+without sending it, and reports. The parts worth paying a SaaS for — identity,
+tenancy, money, law — stay where they belong, in an app; the part that is
+actually intelligence becomes malleable, in your repo, runnable by any harness,
+and it inherits the safety properties a cron job never had. Full write-up, one
+line tweaks and honest boundaries:
+[`docs/EXAMPLE_CRM_PIPELINE.md`](EXAMPLE_CRM_PIPELINE.md).
+
 ---
 
 ## Receipts
@@ -249,9 +262,9 @@ today:
 
 | | |
 | --- | --- |
-| `lib/` | **14 745 lines** across 62 files |
-| `test/` | **11 187 lines** across 45 files |
-| Suite | **600 runs, 2 696 assertions, 0 failures** — no keys, no provider calls, no broker required |
+| `lib/` | **15 046 lines** across 63 files |
+| `test/` | **11 545 lines** across 47 files |
+| Suite | **618 runs, 2 802 assertions, 0 failures** — no keys, no provider calls, no broker required |
 | Observatory | **215 runs, 1 069 assertions**, **4 860 lines** of Rails 8.1 app code — fleet, runs, topology, traces, who published, and what was refused, all fed through the fleet's own `Runes::Transport` |
 | Executables | **7**: `runes` (TUI), `runes-daemon`, `runes-client`, `runes-mcp`, `runes-replay`, `runes-acl`, `runes-workflow` |
 | Workflow engine | **4 600 lines** (engine, the seven runes, and the rune/cog/plugin support classes), stdlib only — no `async`, no `ruby_llm` |
@@ -259,6 +272,7 @@ today:
 | MQTT 5 adapter | **1 149 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects and re-subscribes* |
 | Security surfaces | **1 716 lines**: command policy 309, envelopes 323, identities 240, trust store 184, capability guard 243, guard telemetry 149, credentials 115, RPC auth 99, nonce cache 54 |
 | Request ledger | **187 lines** — the execution half of exactly-once (see item 11) |
+| CRM pipeline example | **431 lines** of DSL writing a real pipeline into interoperable files (see item 8) |
 | Dispatcher | **1 656 lines**, down from 1 968 after the fabric/journal/session split |
 | Gem | builds clean — 64 library files, no secrets, no local state, seven binstubs, MIT `LICENSE` shipped |
 | Live proof | **200 messages, one shared group, 100/100 split, no dupes, no losses** (re-verified 2026-09-11 against mosquitto 2.1.2), plus a dropped-socket proof that the adapter heals and keeps its subscriptions |
@@ -271,6 +285,12 @@ one-command bug.
 Run it yourself: `bundle exec rake test`, then
 `bundle exec ruby demo/smoke.rb` (offline, no key), then
 `bin/runes-workflow execute examples/analyze_codebase.rb`.
+
+For real work, `examples/prospect_pipeline.rb` (431 lines) is a complete
+CRM/product pipeline — idea → goal → mission kanban → every todo executed and
+verified → next actions per contact → drafted (never sent) outreach → weekly
+report — writing files a human, an agent and a Rails app can all read. See
+[`docs/EXAMPLE_CRM_PIPELINE.md`](EXAMPLE_CRM_PIPELINE.md).
 
 ---
 
@@ -338,7 +358,10 @@ that admits exactly what it does not cover. After that, in order:
 4. **`runes_observer/app/services/fabric_ingest.rb`** — the same seam from the
    consumer's side, including the retained-replay window and the refusal to
    ever subscribe as a work-group member.
-5. **`test/request_ledger_test.rb` and `test/request_dedupe_test.rb`** — how
+5. **`examples/prospect_pipeline.rb`** — what the DSL is *for*: one readable file
+   that turns an idea into a goal, a mission kanban, verified todos, CRM next
+   actions and a report. Read it before deciding a DSL is a toy.
+6. **`test/request_ledger_test.rb` and `test/request_dedupe_test.rb`** — how
    the ledger is proved: sixteen threads and one winner; a redelivery through a
    real transport; and two deliberate plain prompts that both run anyway.
 

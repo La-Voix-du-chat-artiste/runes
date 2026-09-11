@@ -175,6 +175,17 @@ RUNES_TRANSPORT=mqtt5 ./bin/runes-daemon &   # shared-subscription agent
 ./bin/runes-workflow --quiet execute examples/analyze_codebase.rb  # no output
 ```
 
+## 🏭 A real pipeline, as a workflow
+
+`examples/prospect_pipeline.rb` (431 lines) is the whole engine of a
+CRM/product pipeline in one readable file: idea → `goal.md` → mission `.mmd`
+kanban → every todo executed and verified → next action per contact → drafted
+(never sent) outreach → weekly report. It writes the Mermaid kanban format
+[`pipeline_prospect`](docs/EXAMPLE_CRM_PIPELINE.md) already publishes, so the
+same file is readable by a human, an agent and that Rails app. This is the
+"we did not build you a SaaS, we built the engine you can tweak in one line"
+argument, in code — with its boundaries written down.
+
 ## 🧩 Runes (Roast-compatible workflows)
 
 Runes can run [Shopify Roast](https://github.com/shopify/roast) workflows

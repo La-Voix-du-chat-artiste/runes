@@ -1974,3 +1974,66 @@ code panels, tables) now calls `ensure_room` and breaks *before* drawing, and
 the renderer checks its own output for pages that carry only the footer and
 warns instead of shipping a PDF with holes. 9 pages (2 blank) → **7 pages, 0
 blank**.
+
+---
+
+## Phase 32 — The anti-SaaS spike: a whole pipeline as one workflow (0.3.0)
+
+The question was whether a real product's *engine* — the part that is
+intelligence — can be a DSL file instead of a Rails app, and thereby become
+something a team can tweak in one line. The answer, after building it, is yes
+for the engine and no for the surface, and the two are now separable in the
+repo.
+
+Two pieces, both tested:
+
+- **`lib/runes/kanban.rb` (297 lines, 14 tests).** The mission `.mmd` format is
+  not invented here: it is the contract `pipeline_prospect` publishes in its
+  `HARNESS.md`, and the test fixture is that file's own sample, verbatim — the
+  round trip `render(**parse(text))` is lossless. `validate` mirrors their
+  `scripts/harness/validate_mermaid.rb`, so a workflow cannot write a file their
+  tooling rejects. `advance` keeps the reason a card moved as free text after
+  the assignee suffix, which is the one place the grammar allows it.
+- **`examples/prospect_pipeline.rb` (431 lines, 4 tests).** Idea → `goal.md`
+  (with a minted `#E-001` reference) → mission kanban → every todo worked and
+  *verified* by a second agent call → CRM next actions by a deterministic rule →
+  drafted outreach written to `outbox/` and never sent → weekly report. The
+  test runs that exact file end to end offline in ~50 ms with the provider seam
+  scripted, and asserts the artifacts: the kanban validates, one todo passes to
+  Done, one fails to Blocked with its reason preserved, mission status derives
+  to Blocked, two drafts exist and say "non envoyé", the report carries the
+  failure, and the epic codes increment across runs while mission codes stay
+  per-epic (their rule).
+
+Three DSL lessons worth writing down, because I got each of them wrong first:
+
+- **`from(call!(:x))` returns the raw value**, not a rune output. `plan.todos`
+  does not work; `plan[:todos]` does. (`ruby!(:x).key` *does* work — the Ruby
+  rune's output delegates missing methods to its value — which is exactly the
+  kind of asymmetry a user hits on day one, so the example now shows the
+  unambiguous form.)
+- **`collect(map!(:x))` returns whatever the sub-scope's `outputs` block
+  returned**, so my `.map(&:value)` was wrong once the sub-scope returned plain
+  hashes. It also cannot be called from a `call` block (it sees no managers);
+  a `ruby` step is the place to read a map's iterations.
+- **Key types are a real hazard.** The model returns JSON (string keys), Ruby
+  builds symbols: the report was silently empty until every boundary symbolized
+  once (`JSON.parse(..., symbolize_names: true)`) and everything downstream
+  agreed.
+
+Also honest: the workflow needed one thing its "no new dependency" framing
+would miss — `lib/runes/workflow.rb` now loads `Runes::Kanban`, because a
+workflow file's constants have to be available to the CLI. And the receipts are
+deliberately not a LOC-versus-LOC claim: the Rails app it borrows its format
+from is 3 758 lines of app code *plus* a product surface (forms, pages, JSON
+API, serializers) this workflow does not replace, and its own SaaS roadmap adds
+five sprints of auth, tenancy, billing and GDPR on top. What the workflow
+replaces is the engine; what it inherits from Runes is the part a PoC usually
+gets wrong — ledger dedupe, journal resume, visible refusals, `/board`, replay.
+
+Docs: `docs/EXAMPLE_CRM_PIPELINE.md` (the pitch, the one-line tweak table, the
+measured receipts, what it is not), README, and `docs/WHY_RUNES.md` item 8 —
+*the alternative to a SaaS is not a smaller SaaS, it is a file*. `scripts/receipts.rb`
+now prints examples too.
+
+Suites: parent **618 / 2802 / 0**, observatory **215 / 1069 / 0**.

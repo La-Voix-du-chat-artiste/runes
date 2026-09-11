@@ -23,6 +23,9 @@
 #     (W5-1): Strings are shell-split and run as argv; `shell: true` opts in.
 #   * `Workflow.from_file` deletes its tmpdir before returning (W5-13).
 require_relative "telemetry"
+# Mission files (.mmd) are a workflow artifact, and the engine is where a
+# workflow file's constants become available — so the format helper ships with it.
+require_relative "kanban"
 require_relative "rune"
 require_relative "workflow_policy"
 require_relative "command_runner"
