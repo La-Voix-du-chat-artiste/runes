@@ -330,6 +330,12 @@ pre.payload__body--raw { color: var(--text-dim); }
 .alert { margin: 10px 0; padding: 8px 10px; border-radius: 6px; font-size: 12px; border: 1px solid var(--border); background: var(--bg-elevated-2); overflow-wrap: anywhere; }
 .alert--error { color: var(--offline); border-color: rgba(255, 107, 107, 0.4); }
 
+/* signature verdicts (doc5.md O0.3): green when the key is trusted, amber
+   when nothing backs the claim, red when it is provably wrong */
+.badge--sig-verified  { color: #7bdcb5; border-color: #2b5a4a; }
+.badge--sig-untrusted { color: #ffc857; border-color: #6b5a2b; }
+.badge--sig-invalid   { color: #ff8b8b; border-color: #6b2b2b; }
+
 /* rune badges, so a step's kind is readable at a glance */
 .badge--ruby, .badge--map, .badge--repeat, .badge--call { color: #b48ef0; border-color: #4b3a6b; }
 .badge--cmd  { color: #ffb07c; border-color: #6b452b; }

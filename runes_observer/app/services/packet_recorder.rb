@@ -265,6 +265,7 @@ class PacketRecorder
     body, truncated = truncate(@payload)
     publisher_at = @occurred_at || publisher_time(data)
     @occurred_at = publisher_at || @received_at
+    signature = signature_of(data)
 
     packet = Packet.create!(
       topic: @topic,
@@ -284,7 +285,9 @@ class PacketRecorder
       retain: @retained,
       correlation_id: @properties[:correlation_id].presence,
       response_topic: @properties[:response_topic].presence,
-      user_properties: user_properties_json
+      user_properties: user_properties_json,
+      signature_state: signature.state,
+      key_fingerprint: signature.fingerprint.presence
     )
 
     self.class.remember_executor(correlation_key(result), agent_id)
@@ -355,6 +358,17 @@ class PacketRecorder
     return nil if publisher_at.nil?
 
     [((@received_at - publisher_at) * 1000).round, 0].max
+  end
+
+  # Who signed this, if anyone (doc5.md O0.3). Verification must never be able
+  # to break ingest — a witness that stops recording because a signature is
+  # odd is worse than one that records the oddity. The service itself fails
+  # closed; this is the second belt.
+  def signature_of(data)
+    ObserverSignature.check(data)
+  rescue StandardError => e
+    Rails.logger.warn("[observer] signature check skipped: #{e.class}: #{e.message}")
+    ObserverSignature::Result.new(state: "unsigned", fingerprint: nil, claimed_agent: nil, reason: nil)
   end
 
   def inferred_executor(result)

@@ -142,4 +142,48 @@ class PacketsControllerTest < ActionDispatch::IntegrationTest
   test "the removed feed stats route is gone" do
     assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path("/feed/stats") }
   end
+  # O0.3: the verdict is on the page, with the fingerprint and a plain-English
+  # reason — an unsigned packet is labelled, not silently trusted.
+  test "show renders the signature verdict and the signing key" do
+    packet = Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                            occurred_at: Time.current, received_at: Time.current,
+                            agent_id: "runes-alpha", signature_state: "untrusted",
+                            key_fingerprint: "ab" * 32)
+
+    get packet_path(packet)
+
+    assert_response :success
+    assert_match "untrusted", response.body
+    assert_match "ab" * 16, response.body
+    assert_match "trust store has no key", response.body
+  end
+
+  test "an unsigned packet says so on its page" do
+    packet = Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                            occurred_at: Time.current, received_at: Time.current,
+                            signature_state: "unsigned")
+
+    get packet_path(packet)
+
+    assert_response :success
+    assert_match "no signature", response.body
+  end
+
+  # The list is where a suspicious packet is first seen, so a signed one is
+  # badged there without expanding it.
+  test "the packet list badges signed packets only" do
+    Packet.delete_all
+    Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                   occurred_at: Time.current, received_at: Time.current,
+                   signature_state: "verified", key_fingerprint: "cd" * 32)
+    Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                   occurred_at: Time.current, received_at: Time.current,
+                   signature_state: "unsigned")
+
+    get packets_path
+
+    assert_response :success
+    assert_match "badge--sig-verified", response.body
+    refute_match "badge--sig-unsigned", response.body
+  end
 end

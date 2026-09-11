@@ -105,6 +105,35 @@ class Packet < ApplicationRecord
     correlation_id.present? || response_topic.present? || user_properties_hash.any?
   end
 
+  # --- who really published this (doc5.md O0.3) --------------------------
+
+  SIGNATURE_STATES = %w[unsigned verified untrusted invalid].freeze
+
+  def signed?
+    signature_state.present? && signature_state != "unsigned"
+  end
+
+  def verified_signature?
+    signature_state == "verified"
+  end
+
+  # First 16 hex characters, the same short form the harness prints in logs,
+  # so a fingerprint can be compared between the two by eye.
+  def fingerprint_label
+    return "—" if key_fingerprint.blank?
+
+    key_fingerprint[0, 16]
+  end
+
+  def signature_tooltip
+    case signature_state
+    when "verified" then "Ed25519 signature verified against a trusted key (#{key_fingerprint})"
+    when "untrusted" then "signed, but the trust store has no key with fingerprint #{key_fingerprint}"
+    when "invalid" then "the signature does not match the payload (key #{key_fingerprint})"
+    else "no signature: the payload's agent field is a claim, not proof"
+    end
+  end
+
   # Roughly how long the payload is, for the "size" column.
   def size_label
     bytes = payload_bytes.to_i

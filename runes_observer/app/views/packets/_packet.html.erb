@@ -4,6 +4,7 @@
   <summary>
     <span class="packet__time"><%= clock_time(packet.occurred_at) %></span>
     <%= kind_badge(packet.kind) %>
+    <%= signature_badge(packet) %>
     <span>
       <% if show_agent && packet.agent_id.present? %>
         <span class="packet__agent"><%= short_id(packet.agent_id, 26) %></span>

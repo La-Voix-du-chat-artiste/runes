@@ -80,4 +80,24 @@ class AgentsControllerTest < ActionDispatch::IntegrationTest
     assert_match "request:req-b", response.body
     assert_match "page 1 of 3", response.body
   end
+  # O0.3 on the fleet member itself: which keys has this agent published under?
+  test "the agent page lists the signing keys it has been seen with" do
+    first = "11" * 32
+    second = "22" * 32
+    2.times do |i|
+      Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                     agent_id: "runes-alpha", signature_state: "verified",
+                     key_fingerprint: [first, second][i], occurred_at: Time.current,
+                     received_at: Time.current)
+    end
+
+    get agent_path("runes-alpha")
+
+    assert_response :success
+    assert_match "signing keys", response.body
+    assert_match "11" * 12, response.body
+    assert_match "22" * 12, response.body
+    assert_match "more than one key", response.body
+    assert_match "kv__warn", response.body
+  end
 end

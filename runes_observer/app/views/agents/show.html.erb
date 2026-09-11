@@ -22,6 +22,22 @@
           <dt>ended</dt><dd><%= @agent.ended_at.strftime("%Y-%m-%d %H:%M:%S") %> (LWT)</dd>
         <% end %>
         <dt>packets</dt><dd><%= @stats[:packets] %></dd>
+        <dt>signing keys</dt>
+        <dd class="<%= "kv__warn" if @agent.impersonated? %>">
+          <% if @agent.key_fingerprints.any? %>
+            <% @agent.key_fingerprints.each do |fingerprint| %>
+              <div class="mono small">
+                <%= fingerprint[0, 24] %>
+                <span class="faint"><%= @agent.trusted_fingerprint == fingerprint ? "· trusted" : "· not in the trust store" %></span>
+              </div>
+            <% end %>
+            <% if @agent.impersonated? %>
+              <div class="small">This agent has published under more than one key.</div>
+            <% end %>
+          <% else %>
+            <span class="faint">none observed — every packet was unsigned</span>
+          <% end %>
+        </dd>
       </dl>
       <% if @stats[:kinds].any? %>
         <div style="margin-top:10px">

@@ -103,6 +103,28 @@ class Agent < ApplicationRecord
     []
   end
 
+  # Every signing key this agent has been seen publishing under (doc5.md
+  # O0.3). More than one is not automatically an attack — a rotated key looks
+  # the same from here — but it is the observation worth making, and the trust
+  # store is what turns it into a decision.
+  def key_fingerprints
+    Packet.for_agent(agent_id).where.not(key_fingerprint: nil).distinct.order(:key_fingerprint).pluck(:key_fingerprint)
+  end
+
+  def trusted_fingerprint
+    ObserverSignature.trust_store.entry_for(agent_id)&.fingerprint
+  rescue StandardError
+    nil
+  end
+
+  def impersonated?
+    prints = key_fingerprints
+    return true if prints.size > 1
+
+    trusted = trusted_fingerprint
+    trusted.present? && prints.any? && prints != [trusted]
+  end
+
   def card_hash
     card.to_s.empty? ? {} : JSON.parse(card)
   rescue JSON::ParserError

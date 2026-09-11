@@ -125,8 +125,8 @@ stored as 0, which is the honest number for "what we received".
 | `qos`, `retain` | `Message` | ✅ |
 | `correlation_id`, `response_topic` | properties | ✅ (`correlation_id` indexed — it is the join key that survives an unparseable payload) |
 | `user_properties` (JSON) | properties | ✅ bounded: 32 pairs, 512 bytes per value, truncated per value so the stored JSON always parses |
-| `signature_state` | O0.3 | ⬜ |
-| `key_fingerprint` | O0.3 | ⬜ |
+| `signature_state` | O0.3 | ✅ `unsigned`/`verified`/`untrusted`/`invalid` |
+| `key_fingerprint` | O0.3 | ✅ indexed; impersonation is derived from it |
 | `run_id`, `rune`, `step_index`, `duration_ms` | O1.1 | ✅ (`run_id` in Phase 20; the rest live in `workflow_steps`) |
 | `tokens_in`, `tokens_out`, `cost_usd` | O2.5 | ✅ (`workflow_steps`) |
 
@@ -135,7 +135,48 @@ classifies as `other` (the live probe showed exactly that). `$a2a/#` topics
 are recognised; the `runes/a2a/…` spelling is not, and should be either
 classified or removed from the vocabulary.
 
-### O0.3 Verify signatures, and catch impersonation (uses P1.5)
+### O0.3 Verify signatures, and catch impersonation (uses P1.5) — ✅ DONE (Phase 27)
+
+**How it landed.** `ObserverSignature.check` runs on every parsed payload and
+records two columns: `signature_state` and `key_fingerprint`.
+
+| State | Means |
+| --- | --- |
+| `unsigned` | no `sig`/`alg`/`kid` — most fabric traffic, or a payload we cannot parse |
+| `verified` | the Ed25519 signature checks out against a key in the trust store |
+| `untrusted` | signed with a key the store does not hold (`:unknown_key`). The claim may be honest, but nothing here can confirm it |
+| `invalid` | provably wrong: `:bad_signature`, `:malformed` |
+
+`verify!` is called with `require_fresh: false` on purpose: freshness and replay
+matter when a message is about to *cause work*, while the observer is a witness
+and a stale-but-authentic packet is still authentic history — a replay guard
+would also make the verdict depend on read order. The trust store comes from
+`RUNES_OBSERVER_TRUST_DIR`, then `RUNES_TRUST_DIR`, then
+`<harness>/config/trust`, and a missing directory is an *empty* store, so
+signed traffic reads `untrusted` rather than trusted. Verification is memoized
+per `(kid, digest)` because retained packets are re-verified on every reconnect.
+A verifier exception is recorded as `invalid`, never as trust. An empty trust
+store cannot distinguish a forgery from a stranger, and says `untrusted`.
+
+`ImpersonationDetector` derives two findings from stored packets (so they
+survive a restart): **split identity** (one `agent_id` with two fingerprints) and
+**wrong key** (the fingerprint is not the one the trust store holds for the
+claimed agent). The dashboard's Security panel shows the hour's counts,
+impersonation findings with both fingerprints, and — under
+`RUNES_OBSERVER_REQUIRE_SIGNATURES=1` — how many packets are unsigned, because
+an unproven `agent` field should not be quiet. Packets are badged in the feed
+(signed only, so an unsigned majority is not noise), labelled in full on the
+packet page, and each agent page lists the keys it has been seen with.
+
+**Acceptance met:** signed/unsigned/tampered/unknown-key fixtures assert all
+four states; the memo is proven to verify once; a two-key fixture raises the
+impersonation finding; a broken verifier reads `invalid`; controller tests cover
+the panel, the badge and the agent key list. **Verified live** against mosquitto
+2.1.2: `RUNES_PROBE_SIGN=1 ruby scripts/mqtt5_observer_probe.rb` published a
+signed envelope and the stored row came back `verified` with the signing key's
+fingerprint.
+
+### O0.3 (original proposal)
 
 **Why.** `PacketRecorder` currently trusts the payload's `agent` field. With
 `Runes::Security::Envelope` and a `TrustStore` on disk, the observer can
@@ -362,7 +403,7 @@ process — no job runner needed:
 
 | Detector | Fires when |
 | --- | --- |
-| impersonation | one `agent_id` publishes under two fingerprints (O0.3) |
+| impersonation | one `agent_id` publishes under two fingerprints (O0.3) — ✅ derived, not yet an `Alert` row |
 | signature failure | a signed packet fails verification |
 | orphaned request | a `prompt` with no `response` after N minutes |
 | task timeout | an A2A task with no terminal status |

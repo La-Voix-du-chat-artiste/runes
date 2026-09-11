@@ -4,6 +4,9 @@ ENV["RAILS_ENV"] ||= "test"
 # ordering depend on whatever the last local run wrote. JournalTailTest builds
 # its own tail from a tmpdir instead.
 ENV["RUNES_OBSERVER_JOURNAL"] = "off"
+# Same reasoning for signatures: the checkout may carry a real trust store,
+# and a test that silently trusts keys it never created is not a test.
+ENV["RUNES_OBSERVER_TRUST_DIR"] = File.join(Dir.tmpdir, "runes-observer-untrusted")
 require_relative "../config/environment"
 require "rails/test_help"
 

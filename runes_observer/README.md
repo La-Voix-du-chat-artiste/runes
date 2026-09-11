@@ -91,6 +91,12 @@ all classified and stored.
   The ingest drops a single message it cannot store — counted in
   `ingest_statuses.packets_dropped` — instead of tearing down the
   connection.
+- `ObserverSignature` answers *who really published this*: every payload is
+  checked against `Runes::Security::Envelope` + `TrustStore` and stored as
+  `unsigned`, `verified`, `untrusted` or `invalid` with the signing key's
+  fingerprint. `ImpersonationDetector` turns that history into findings — one
+  `agent_id` under two keys, or a key the trust store does not hold for the
+  agent it claims to be. Nothing here blocks traffic; the observer reports.
 - `JournalTail` is the **second source**. The harness publishes every
   prompt-lifecycle end on `runes/_log/prompts` *and* appends the same payload
   to a durable JSONL journal (`<repo>/log/journal.jsonl`, rotated at 10 MB), so
@@ -113,7 +119,7 @@ all classified and stored.
 | Table | Purpose |
 |---|---|
 | `agents` | one row per observed agent: card metadata, `state` (online/offline/unknown), first/last seen, packet count |
-| `packets` | every observed PUBLISH: topic, payload (≤256 KiB), classified `kind`, `agent_id`, `request_id`, `event`, `tool`, timestamps, `run_id`, and the transport's view (`qos`, `retain`, `correlation_id`, `response_topic`, `user_properties`) |
+| `packets` | every observed PUBLISH: topic, payload (≤256 KiB), classified `kind`, `agent_id`, `request_id`, `event`, `tool`, timestamps, `run_id`, the transport's view (`qos`, `retain`, `correlation_id`, `response_topic`, `user_properties`), and the signature verdict (`signature_state`, `key_fingerprint`) |
 | `ingest_statuses` | singleton row: connected?, broker, transport, last message, packets this run, packets dropped, reconnects, publisher lag, last error |
 
 ## A2A topics
@@ -149,6 +155,8 @@ bin/rails runes:reset                # delete every observed packet and agent
 | `RUNES_HARNESS_LIB` | `../lib` | Where `Runes::Transport` is loaded from |
 | `RUNES_OBSERVER_JOURNAL` | sibling harness `log/journal.jsonl`, if it exists | Journal file to tail; `off` disables, any other value is a path (waited for) |
 | `RUNES_OBSERVER_JOURNAL_INTERVAL_S` | `2` | How often the journal tail polls |
+| `RUNES_OBSERVER_TRUST_DIR` | `$RUNES_TRUST_DIR`, else the harness `config/trust` | Public keys used to verify signed envelopes; a missing directory means an empty store, so signed traffic reads `untrusted` |
+| `RUNES_OBSERVER_REQUIRE_SIGNATURES` | unset | `1` makes the dashboard shout about unsigned traffic in the last hour |
 | `RUNES_OBSERVER_RETENTION_DAYS` | `7` | Prune packets older than this |
 | `RUNES_OBSERVER_MAX_PACKETS` | `200000` | Hard cap on stored packets; `0` or less (or non-numeric) means no cap |
 | `RAILS_MAX_THREADS` | `5` | Puma/DB pool size |
@@ -156,7 +164,7 @@ bin/rails runes:reset                # delete every observed packet and agent
 ## Tests
 
 ```bash
-bin/rails test     # 152 runs, 736 assertions
+bin/rails test     # 178 runs, 835 assertions
 ```
 
 Covers the topic classifier (every Runes topic shape, including the A2A

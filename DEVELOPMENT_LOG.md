@@ -1703,3 +1703,64 @@ lands), an unparseable line (stored, not dropped — the MQTT path's behaviour),
 the unbounded partial line, and the environment switch.
 
 Suites: parent **567 / 2592 / 0**, observatory **152 / 736 / 0**.
+
+---
+
+## Phase 27 — Who really published this (0.3.0, Batch B)
+
+doc5.md O0.3 and the last of O0.2's columns. `PacketRecorder` used to take the
+payload's `agent` field at face value: the observer could show a name and had no
+way to say whether anything backed it, on a shared broker, which is the one
+place where that question matters.
+
+`ObserverSignature.check` now runs on every parsed payload and stores
+`signature_state` + `key_fingerprint`:
+
+| State | Means |
+| --- | --- |
+| `unsigned` | no `sig`/`alg`/`kid` — most fabric traffic, or a payload we cannot parse |
+| `verified` | the Ed25519 signature checks out against a key in the trust store |
+| `untrusted` | signed with a key the store does not hold (`:unknown_key`): the claim may be honest, but nothing here can confirm it |
+| `invalid` | provably wrong (`:bad_signature`, `:malformed`) |
+
+Decisions worth recording:
+
+- **`require_fresh: false`, no replay guard.** Freshness and replay matter when a
+  message is about to *cause work*; the observer is a witness, and a
+  stale-but-authentic packet is still authentic history. A replay guard would
+  also make the verdict depend on read order, which is precisely what
+  contradicts "witness". The cost is stated in the roadmap: an attacker can
+  replay an old authentic packet and the observer will call it `verified` — it
+  will also show you its `ts`.
+- **A missing trust directory is an empty store, not an error.** Signed traffic
+  then reads `untrusted`. Fail-closed in the direction that matters.
+- **An empty store cannot tell a forgery from a stranger**, so it does not
+  pretend to: `:unknown_key` is `untrusted`, never `invalid`. The test for a
+  tampered payload had to put the key in the store first to earn `invalid` —
+  a nice demonstration of why the distinction is honest.
+- **Memoized per `(kid, digest)`**, because a broker replays retained packets on
+  every reconnect and re-verifying identical bytes is pure waste.
+- **A verifier exception is `invalid`, never `verified`.** The recorder wraps the
+  whole call as well: a witness that stops recording because a signature is odd
+  is worse than one that records the oddity.
+
+`ImpersonationDetector` derives findings from stored packets — so they survive a
+restart — in two shapes: **split identity** (one `agent_id` with two
+fingerprints) and **wrong key** (the fingerprint is not the one the trust store
+holds for the agent the payload claims to be). The dashboard's Security panel
+shows the hour's counts, the findings with both fingerprints side by side, and,
+under `RUNES_OBSERVER_REQUIRE_SIGNATURES=1`, how many packets in the last hour
+are unsigned — because on a shared broker an unproven `agent` field should not
+be quiet. Packets are badged in the feed (signed ones only, so an unsigned
+majority stays quiet), fully labelled on the packet page, and each agent page
+lists every key it has been seen with.
+
+**Verified live** against mosquitto 2.1.2, not just in tests:
+`RUNES_PROBE_SIGN=1 RUNES_PROBE_TRUST_DIR=/tmp/runes-probe-trust ruby
+scripts/mqtt5_observer_probe.rb` signed an A2A-shaped envelope with a freshly
+generated Ed25519 key and published it; the stored row came back
+`signature_state = verified`, `key_fingerprint = d01deeea…` — the signing key —
+alongside the MQTT 5 properties from Phase 25. The probe now does both checks,
+and can write the public key into a trust directory for the ingest to read.
+
+Suites: parent **567 / 2592 / 0**, observatory **178 / 835 / 0** (+26 tests).

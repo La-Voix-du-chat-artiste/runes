@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_10_090004) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_10_090005) do
   create_table "agents", force: :cascade do |t|
     t.string "agent_id", null: false
     t.text "card"
@@ -52,6 +52,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_090004) do
     t.string "correlation_id"
     t.datetime "created_at", null: false
     t.string "event"
+    t.string "key_fingerprint"
     t.string "kind", default: "other", null: false
     t.datetime "occurred_at", null: false
     t.text "payload"
@@ -63,6 +64,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_090004) do
     t.boolean "retain"
     t.string "run_id"
     t.boolean "scrubbed", default: false, null: false
+    t.string "signature_state"
     t.string "tool"
     t.string "topic", null: false
     t.boolean "truncated", default: false, null: false
@@ -71,6 +73,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_090004) do
     t.index ["agent_id", "id"], name: "index_packets_on_agent_id_and_id"
     t.index ["agent_id"], name: "index_packets_on_agent_id"
     t.index ["correlation_id"], name: "index_packets_on_correlation_id"
+    t.index ["key_fingerprint"], name: "index_packets_on_key_fingerprint"
     t.index ["kind"], name: "index_packets_on_kind"
     t.index ["occurred_at"], name: "index_packets_on_occurred_at"
     t.index ["request_id", "id"], name: "index_packets_on_request_id_and_id"

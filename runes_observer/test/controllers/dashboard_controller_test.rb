@@ -79,4 +79,51 @@ class DashboardControllerTest < ActionDispatch::IntegrationTest
     assert_match "unknown (publisher sent no clock)", response.body
     refute_match "kv__warn", response.body
   end
+  # doc5.md O0.3: the panel that answers "who really published this".
+  test "the security panel shows signature states and catches one agent under two keys" do
+    Packet.delete_all
+    alice = "a" * 64
+    mallory = "b" * 64
+    Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                   agent_id: "runes-alpha", signature_state: "verified", key_fingerprint: alice,
+                   occurred_at: 5.minutes.ago, received_at: 5.minutes.ago)
+    Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                   agent_id: "runes-alpha", signature_state: "untrusted", key_fingerprint: mallory,
+                   occurred_at: 5.minutes.ago, received_at: 5.minutes.ago)
+    Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                   agent_id: "runes-beta", signature_state: "unsigned",
+                   occurred_at: 5.minutes.ago, received_at: 5.minutes.ago)
+
+    get root_path
+
+    assert_response :success
+    assert_match "Security", response.body
+    assert_match "runes-alpha", response.body
+    assert_match "2 different keys", response.body
+    assert_match "a" * 16, response.body
+    assert_match "unsigned packet", response.body
+  end
+
+  test "require-signatures mode says loudly how much of the feed is unproven" do
+    Packet.delete_all
+    Packet.create!(topic: "runes/prompts", kind: "prompt", payload: "{}", payload_bytes: 2,
+                   agent_id: "runes-beta", signature_state: "unsigned",
+                   occurred_at: 5.minutes.ago, received_at: 5.minutes.ago)
+    previous = ENV["RUNES_OBSERVER_REQUIRE_SIGNATURES"]
+    ENV["RUNES_OBSERVER_REQUIRE_SIGNATURES"] = "1"
+    begin
+      get root_path
+      assert_response :success
+      assert_match "RUNES_OBSERVER_REQUIRE_SIGNATURES is on", response.body
+    ensure
+      previous.nil? ? ENV.delete("RUNES_OBSERVER_REQUIRE_SIGNATURES") : ENV["RUNES_OBSERVER_REQUIRE_SIGNATURES"] = previous
+    end
+  end
+
+  test "with no findings the panel says so instead of staying silent" do
+    get root_path
+
+    assert_response :success
+    assert_match "no findings", response.body
+  end
 end

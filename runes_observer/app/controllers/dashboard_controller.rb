@@ -14,6 +14,11 @@ class DashboardController < ApplicationController
     @volume = packet_volume(minutes: 30)
     @volume_total = @volume.sum { |slot| slot[:count] }
     @kind_mix = kind_mix
+    # Who published, and does anything back it (doc5.md O0.3)?
+    @signature_counts = Packet.since(1.hour.ago).group(:signature_state).count
+    @impersonations = ImpersonationDetector.call
+    @require_signatures = ObserverSignature.require_signatures?
+    @unsigned_recent = Packet.since(1.hour.ago).where(signature_state: %w[unsigned]).count
     @stats = {
       online: @online.size,
       ended: Agent.ended.count,

@@ -26,10 +26,15 @@ end
 
 begin
   require "runes/transport"
+  # Signature state is the other half of "who published this" (doc5.md O0.3):
+  # the transport tells us what arrived, Runes::Security tells us whether the
+  # envelope is backed by a key we trust. Only stdlib OpenSSL, so this cannot
+  # pull a client library in.
+  require "runes/security"
 rescue LoadError => e
   # Not fatal: the web UI must still boot without the harness (it is
   # read-only over the database). `FabricIngest` fails loudly if it is
   # started without a transport, which is the process that actually needs it.
-  Rails.logger.warn("[observer] Runes::Transport unavailable (#{e.class}: #{e.message}); " \
+  Rails.logger.warn("[observer] Runes::Transport/Security unavailable (#{e.class}: #{e.message}); " \
                     "ingest needs a harness checkout at #{harness_lib} or RUNES_HARNESS_LIB")
 end

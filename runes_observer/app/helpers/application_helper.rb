@@ -10,6 +10,18 @@ module ApplicationHelper
     tag.span(kind, class: "badge badge--#{kind.to_s.tr('_', '-')}")
   end
 
+  # A signature badge, or nothing at all when the packet is unsigned: most
+  # fabric traffic is, and a badge on every row would be noise rather than
+  # information. Unsigned packets are still labelled on the packet page and in
+  # the security panel.
+  def signature_badge(packet, short: true)
+    return nil unless packet.signed?
+
+    label = short ? packet.signature_state : "#{packet.signature_state} #{packet.fingerprint_label}"
+    tag.span(label, class: "badge badge--sig-#{packet.signature_state}",
+                   title: packet.signature_tooltip)
+  end
+
   def nav_link(label, path)
     active = current_page?(path)
     link_to label, path, class: "nav__link#{' nav__link--active' if active}"

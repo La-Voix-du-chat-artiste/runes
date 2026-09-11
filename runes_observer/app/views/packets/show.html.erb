@@ -34,6 +34,14 @@
         <dt>user properties</dt>
         <dd><% @packet.user_properties_hash.each do |key, value| %><div class="mono small"><%= key %> = <%= value %></div><% end %></dd>
       <% end %>
+      <dt>signature</dt>
+      <dd class="<%= "kv__warn" unless @packet.signature_state == "verified" %>">
+        <%= @packet.signature_state.presence || "unsigned" %>
+        <% if @packet.key_fingerprint.present? %>
+          <span class="mono small faint"><%= @packet.key_fingerprint %></span>
+        <% end %>
+        <div class="faint small"><%= @packet.signature_tooltip %></div>
+      </dd>
     </dl>
     <pre class="payload__body<%= " payload__body--raw" if @packet.parsed.nil? %>"><%= json_pretty(@packet.payload) %></pre>
   </div>

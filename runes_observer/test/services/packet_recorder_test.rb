@@ -287,4 +287,70 @@ class PacketRecorderTest < ActiveSupport::TestCase
     assert_in_delta packet.received_at.to_f, packet.occurred_at.to_f, 0.01
     assert_nil IngestStatus.current.last_lag_ms, "unknown lag must not be recorded as zero"
   end
+  # doc5.md O0.3: the recorder is where "who published this" is decided, and
+  # where a signature oddity must never stop the packet being stored.
+  test "a signed payload is verified against the trust store and its key stored" do
+    dir = Dir.mktmpdir("runes-rec-sig-")
+    identity = Runes::Security::Identity.load_or_create(agent_id: "runes-alpha", dir: dir)
+    trust = File.join(dir, "trust")
+    FileUtils.mkdir_p(trust)
+    File.write(File.join(trust, "runes-alpha.pem"), identity.public_key_pem)
+    with_env("RUNES_OBSERVER_TRUST_DIR", trust) do
+      ObserverSignature.reset_cache!
+      signed = Runes::Security::Envelope.sign(
+        { "request_id" => "sig-1", "agent" => "runes-alpha", "prompt" => "hi" }, identity
+      )
+
+      PacketRecorder.record(topic: "runes/prompts", payload: JSON.generate(signed))
+
+      packet = Packet.find_by(request_id: "sig-1")
+      assert_equal "verified", packet.signature_state
+      assert_equal identity.fingerprint.to_s, packet.key_fingerprint
+      assert packet.verified_signature?
+      assert_equal identity.fingerprint.to_s[0, 16], packet.fingerprint_label
+    end
+  ensure
+    ObserverSignature.reset_cache!
+    FileUtils.remove_entry(dir) if dir && Dir.exist?(dir) && dir.start_with?(Dir.tmpdir)
+  end
+
+  test "an unsigned payload says unsigned, and a tampered one says invalid" do
+    PacketRecorder.record(topic: "runes/prompts",
+                          payload: JSON.generate("request_id" => "plain-1", "prompt" => "hi"))
+    assert_equal "unsigned", Packet.find_by(request_id: "plain-1").signature_state
+    assert_nil Packet.find_by(request_id: "plain-1").key_fingerprint
+
+    dir = Dir.mktmpdir("runes-rec-bad-")
+    identity = Runes::Security::Identity.load_or_create(agent_id: "runes-alpha", dir: dir)
+    trust = File.join(dir, "trust")
+    FileUtils.mkdir_p(trust)
+    File.write(File.join(trust, "runes-alpha.pem"), identity.public_key_pem)
+    # Without the key in the store the same packet would be "untrusted" — the
+    # observer cannot tell a forgery from a stranger, and says so.
+    with_env("RUNES_OBSERVER_TRUST_DIR", trust) do
+      ObserverSignature.reset_cache!
+      signed = Runes::Security::Envelope.sign({ "request_id" => "bad-1", "prompt" => "hi" }, identity)
+      PacketRecorder.record(topic: "runes/prompts",
+                            payload: JSON.generate(signed.merge("prompt" => "not what was signed")))
+
+      assert_equal "invalid", Packet.find_by(request_id: "bad-1").signature_state
+    end
+  ensure
+    ObserverSignature.reset_cache!
+    FileUtils.remove_entry(dir) if dir && Dir.exist?(dir) && dir.start_with?(Dir.tmpdir)
+  end
+
+  test "a verification that explodes does not stop the packet being recorded" do
+    original = ObserverSignature.method(:check)
+    ObserverSignature.define_singleton_method(:check) { |*_a, **_k| raise NoMethodError, "boom" }
+    begin
+      PacketRecorder.record(topic: "runes/prompts",
+                            payload: JSON.generate("request_id" => "explode-1", "prompt" => "hi"))
+    ensure
+      ObserverSignature.define_singleton_method(:check, original)
+    end
+
+    packet = Packet.find_by(request_id: "explode-1")
+    assert_equal "unsigned", packet.signature_state
+  end
 end
