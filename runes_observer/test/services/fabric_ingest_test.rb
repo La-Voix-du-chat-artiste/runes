@@ -132,9 +132,59 @@ class FabricIngestTest < ActiveSupport::TestCase
     thread = Thread.new { ingest.run }
     Timeout.timeout(10) { sleep 0.02 until built.size >= 2 }
     assert_equal %i[dead good], built, "the first transport failed and a fresh one was built"
+    assert_equal 1, IngestStatus.current.reconnects, "a rebuild is counted for the operator"
   ensure
     ingest&.stop
     thread&.join(5)
+  end
+
+  # doc5.md O0.6: sharing the transport API with the agents made the observer
+  # one copy-paste away from joining a work group — where MQTT 5 hands each
+  # member exactly one share of the messages, so the observer would *eat*
+  # prompts it has no worker pool to run. A comment cannot fail; this can.
+  test "the observer subscribes as a witness, never as a work-group member" do
+    start_ingest
+
+    filters = @ingest.transport.subscriptions
+    assert_equal [FabricIngest::DEFAULT_TOPIC, FabricIngest::A2A_TOPIC], filters.map(&:filter)
+    assert(filters.all? { |s| s.group.nil? }, "no subscription may carry a group")
+    refute(filters.any? { |s| s.filter.to_s.start_with?("$share/") },
+           "no subscription may be a shared filter")
+  end
+
+  test "a grouped subscription is refused with an explanation, not accepted quietly" do
+    ingest = FabricIngest.new(logger: Logger.new(IO::NULL), journal_tail: nil)
+    grouped = Struct.new(:filter, :group).new("$share/runes-prompts/runes/prompts", "runes-prompts")
+    plain = Struct.new(:filter, :group).new("runes/prompts", nil)
+
+    error = assert_raises(FabricIngest::WorkGroupRefusal) do
+      ingest.send(:assert_not_a_worker!, Struct.new(:subscriptions).new([plain, grouped]))
+    end
+    assert_match "work-group member", error.message
+    assert_match "steal messages", error.message
+
+    ingest.send(:assert_not_a_worker!, Struct.new(:subscriptions).new([plain]))
+  end
+
+  # doc5.md O0.7: the ingest owns the journal tail's lifecycle, so a stopped
+  # ingest stops reading the harness's file too.
+  test "the ingest starts and stops the journal tail it was given" do
+    dir = Dir.mktmpdir("runes-ingest-journal-")
+    path = File.join(dir, "journal.jsonl")
+    File.write(path, "")
+    tail = JournalTail.new(path: path, logger: Logger.new(IO::NULL), interval: 0.01)
+    ingest = FabricIngest.new(logger: Logger.new(IO::NULL), journal_tail: tail,
+                              transport_kind: "inproc")
+
+    ingest.start_journal_tail
+    File.write(path, "#{JSON.generate('request_id' => 'tail-1', 'agent' => 'a1', 'status' => 'complete')}\n",
+               mode: "a")
+    Timeout.timeout(10) { sleep 0.02 until Packet.where(request_id: "tail-1").exists? }
+
+    ingest.stop_journal_tail
+    assert_nil tail.instance_variable_get(:@thread), "the tail thread is gone with the ingest"
+  ensure
+    FileUtils.remove_entry(dir) if dir && File.exist?(dir)
   end
 
   # The bug this test would have caught: `require "runes/transport"` eagerly

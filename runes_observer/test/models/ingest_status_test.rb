@@ -73,4 +73,42 @@ class IngestStatusTest < ActiveSupport::TestCase
       IngestStatus.define_singleton_method(:current, original)
     end
   end
+  # doc5.md O0.5: "connected" is not the question — "is this feed trustworthy
+  # right now?" is. These are the two numbers that answer it.
+  test "reconnects accumulate so a flappy link is visible" do
+    IngestStatus.mark_connected!(host: "127.0.0.1", port: 1883)
+    IngestStatus.bump_reconnects!
+    IngestStatus.bump_reconnects!(by: 2)
+
+    assert_equal 3, IngestStatus.current.reconnects
+  end
+
+  test "the heartbeat records the publisher clock lag, and nil means unknown" do
+    IngestStatus.mark_connected!(host: "127.0.0.1", port: 1883)
+
+    IngestStatus.bump!(at: Time.current, by: 1, lag_ms: 250)
+    assert_equal 250, IngestStatus.current.last_lag_ms
+    assert_equal "250 ms", IngestStatus.current.lag_label
+    refute IngestStatus.current.lagging?
+
+    IngestStatus.bump!(at: Time.current, by: 1, lag_ms: 42_000)
+    assert_equal "42.0 s", IngestStatus.current.lag_label
+    assert IngestStatus.current.lagging?
+
+    # Most fabric traffic carries no clock at all: the previous lag must not
+    # be overwritten with a made-up zero.
+    IngestStatus.bump!(at: Time.current, by: 1)
+    assert_equal 42_000, IngestStatus.current.last_lag_ms
+  end
+
+  test "packets per minute is derived from stored packets, not from a counter a reconnect resets" do
+    Packet.delete_all
+    IngestStatus.mark_connected!(host: "127.0.0.1", port: 1883)
+    3.times do |i|
+      Packet.create!(topic: "runes/prompts/#{i}", kind: "prompt", payload: "{}", payload_bytes: 2,
+                     occurred_at: 30.seconds.ago, received_at: 30.seconds.ago)
+    end
+
+    assert_in_delta 0.6, IngestStatus.current.packets_per_minute, 0.01
+  end
 end

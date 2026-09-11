@@ -51,4 +51,32 @@ class DashboardControllerTest < ActionDispatch::IntegrationTest
     assert_match "Ingest", response.body
     assert_match "127.0.0.1:1883", response.body
   end
+
+  # O0.5: the panel has to answer "is this feed trustworthy right now?" — not
+  # just "connected": over what transport, at what rate, lagging by how much,
+  # and after how many rebuilds.
+  test "the ingest panel shows transport, rate, lag and reconnects" do
+    IngestStatus.mark_connected!(host: "127.0.0.1", port: 1883, transport: "MQTT5")
+    IngestStatus.bump_reconnects!(by: 2)
+    IngestStatus.bump!(at: Time.current, by: 5, lag_ms: 45_000)
+
+    get root_path
+
+    assert_response :success
+    assert_match "MQTT5", response.body
+    assert_match "reconnects", response.body
+    assert_match "45.0 s", response.body
+    assert_match "packets/min", response.body
+    assert_match "kv__warn", response.body, "a 45 s publisher lag must be visible, not just recorded"
+  end
+
+  test "a feed with no publisher clock says unknown instead of zero" do
+    IngestStatus.mark_connected!(host: "127.0.0.1", port: 1883, transport: "MQTT5")
+
+    get root_path
+
+    assert_response :success
+    assert_match "unknown (publisher sent no clock)", response.body
+    refute_match "kv__warn", response.body
+  end
 end

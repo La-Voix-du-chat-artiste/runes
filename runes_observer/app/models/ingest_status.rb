@@ -51,14 +51,28 @@ class IngestStatus < ApplicationRecord
     nil
   end
 
-  def self.bump!(at: Time.current, by: 1)
+  def self.bump!(at: Time.current, by: 1, lag_ms: nil)
     status = current
-    status.update_columns(last_message_at: at,
-                          packets_total: status.packets_total.to_i + by.to_i,
-                          updated_at: Time.current)
+    changes = { last_message_at: at,
+                packets_total: status.packets_total.to_i + by.to_i,
+                updated_at: Time.current }
+    changes[:last_lag_ms] = lag_ms.to_i if lag_ms
+    status.update_columns(changes)
     status
   rescue StandardError => e
     warn_failure("bump!", e)
+    nil
+  end
+
+  # One more transport rebuild. A climbing number here is the difference
+  # between "connected" and "connected *reliably*".
+  def self.bump_reconnects!(by: 1)
+    status = current
+    status.update_columns(reconnects: status.reconnects.to_i + by.to_i,
+                          updated_at: Time.current)
+    status
+  rescue StandardError => e
+    warn_failure("bump_reconnects!", e)
     nil
   end
 
@@ -108,5 +122,29 @@ class IngestStatus < ApplicationRecord
     return "watching" if watching?
 
     connected? ? "connected" : "disconnected"
+  end
+
+  # The fabric's throughput as stored, not as counted by the ingest: derived
+  # from the packets table so a reconnect (which resets started_at) or a
+  # restarted process cannot inflate it.
+  def packets_per_minute(window: 5.minutes)
+    Packet.where("occurred_at >= ?", window.ago).count / (window / 60.0)
+  end
+
+  def lag_label
+    return "unknown (publisher sent no clock)" if last_lag_ms.nil?
+
+    ms = last_lag_ms.to_i
+    return "#{ms} ms" if ms < 1_000
+
+    "#{(ms / 1000.0).round(1)} s"
+  end
+
+  # A lag an operator should look at: the newest packet's own clock is far
+  # behind our receipt of it.
+  LAG_WARN_MS = 30_000
+
+  def lagging?
+    last_lag_ms.to_i > LAG_WARN_MS
   end
 end

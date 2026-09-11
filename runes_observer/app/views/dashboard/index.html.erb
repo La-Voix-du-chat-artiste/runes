@@ -64,6 +64,10 @@
             <dt>transport</dt><dd><%= @status.transport.presence || "unknown (started before O0.1)" %></dd>
             <dt>connected</dt><dd><%= @status.connected? ? "yes" : "no" %></dd>
             <dt>last packet</dt><dd><%= @status.last_message_at.present? ? "#{ago_in_words_short(@status.last_message_at)} ago" : "—" %></dd>
+            <dt>rate</dt><dd><%= number_with_precision(@status.packets_per_minute, precision: 1) %> packets/min</dd>
+            <dt>publisher lag</dt>
+            <dd class="<%= "kv__warn" if @status.lagging? %>"><%= @status.lag_label %></dd>
+            <dt>reconnects</dt><dd><%= @status.reconnects.to_i %><%= " (this run)" if @status.reconnects.to_i.positive? %></dd>
             <dt>packets this run</dt><dd><%= @status.packets_total %></dd>
             <% if @status.packets_dropped.to_i.positive? %>
               <dt>dropped</dt><dd><%= @status.packets_dropped %> (unstoreable)</dd>

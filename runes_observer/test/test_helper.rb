@@ -1,4 +1,9 @@
 ENV["RAILS_ENV"] ||= "test"
+# Tests must never tail the developer's real harness journal: it exists in
+# this checkout, and a background tail inserting rows would make counts and
+# ordering depend on whatever the last local run wrote. JournalTailTest builds
+# its own tail from a tmpdir instead.
+ENV["RUNES_OBSERVER_JOURNAL"] = "off"
 require_relative "../config/environment"
 require "rails/test_help"
 

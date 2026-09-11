@@ -28,11 +28,19 @@ Where the current goal stands (it stays **active**):
   used to load the `mqtt`-gem adapter eagerly, so without the gem it defined
   half a module and `Transport.build` was missing. The 3.1.1 adapter is now
   loaded on demand (guarded in `lib/runes.rb`), pinned by two subprocess tests
-  in `test/transport_test.rb`.
-- **Next, in order:** `O0.2` leftovers (`signature_state`, `key_fingerprint` —
-  both need `O0.3`) and `O0.3` signature verification / impersonation
-  detection in the observer; then the P1/P2 roadmap in
-  `docs/OBSERVATORY_ROADMAP.md` (auth gates O1.2 — it is remote execution).
+  in `test/transport_test.rb`. Phase 26 closed the rest of P0:
+  the observer refuses to ever subscribe as a work-group member (O0.6), ingest
+  health now carries transport/rate/publisher-lag/reconnects with the payload's
+  own clock believed when plausible (O0.5), and `JournalTail` reads the
+  harness's durable `log/journal.jsonl` as a second source, deduped against the
+  bus (O0.7).
+- **Next, in order:** `O0.3` + the `O0.2` leftovers — `signature_state`
+  (`unsigned`/`verified`/`untrusted`/`invalid`) and `key_fingerprint` verified
+  through `Runes::Security::Envelope` + `TrustStore`, with the
+  one-agent-two-fingerprints impersonation alert (Batch B of the agreed plan);
+  then `O2.3` guard-decision telemetry, the at-least-once execution ledger, and
+  the P1 views in `docs/OBSERVATORY_ROADMAP.md` (auth gates O1.2 — it is
+  remote execution).
 - **Known open items:** at-least-once *execution* (handlers are not idempotent;
   a bounded request ledger is the fix), envelope replay is closed but **A2A peer
   cards are still unauthenticated**, token scanning is not a sandbox, the
@@ -45,8 +53,8 @@ Where the current goal stands (it stays **active**):
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 567 runs / 2593 assertions / 0 failures
-cd runes_observer && bin/rails test   # observatory: 131 runs / 658 assertions / 0 failures
+bundle exec rake test                 # parent harness: 567 runs / 2592 assertions / 0 failures
+cd runes_observer && bin/rails test   # observatory: 152 runs / 736 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
 

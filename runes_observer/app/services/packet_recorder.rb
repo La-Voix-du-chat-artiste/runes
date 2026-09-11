@@ -1,3 +1,5 @@
+require "time"
+
 # Turns one observed MQTT PUBLISH into a Packet row plus the agent
 # bookkeeping the UI needs. This is the single write path: live ingest and
 # the demo seeder both go through it, so what the UI shows is exactly what
@@ -25,6 +27,7 @@ class PacketRecorder
   @executors = {}
   @executors_mutex = Mutex.new
   @pending_heartbeats = 0
+  @pending_lag_ms = nil
   @last_heartbeat = nil
   @since_prune = 0
   @seen_digests = {}
@@ -86,15 +89,18 @@ class PacketRecorder
       @executors_mutex.synchronize { @executors[key] }
     end
 
-    def heartbeat!(at:)
+    def heartbeat!(at:, lag_ms: nil)
       @pending_heartbeats = @pending_heartbeats.to_i + 1
+      @pending_lag_ms = lag_ms if lag_ms
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       return if @last_heartbeat && (now - @last_heartbeat) < HEARTBEAT_INTERVAL
 
       @last_heartbeat = now
       pending = @pending_heartbeats
+      lag = @pending_lag_ms
       @pending_heartbeats = 0
-      IngestStatus.bump!(at: at, by: pending)
+      @pending_lag_ms = nil
+      IngestStatus.bump!(at: at, by: pending, lag_ms: lag)
     rescue ActiveRecord::ActiveRecordError => e
       Rails.logger.warn("[observer] heartbeat failed: #{e.class}: #{e.message}")
     end
@@ -102,6 +108,7 @@ class PacketRecorder
     def reset_heartbeat!
       @last_heartbeat = nil
       @pending_heartbeats = 0
+      @pending_lag_ms = nil
     end
 
     # Clears every piece of in-process state (tests, mainly).
@@ -236,7 +243,11 @@ class PacketRecorder
     @scrubbed = !utf8.valid_encoding?
     @payload = utf8.scrub
     @bytesize = raw.bytesize
-    @occurred_at = occurred_at || received_at
+    # Deliberately NOT `|| received_at` here: #record has to be able to tell
+    # "the caller gave us a time" from "nobody did", because the payload may
+    # carry the publisher's own clock. Defaulting here made that distinction
+    # impossible and silently disabled the clock extraction.
+    @occurred_at = occurred_at
     @received_at = received_at
     @retained = retained
     @qos = qos
@@ -252,6 +263,8 @@ class PacketRecorder
     data = PacketClassifier.parse(@payload)
     agent_id = result.agent_id || inferred_executor(result)
     body, truncated = truncate(@payload)
+    publisher_at = @occurred_at || publisher_time(data)
+    @occurred_at = publisher_at || @received_at
 
     packet = Packet.create!(
       topic: @topic,
@@ -280,7 +293,7 @@ class PacketRecorder
     # A workflow telemetry event is also a packet, but the run view reads the
     # projected rows, so fold it into WorkflowRun/WorkflowStep here.
     project_workflow_event(packet)
-    self.class.heartbeat!(at: @received_at)
+    self.class.heartbeat!(at: @received_at, lag_ms: lag_ms(publisher_at))
     self.class.prune_if_due!
     packet
   end
@@ -298,6 +311,50 @@ class PacketRecorder
     return "request:#{result.request_id}" if result.request_id.present?
 
     nil
+  end
+
+  # The publisher's own clock, when the payload carries one: the journal writes
+  # `at` (ISO 8601) and a signed envelope carries `ts` (unix seconds). Neither
+  # used to reach the row — `occurred_at` was always our receipt time, which
+  # made a packet's real age unknowable and an ingest-lag measurement
+  # impossible (doc5.md O0.5).
+  #
+  # A payload may claim any time it likes, so a clock is trusted only when it
+  # is plausible: a stale or future timestamp would silently reorder the
+  # timeline and poison the lag figure. Rejected clocks leave occurred_at as
+  # the receipt time, which is what it always was.
+  MAX_CLOCK_SKEW_S = 60
+  MAX_CLOCK_AGE_S = 7 * 24 * 60 * 60
+
+  def publisher_time(data)
+    return nil unless data.is_a?(Hash)
+
+    raw = data["at"] || data["ts"]
+    time = case raw
+           when String then safe_iso8601(raw)
+           when Numeric then Time.at(raw)
+           end
+    return nil if time.nil?
+
+    now = Time.current
+    return nil if time > now + MAX_CLOCK_SKEW_S
+    return nil if time < now - MAX_CLOCK_AGE_S
+
+    time.utc
+  end
+
+  def safe_iso8601(raw)
+    Time.iso8601(raw)
+  rescue ArgumentError, TypeError
+    nil
+  end
+
+  # How far behind the publisher's clock this packet arrived. nil when the
+  # publisher sent no clock: "unknown" is honest, 0 would not be.
+  def lag_ms(publisher_at)
+    return nil if publisher_at.nil?
+
+    [((@received_at - publisher_at) * 1000).round, 0].max
   end
 
   def inferred_executor(result)

@@ -242,4 +242,49 @@ class PacketRecorderTest < ActiveSupport::TestCase
   ensure
     previous.nil? ? ENV.delete(key) : ENV[key] = previous
   end
+  # doc5.md O0.5: `occurred_at` used to be nothing but our receipt time, which
+  # made a packet's real age unknowable and an ingest lag figure impossible.
+  # The journal writes `at`, a signed envelope carries `ts`; both are believed
+  # only when plausible.
+  test "a payload's own clock becomes occurred_at and drives the lag figure" do
+    sent_at = 5.seconds.ago
+    PacketRecorder.record(topic: "runes/_log/prompts",
+                          payload: JSON.generate("request_id" => "clock-1", "agent" => "a1",
+                                                 "status" => "complete", "at" => sent_at.utc.iso8601))
+
+    packet = Packet.find_by(request_id: "clock-1")
+    assert_in_delta sent_at.to_f, packet.occurred_at.to_f, 1.0
+    assert_operator packet.received_at, :>=, packet.occurred_at
+    assert_in_delta 5_000, IngestStatus.current.last_lag_ms, 1_500
+  end
+
+  test "an envelope's unix ts is honoured too" do
+    PacketRecorder.record(topic: "runes/prompts",
+                          payload: JSON.generate("request_id" => "clock-2", "prompt" => "hi",
+                                                 "ts" => 10.seconds.ago.to_i))
+
+    assert_in_delta 10.seconds.ago.to_f, Packet.find_by(request_id: "clock-2").occurred_at.to_f, 1.0
+  end
+
+  test "an implausible clock is ignored rather than reordering the timeline" do
+    future = (Time.current + 1.hour).utc.iso8601
+    ancient = (Time.current - 30.days).utc.iso8601
+
+    PacketRecorder.record(topic: "runes/_log/prompts",
+                          payload: JSON.generate("request_id" => "clock-future", "status" => "x", "at" => future))
+    PacketRecorder.record(topic: "runes/_log/prompts",
+                          payload: JSON.generate("request_id" => "clock-ancient", "status" => "x", "at" => ancient))
+
+    assert_in_delta Time.current.to_f, Packet.find_by(request_id: "clock-future").occurred_at.to_f, 5
+    assert_in_delta Time.current.to_f, Packet.find_by(request_id: "clock-ancient").occurred_at.to_f, 5
+  end
+
+  test "no clock in the payload leaves occurred_at as the receipt time" do
+    PacketRecorder.record(topic: "runes/prompts",
+                          payload: JSON.generate("request_id" => "clock-none", "prompt" => "hi"))
+
+    packet = Packet.find_by(request_id: "clock-none")
+    assert_in_delta packet.received_at.to_f, packet.occurred_at.to_f, 0.01
+    assert_nil IngestStatus.current.last_lag_ms, "unknown lag must not be recorded as zero"
+  end
 end

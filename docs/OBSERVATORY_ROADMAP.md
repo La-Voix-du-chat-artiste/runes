@@ -40,18 +40,15 @@ Everything below is in service of those three.
 
 ## 2. Prerequisites (do these first, they block everything)
 
-**PR-1 — the observer must depend on the harness.** `runes_observer/Gemfile`
-does not include the `runes` gem; ingest uses `mqtt` directly. O0.1, O0.3,
-O1.6, O2.1 and O2.3 all need `Runes::Transport`, `Runes::Security` and
-`Runes::Plugin` in-process:
-
-```ruby
-gem "runes", path: ".."   # observer Gemfile
-```
-
-Keep the split that already exists: **only the ingest process** loads the
-transport/security stack; the web process stays light. That preserves the
-good property that a harness crash cannot take the UI down with it.
+**PR-1 — the observer must depend on the harness — ✅ RESOLVED (Phase 25),
+by a load path rather than a gem dependency.** `runes_observer/` now puts the
+sibling checkout's `lib` on the load path (`config/initializers/runes_transport.rb`,
+`RUNES_HARNESS_LIB` overrides) and the ingest subscribes through
+`Runes::Transport`. Deliberately *not* `gem "runes", path: ".."`: the harness
+declares `mqtt ~> 0.7` as a runtime dependency, and the observatory must not
+pin — or be pinned by — the client its own transport may not use. The split is
+preserved: only the ingest process loads the transport stack, so a harness
+crash cannot take the UI down with it.
 
 **PR-2 — telemetry seams.** The workflow engine and the guard currently
 have no event hook (verified: nothing in `lib/runes/workflow*` emits
@@ -194,42 +191,62 @@ count and timing do not grow with table size, and that pruning never
 deletes a packet belonging to an interaction that is still "open"
 (a prompt with no response).
 
-### O0.5 Ingest health: lag, reconnects, drops
+### O0.5 Ingest health: lag, reconnects, drops — ✅ DONE (Phase 26)
 
-`IngestStatus` knows connected/disconnected and a packet total. It should
-also know: `reconnects`, `dropped` (oversized payloads), `last_lag_ms`
-(`received_at - occurred_at`), and `packets_per_minute`. The dashboard pill
-then answers the question an operator actually has — *"is this feed
-trustworthy right now?"* — instead of just "connected".
+`IngestStatus` knows connected/disconnected and a packet total. The dashboard
+pill now also answers the question an operator actually has — *"is this feed
+trustworthy right now?"*:
 
-**Size** S · **Acceptance** unit tests on the counters plus a controller
-test for the pill; a synthetic 5 s stall shows up as lag.
+- `reconnects` — counted both when our loop rebuilds the transport and when the
+  adapter reconnects itself (the number exists to show how choppy the link is,
+  not who fixed it);
+- `drops` — `packets_dropped`, already there;
+- `last_lag_ms` — the newest packet's **publisher** clock against our receipt.
+  Getting this required the recorder to *believe a payload's own clock*
+  (`at` on a journal entry, `ts` on a signed envelope) instead of always
+  stamping `occurred_at = received_at`; a clock is accepted only when
+  plausible (≤60 s future, ≤7 days old), and `nil` means "the publisher sent
+  no clock", which is honest where `0` would be a lie;
+- `packets_per_minute` — derived from the `packets` table, not from a counter
+  that a reconnect resets.
 
-### O0.6 The observer must never join a work group (P0.2 footgun)
+The panel warns in red past `LAG_WARN_MS` (30 s). **Acceptance met:** unit
+tests on every counter, a controller test that a 45 s lag renders as a warning
+and that "no clock" says so instead of showing zero.
 
-Shared subscriptions mean a subscriber in the same group **steals work**.
-Today the observer uses the raw `mqtt` client and subscribes without a
-group, which is correct — but **after O0.1 it shares the transport API with
-the agents**, and `subscribe(filter, group:)` is one copy-paste away from
-turning the observatory into a consumer that silently eats prompts: on
-MQTT 5 the broker would deliver each prompt to exactly one member of
-`$share/runes-prompts/…`, and the observer has no worker pool to run them.
-That deserves a test rather than a comment: assert the observer's
-subscription set carries no group and no `$share/` filter, and fail with an
-explanatory message if it ever does.
+### O0.6 The observer must never join a work group — ✅ DONE (Phase 26)
 
-**Size** XS · **Acceptance** one test; a deliberately wrong config fails it.
+Shared subscriptions mean a subscriber in the same group **steals work**, and
+since O0.1 the observer subscribes through the very same API as the agents.
+`FabricIngest#assert_not_a_worker!` inspects its own live subscription set
+after subscribing and raises `WorkGroupRefusal` — naming the offending filter —
+if any subscription carries a `group:` or a `$share/` filter. Two tests: the
+real inproc ingest must expose exactly `runes/#` and `$a2a/#` with no group
+(the live set, not a stub), and a deliberately grouped transport must be
+refused with a message that explains what would have happened.
 
-### O0.7 Tail `log/journal.jsonl` as a second source (uses P1.6)
+### O0.7 Tail `log/journal.jsonl` as a second source — ✅ DONE (Phase 26)
 
-`Runes::Agent::Journal` already writes a durable, rotated, flock-protected
-journal of every prompt lifecycle. The observer can tail it and ingest
-entries it has not seen (by offset + inode), which gives **history that
-survives a broker restart** and makes `bin/runes-replay`'s text view into a
-visual one. Cheap, and it makes the "durable journal" claim pay off twice.
+`JournalTail` follows one path, tracks inode + byte offset, emits only complete
+lines (`MAX_LINE_BYTES` 64 KiB bounds a line that never ends), and re-reads
+from zero on rotation or truncation. It is wired into the ingest's timer
+threads (like pruning) so it does not depend on the broker.
 
-**Size** S-M · **Acceptance** a rotated journal is read once, in order, with
-no duplicates and no re-reading after rotation.
+The interesting part is the **cross-source check**: before storing a line it
+asks whether that exact `(topic, payload)` row already exists. That is what
+makes the two sources safe to run at once — an entry the observer heard on
+`runes/_log/prompts` is not stored twice when the file is read, and a restart
+re-reading the whole file cannot duplicate rows either. Off by default in
+tests (`RUNES_OBSERVER_JOURNAL=off` in `test_helper.rb`, so the suite never
+tails the developer's real journal); the default path is the sibling harness
+checkout's journal and is only used when that file exists. An explicit path is
+waited for, because an operator who names a file means it.
+
+**Acceptance met:** read-once-in-order, partial lines, rotation, truncation,
+an unstoreable line (counted, next one still lands), an unbounded partial line,
+and a malformed line that is *stored* rather than dropped — the MQTT path's
+behaviour, since silently discarding what we cannot parse is how a partial
+outage becomes invisible.
 
 ---
 

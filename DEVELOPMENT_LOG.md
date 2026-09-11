@@ -1635,3 +1635,71 @@ instead of half-drawn. The renderer and the live observer probe now live in
 text as the markdown" invariant is only reproducible if the tool that enforces
 it is in the repository. `docs/WHY_RUNES.pdf` is 7 pages with all table values
 present.
+
+---
+
+## Phase 26 — Closing P0: witness only, health you can judge, and the second source (0.3.0)
+
+Batch A of the agreed plan: the three P0 items O0.1 left behind.
+
+### O0.6 — the observer must never be a worker
+
+`assert_not_a_worker!` runs after the two subscriptions and inspects the live
+subscription set: any `group:` or `$share/` filter raises `WorkGroupRefusal`
+naming the offending filter and explaining that on MQTT 5 the broker would have
+handed the observer exactly one member's share of the prompts, which it has no
+worker pool to run. It is a runtime check rather than a comment because the
+risk is one copy-paste away: since O0.1 the observer subscribes through the same
+API as the agents. Two tests pin it — the real inproc ingest must expose exactly
+`runes/#` and `$a2a/#` with no group, and a deliberately grouped transport must
+be refused.
+
+### O0.5 — "is this feed trustworthy right now?"
+
+`ingest_statuses` gained `reconnects` and `last_lag_ms`; the dashboard panel
+gained rate, lag and reconnects, and turns the lag red past 30 s.
+
+Getting an honest lag figure was the real work. `occurred_at` had always been
+our receipt time, so a packet's own age was unknowable and `received - occurred`
+would have been a constant zero. The recorder now believes a payload's clock
+when it carries one — the journal writes `at` (ISO 8601), a signed envelope
+carries `ts` (unix seconds) — and only when it is plausible (≤60 s in the
+future, ≤7 days old), because a publisher may claim any time it likes and a
+wrong `occurred_at` silently reorders the timeline. `nil` lag means "the
+publisher sent no clock": `0` would be a lie, and the panel says
+*unknown (publisher sent no clock)*.
+
+That change surfaced its own bug immediately: `initialize` defaulted
+`@occurred_at = occurred_at || received_at`, so `record` could never tell "the
+caller supplied a time" from "nobody did" and the clock extraction never ran.
+Three of my own new tests failed on it, which is exactly why they exist.
+
+`packets_per_minute` is derived from the `packets` table rather than from a
+counter: a reconnect resets `started_at`, and a process restart resets
+everything, so a counter-based rate would drift away from the truth.
+
+### O0.7 — the durable journal becomes history
+
+`JournalTail` follows `<repo>/log/journal.jsonl` — the same payloads the harness
+publishes on `runes/_log/prompts`, but on disk, which is the only thing that
+survives a broker restart or an observer that was simply down. It tracks inode
+and byte offset, holds a partial line until its newline arrives, re-reads from
+zero on rotation (the archive is a timestamped sibling) or truncation, bounds a
+line that never ends at 64 KiB, and runs on the ingest's timer threads so it
+does not depend on the broker.
+
+The part that makes two sources safe is one query: before storing a line it
+checks whether that exact `(topic, payload)` row already exists. An entry the
+observer heard on the bus is not stored twice when the file is read, a restart
+that re-reads the whole file cannot duplicate rows, and a truncated file that is
+re-read cannot either. Off in tests (`RUNES_OBSERVER_JOURNAL=off` in
+`test_helper.rb`) so the suite never tails the developer's real journal — that
+default path *does* exist in this checkout, and a background tail inserting rows
+would have made counts and ordering depend on the last local run.
+
+Nine tests cover the tail: read-once-in-order, cross-source dedupe, a partial
+line, rotation, truncation, a recorder failure (counted, and the next line still
+lands), an unparseable line (stored, not dropped — the MQTT path's behaviour),
+the unbounded partial line, and the environment switch.
+
+Suites: parent **567 / 2592 / 0**, observatory **152 / 736 / 0**.

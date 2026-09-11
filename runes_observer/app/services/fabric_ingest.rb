@@ -19,6 +19,10 @@
 #     rebuilds the whole transport with exponential backoff, and the process
 #     cannot end up "connected" forever against a broker that is gone.
 class FabricIngest
+  # Raised when the ingest is about to join a shared subscription group and so
+  # silently become a consumer of work it cannot do (see #assert_not_a_worker!).
+  class WorkGroupRefusal < StandardError; end
+
   # Raised when the harness transport is not on the load path at all: a
   # configuration mistake, and one worth naming precisely (see
   # config/initializers/runes_transport.rb).
@@ -38,11 +42,16 @@ class FabricIngest
   DISCONNECT_GRACE_S = 60
   POLL_INTERVAL_S = 0.25
 
+  # The prefix that turns a subscription into a *work group* member. The
+  # observer must never use it: see #assert_not_a_worker!.
+  WORK_GROUP_PREFIX = "$share/".freeze
+
   attr_reader :host, :port, :topic, :transport_kind
   # The live transport, once connected. Read-only: it exists so an operator
   # (or a test) can ask what the ingest is actually attached to when the
   # database is too busy to record the answer in IngestStatus.
   attr_reader :transport
+  attr_reader :journal_tail
 
   def initialize(host: IngestStatus.default_host,
                  port: IngestStatus.default_port,
@@ -50,6 +59,7 @@ class FabricIngest
                  logger: Rails.logger,
                  transport_kind: nil,
                  transport_factory: nil,
+                 journal_tail: :auto,
                  poll_interval: POLL_INTERVAL_S,
                  backoff: INITIAL_BACKOFF,
                  disconnect_grace: DISCONNECT_GRACE_S)
@@ -66,13 +76,19 @@ class FabricIngest
     # Test seam: a factory lets a test drive the loop with a scripted
     # transport (or a real inproc hub) without a broker.
     @transport_factory = transport_factory || method(:default_transport)
+    # :auto reads the environment (see JournalTail.build); nil/false disables.
+    @journal_tail = journal_tail == :auto ? JournalTail.build(logger: @logger) : journal_tail
+    @attempts = 0
   end
 
   def run
     start_pruner
+    start_journal_tail
     delay = @backoff
     until @stopping
       begin
+        @attempts += 1
+        IngestStatus.bump_reconnects! if @attempts > 1
         connect_and_consume
         delay = @backoff
       rescue Interrupt
@@ -94,6 +110,7 @@ class FabricIngest
     end
   ensure
     stop_pruner
+    stop_journal_tail
     disconnect
     IngestStatus.mark_disconnected!("stopped")
   end
@@ -102,6 +119,7 @@ class FabricIngest
   def stop
     @stopping = true
     stop_pruner
+    stop_journal_tail
     disconnect
   end
 
@@ -129,6 +147,17 @@ class FabricIngest
   def stop_pruner
     @pruner&.kill
     @pruner = nil
+  end
+
+  # Tailing the harness journal is a timer thread for the same reason pruning
+  # is: it must not depend on the broker being reachable (doc5.md O0.7). The
+  # history it recovers is exactly the history a broker outage loses.
+  def start_journal_tail
+    @journal_tail&.start
+  end
+
+  def stop_journal_tail
+    @journal_tail&.stop
   end
 
   # One pruning pass; never raises into the caller (a locked database must not
@@ -170,6 +199,7 @@ class FabricIngest
     warn_if_process_local(transport)
     transport.subscribe(@topic) { |message| consume(message) }
     transport.subscribe(A2A_TOPIC) { |message| consume(message) }
+    assert_not_a_worker!(transport)
     PacketRecorder.reset_heartbeat!
     PacketRecorder.begin_session!
     IngestStatus.mark_connected!(host: @host, port: @port, transport: transport.name)
@@ -177,6 +207,28 @@ class FabricIngest
 
     wait_until_stopped(transport)
     raise Runes::Transport::Error, "#{transport.describe} disconnected" unless @stopping
+  end
+
+  # The observer is a *witness*, never a worker (doc5.md O0.6).
+  #
+  # Since O0.1 the observer subscribes through the same API as the agents, and
+  # `subscribe(filter, group:)` is one copy-paste away from something much
+  # worse than a bug: on MQTT 5 the broker delivers each message in a shared
+  # group to exactly ONE member, so an observer that joined
+  # `$share/runes-prompts/runes/prompts` would silently *eat prompts* that no
+  # agent would ever run — and it has no worker pool to run them. A comment
+  # cannot fail; this can.
+  def assert_not_a_worker!(transport)
+    grouped = transport.subscriptions.select do |subscription|
+      subscription.group || subscription.filter.to_s.start_with?(WORK_GROUP_PREFIX)
+    end
+    return transport if grouped.empty?
+
+    filters = grouped.map { |s| s.group ? "#{s.filter} (group #{s.group})" : s.filter }
+    raise WorkGroupRefusal,
+          "the observatory subscribed as a work-group member (#{filters.join(', ')}): " \
+          "on MQTT 5 that would steal messages from the agents that must run them. " \
+          "Subscribe to the plain topic, never with group: / $share/."
   end
 
   # inproc is a hub inside this process: perfectly good for an embedded
@@ -198,6 +250,9 @@ class FabricIngest
     when :disconnected
       IngestStatus.mark_disconnected!("transport disconnected (#{details[:reason] || "unknown"})")
     when :reconnected, :connected
+      # A reconnect the adapter handled itself still counts as one: the number
+      # exists to show how choppy the link is, not who fixed it.
+      IngestStatus.bump_reconnects! if event == :reconnected
       IngestStatus.mark_connected!(host: @host, port: @port, transport: @transport&.name)
       # The adapter replays every retained message after re-subscribing;
       # without reopening the dedupe window a long outage would store each

@@ -91,6 +91,16 @@ all classified and stored.
   The ingest drops a single message it cannot store — counted in
   `ingest_statuses.packets_dropped` — instead of tearing down the
   connection.
+- `JournalTail` is the **second source**. The harness publishes every
+  prompt-lifecycle end on `runes/_log/prompts` *and* appends the same payload
+  to a durable JSONL journal (`<repo>/log/journal.jsonl`, rotated at 10 MB), so
+  the file is the only history that survives a broker restart or a stopped
+  observer. The tail follows inode + offset, emits only complete lines, and
+  re-reads from zero on rotation or truncation — and before storing a line it
+  asks whether that exact `(topic, payload)` row already exists, so an entry
+  heard on the bus is never stored twice. Off with
+  `RUNES_OBSERVER_JOURNAL=off`; point it elsewhere (including at a path that
+  does not exist yet) by naming a file.
 - The web process **polls** `GET /feed?after_id=…` (JSON) from a small
   Stimulus controller and prepends rows rendered by the same partial as the
   first page. Every list view serves only a bounded payload summary
@@ -103,8 +113,8 @@ all classified and stored.
 | Table | Purpose |
 |---|---|
 | `agents` | one row per observed agent: card metadata, `state` (online/offline/unknown), first/last seen, packet count |
-| `packets` | every observed PUBLISH: topic, payload (≤256 KiB), classified `kind`, `agent_id`, `request_id`, `event`, `tool`, timestamps |
-| `ingest_statuses` | singleton row: connected?, broker, last message, packets this run, packets dropped, last error |
+| `packets` | every observed PUBLISH: topic, payload (≤256 KiB), classified `kind`, `agent_id`, `request_id`, `event`, `tool`, timestamps, `run_id`, and the transport's view (`qos`, `retain`, `correlation_id`, `response_topic`, `user_properties`) |
+| `ingest_statuses` | singleton row: connected?, broker, transport, last message, packets this run, packets dropped, reconnects, publisher lag, last error |
 
 ## A2A topics
 
@@ -135,6 +145,10 @@ bin/rails runes:reset                # delete every observed packet and agent
 |---|---|---|
 | `RUNES_MQTT_HOST` | `127.0.0.1` | Broker host |
 | `RUNES_MQTT_PORT` | `1883` | Broker port |
+| `RUNES_TRANSPORT` | `auto` | Ingest adapter: `auto` (mqtt5 → mqtt311 → inproc), `mqtt5`, `mqtt311`, `inproc` |
+| `RUNES_HARNESS_LIB` | `../lib` | Where `Runes::Transport` is loaded from |
+| `RUNES_OBSERVER_JOURNAL` | sibling harness `log/journal.jsonl`, if it exists | Journal file to tail; `off` disables, any other value is a path (waited for) |
+| `RUNES_OBSERVER_JOURNAL_INTERVAL_S` | `2` | How often the journal tail polls |
 | `RUNES_OBSERVER_RETENTION_DAYS` | `7` | Prune packets older than this |
 | `RUNES_OBSERVER_MAX_PACKETS` | `200000` | Hard cap on stored packets; `0` or less (or non-numeric) means no cap |
 | `RAILS_MAX_THREADS` | `5` | Puma/DB pool size |
@@ -142,16 +156,20 @@ bin/rails runes:reset                # delete every observed packet and agent
 ## Tests
 
 ```bash
-bin/rails test     # 89 runs, 454 assertions
+bin/rails test     # 152 runs, 736 assertions
 ```
 
 Covers the topic classifier (every Runes topic shape, including the A2A
 discovery/task topics and their fallback to `other`, and the deleted
 claim/lease grammar falling through to `other`), the recorder's agent
 bookkeeping, UTF-8 repair of non-UTF-8 payloads, journal backfill
-attribution, retained-replay dedupe and retention, the per-message ingest
-isolation and its survival of a locked database, the singleton ingest
-status (including the dead-ingest state), the demo seeder, all four
+attribution, publisher-clock extraction and lag, retained-replay dedupe and
+retention, the transport-backed ingest driven over a real inproc hub
+(including the refusal to ever subscribe as a work-group member), the
+journal tail (read-once, partial lines, rotation, truncation, dedupe against
+the bus), the per-message ingest isolation and its survival of a locked
+database, the singleton ingest status (including the dead-ingest state and
+the health counters), the demo seeder, all four
 controllers (HTML, the bounded JSON feed and the full-payload page) and an
 integration walk from recorded packet → dashboard → agent → interaction →
 filtered log.

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_10_090003) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_10_090004) do
   create_table "agents", force: :cascade do |t|
     t.string "agent_id", null: false
     t.text "card"
@@ -36,10 +36,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_090003) do
     t.datetime "created_at", null: false
     t.string "host"
     t.string "last_error"
+    t.integer "last_lag_ms"
     t.datetime "last_message_at"
     t.integer "packets_dropped", default: 0, null: false
     t.integer "packets_total", default: 0, null: false
     t.integer "port"
+    t.integer "reconnects", default: 0, null: false
     t.datetime "started_at"
     t.string "transport"
     t.datetime "updated_at", null: false
