@@ -103,7 +103,7 @@ execute(:prepare) do
       idea: (kwargs[:idea] || ENV["PROSPECT_IDEA"] ||
              "Trouver 10 PME de 10 à 100 employés intéressées par un CRM qui " \
              "transforme une idée en mission exécutée").to_s,
-      owner: (kwargs[:owner] || ENV["PROSPECT_OWNER"] || "Richard").to_s,
+      owner: (kwargs[:owner] || ENV["PROSPECT_OWNER"] || "the team").to_s,
       today: Date.today.to_s,
       slug: nil,
       epic_code: nil,

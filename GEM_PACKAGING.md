@@ -51,7 +51,7 @@ gem push runes-0.3.0.gem
 ```
 
 Before the first push, update `spec.homepage` in `runes.gemspec` — it is a
-placeholder (`https://github.com/runes-harness/runes`) because this checkout is
+placeholder (`https://github.com/unplugandplay/runes`) because this checkout is
 git-less. `source_code_uri` and `changelog_uri` are derived from it, so they
 must point at the real repository first. `rubygems_mfa_required` is set.
 

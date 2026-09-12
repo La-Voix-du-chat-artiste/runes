@@ -137,4 +137,20 @@ class TelemetryTest < Minitest::Test
     assert_operator output.bytesize, :<, 20_000
     assert_includes output, "bytes dropped"
   end
+  # The run telemetry sink has the same lifetime rule as the guard's.
+  def test_the_run_sink_closes_the_transport_and_is_forgotten
+    transport = Object.new
+    closed = []
+    transport.define_singleton_method(:publish) { |*_a, **_k| true }
+    transport.define_singleton_method(:disconnect) { closed << :bye }
+
+    sink = Runes::Telemetry::TransportSink.new(transport: transport)
+    sink.call("kind" => "run_started", "run_id" => "r1")
+    Runes::Telemetry.sink = sink
+    Runes::Telemetry.close!
+
+    assert_nil Runes::Telemetry.sink
+    assert_equal [:bye], closed
+    assert sink.closed?
+  end
 end

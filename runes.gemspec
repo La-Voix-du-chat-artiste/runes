@@ -25,7 +25,7 @@ Gem::Specification.new do |spec|
     'over its built-in OpenAI-compatible LLM router.'
   # Placeholder until the project has a public home; update before `gem push`
   # so source_code_uri/changelog_uri resolve. See GEM_PACKAGING.md.
-  spec.homepage    = 'https://github.com/runes-harness/runes'
+  spec.homepage    = 'https://github.com/unplugandplay/runes'
   spec.license     = 'MIT'
   spec.required_ruby_version = '>= 3.3'
 

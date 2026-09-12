@@ -186,6 +186,14 @@ same file is readable by a human, an agent and that Rails app. This is the
 "we did not build you a SaaS, we built the engine you can tweak in one line"
 argument, in code — with its boundaries written down.
 
+![A run of examples/prospect_pipeline.rb in the Runes observatory: 40 steps, 6.70 s wall clock, 0 failed, with the per-step timeline and the run's parameters](docs/images/run-timeline.png)
+
+*That is the run above, as the Rails app saw it: 40 steps, 6.70 s wall clock,
+0 failed, 3.65 s in its slowest step (the `map` over todos), every step's
+duration on a shared track, and the parameters it was given. Recorded by
+`bin/runes-ingest`, drawn from the workflow's own telemetry — and reproducible
+with `scripts/demo_pipeline_run.rb` + `scripts/screenshot_observatory.sh`.*
+
 Then read [`docs/DSL_POWER.md`](docs/DSL_POWER.md)
 ([PDF](docs/DSL_POWER.pdf)): the whole DSL on one page, the pipeline scope by
 scope, the three sharp edges worth knowing before you find them, and why the
@@ -510,7 +518,7 @@ from the process environment, and exercises the full LLM call path through
 an injected **dup transport** (a real `Net::HTTPResponse` object with a
 canned body) — no API key and no network call. Broker tests start their own
 in-process broker on a free port, so **nothing dials your broker** and the
-suite passes on a machine with none running (round-5 audit, `doc5.md` D5-1). Run it with a few fixed seeds
+suite passes on a machine with none running (round-5 audit, [`doc5.md`](docs/How%20this%20started/doc5.md) D5-1). Run it with a few fixed seeds
 (`TESTOPTS="--seed=N"`) to check for order dependence.
 
 Covers: guard (baseline, fragments, revocation, wildcard rules), transport
@@ -629,7 +637,7 @@ demo/                smoke + live end-to-end demos
 runes_observer/      Rails 8.1 MQTT observatory (fleet + packet UI)
 runes.gemspec        gem packaging (`wasmtime` and `ruby.wasm` optional)
 .gitignore           keeps config/.env, runes.db, logs and ruby.wasm out of git
-doc.md / doc4.md     round-3 / round-4 review findings
+docs/How this started/  provenance: rounds 3-5 audits, the recovery note, the origin doc
 STATE.md             full system snapshot (start here next session)
 DEVELOPMENT_LOG.md   architecture decisions + phase-by-phase history
 GEM_PACKAGING.md     build/install/publish + what ships in the gem

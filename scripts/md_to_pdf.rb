@@ -152,8 +152,16 @@ end
 
 # --- renderer ---------------------------------------------------------------
 
+# Project constants for the cover, in one place: the repository this renders
+# for, and the one-line description under the title.
+REPO_URL = ENV.fetch("RUNES_REPO_URL", "github.com/unplugandplay/runes")
+REPO_BLURB = ENV.fetch("RUNES_REPO_BLURB",
+                       "A Ruby agent harness with a fabric, an identity, a memory and a face")
+
 def render(markdown, out_path)
   blocks = parse(markdown)
+  # The H1 is the cover title *and* the page footer, so a second document in
+  # this repo is not labelled with the first one's name.
   title = blocks.find { |b| b.type == :heading && b.level == 1 }&.text || "Runes"
 
   Prawn::Document.generate(out_path, page_size: "A4", margin: [44, 48, 52, 48]) do |pdf|
@@ -173,15 +181,13 @@ def render(markdown, out_path)
 
     pdf.move_down 22
     pdf.fill_color INK
-    pdf.text(scrub(title.sub(/\AWhy Runes.*\z/, "Why Runes")), size: 30, style: :bold, inline_format: false)
+    pdf.text(scrub(title), size: 30, style: :bold, inline_format: false)
     pdf.move_down 2
     pdf.fill_color PRIMARY
-    pdf.text("A Ruby agent harness with a fabric, an identity, a memory and a face",
-             size: 12.5, style: :bold)
+    pdf.text(REPO_BLURB, size: 12.5, style: :bold)
     pdf.move_down 6
     pdf.fill_color MUTED
-    pdf.text("Runes 0.3.0  |  #{Time.now.strftime('%d %B %Y')}  |  " \
-             "github.com/runes-harness/runes", size: 9)
+    pdf.text("Runes 0.3.0  |  #{Time.now.strftime('%d %B %Y')}  |  #{REPO_URL}", size: 9)
     pdf.move_down 14
 
     # The document's H1 is the cover title, so it is not repeated in the flow.
@@ -284,7 +290,10 @@ def render(markdown, out_path)
     end
 
     # --- footer ----------------------------------------------------------
-    pdf.number_pages("<color rgb='#{MUTED}'>Why Runes - page <page> of <total></color>",
+    # The cover keeps the full H1 (title and subtitle); the footer takes the part
+    # before the dash, because "page 1 of 7" should not inherit an essay.
+    footer_title = title.to_s.split(/[,—–]/).first.to_s.split(/\s+-\s+/).first.to_s.strip
+    pdf.number_pages("<color rgb='#{MUTED}'>#{scrub(footer_title)} - page <page> of <total></color>",
                      at: [0, -32], align: :center, size: 8.5, inline_format: true)
   end
   check_blank_pages(out_path)

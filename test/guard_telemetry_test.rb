@@ -121,6 +121,45 @@ class GuardTelemetryTest < Minitest::Test
     assert_kind_of Proc, Runes::GuardTelemetry.sink
   end
 
+  # A sink that is never closed loses the last event of a process: a
+  # `run_finished` that never arrives leaves a run "running" for ever in the
+  # observatory. This is the regression test for that (found by screenshotting a
+  # real run, where the final events were missing).
+  def test_a_transport_sink_closes_its_transport_once_and_never_raises
+    transport = RecordingTransport.new
+    transport.define_singleton_method(:disconnects) { @disconnects ||= 0 }
+    transport.define_singleton_method(:disconnect) { @disconnects = disconnects + 1 }
+
+    sink = Runes::GuardTelemetry::TransportSink.new(transport: transport, agent_id: "a")
+    refute sink.closed?
+    sink.close
+
+    assert sink.closed?
+    assert_equal 1, transport.disconnects
+
+    broken = Runes::GuardTelemetry::TransportSink.new(transport: Object.new)
+    refute broken.close, "closing must swallow a transport that cannot disconnect"
+  end
+
+  def test_close_bang_forgets_the_sink_and_closes_it
+    transport = RecordingTransport.new
+    closed = []
+    transport.define_singleton_method(:disconnect) { closed << :bye }
+    Runes::GuardTelemetry.sink = Runes::GuardTelemetry::TransportSink.new(transport: transport)
+
+    Runes::GuardTelemetry.close!
+
+    assert_nil Runes::GuardTelemetry.sink
+    assert_equal [:bye], closed
+  end
+
+  def test_attach_does_not_register_a_close_for_a_sink_it_did_not_create
+    capture
+
+    assert_kind_of Proc, Runes::GuardTelemetry.attach(transport: RecordingTransport.new, agent_id: "a")
+    assert_kind_of Proc, Runes::GuardTelemetry.sink, "the caller's sink is untouched"
+  end
+
   def test_build_sink_understands_the_off_switch
     assert_nil Runes::GuardTelemetry.build_sink("off")
     assert_nil Runes::GuardTelemetry.build_sink("")

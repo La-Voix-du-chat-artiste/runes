@@ -151,6 +151,14 @@ module RunesWorkflowCli
     end
 
     Runes::Telemetry.sink = sink
+    # The CLI owns the sink, so the CLI closes it: a QoS 1 publish is
+    # fire-and-forget, and without this the run's last events die in the socket
+    # buffer when the process exits (the observatory then shows a run that never
+    # finished).
+    at_exit do
+      Runes::Telemetry.close!
+      Runes::GuardTelemetry.close! if defined?(Runes::GuardTelemetry)
+    end
     # A workflow refused by RUNES_WORKFLOW_POLICY is exactly the kind of
     # refusal the observatory should see (doc5.md O2.3). It rides the same
     # transport the run's events do: one connection, one spec.

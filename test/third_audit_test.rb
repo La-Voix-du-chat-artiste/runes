@@ -4,7 +4,7 @@ require 'json'
 require 'tmpdir'
 require_relative 'test_helper'
 
-# Regression tests for the third audit round (doc.md):
+# Regression tests for the third audit round (docs/How this started/doc.md):
 #   Dispatcher: D1-D11, S-D1, S-D2, S-D3, S-R1, S-W3
 #   Broker:     M1-M11, S-M1, S-M2
 #   Guard:      S-D4, S-W4, S-R2, W3

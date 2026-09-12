@@ -52,8 +52,16 @@ module Runes
 
       # Attach a transport sink unless someone already chose one. Returns the
       # sink in use, so a caller can report what it attached.
+      #
+      # Whoever attaches a sink owns its lifetime, so this registers the close:
+      # a sink that is never closed loses its last events. A sink that was
+      # already installed is left alone — it is not ours to close.
       def attach(transport:, agent_id: nil)
-        self.sink ||= build_sink('mqtt', transport: transport, agent_id: agent_id)
+        return sink if sink
+
+        self.sink = build_sink('mqtt', transport: transport, agent_id: agent_id)
+        at_exit { close! } if sink
+        sink
       rescue StandardError => e
         warn "[GuardTelemetry] could not attach: #{e.class}: #{e.message}"
         nil
@@ -76,6 +84,13 @@ module Runes
 
         emit(decision)
         decision
+      end
+
+      # Close whatever sink is installed and forget it (call before exit).
+      def close!
+        current = sink
+        self.sink = nil
+        current.respond_to?(:close) ? current.close : nil
       end
 
       # Test/reset seam: drop the rate-limit window (the sink is the caller's).
@@ -144,6 +159,17 @@ module Runes
         payload = agent_id ? decision.merge('agent' => decision['agent'] || agent_id) : decision
         @transport.publish(TOPIC, JSON.generate(payload))
       end
+
+      # Same lifetime rule as the run telemetry sink: close before exit, or the
+      # last refusal of a process can be lost.
+      def close
+        @transport.disconnect
+        @closed = true
+      rescue StandardError
+        false
+      end
+
+      def closed? = @closed == true
     end
   end
 end

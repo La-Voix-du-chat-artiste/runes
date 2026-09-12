@@ -1,5 +1,11 @@
 # Runes Development Log & Plan
 
+> The audit documents this log cites by name (`doc.md`, `doc4.md`, `doc5.md`,
+> `RECOVERY.md`, `Runes-MQTT-Overview.pdf`) live in
+> [`docs/How this started/`](docs/How%20this%20started/README.md), with a note on
+> what each round found. They keep their original filenames on purpose.
+
+
 ## Objective
 Recursive Ruby harness: an LLM-planned agent loop rides on top of an
 MQTT messaging fabric, with trusted host tools and (opt-in) WASM

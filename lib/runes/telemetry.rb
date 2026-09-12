@@ -51,6 +51,16 @@ module Runes
       def now
         Time.now.utc
       end
+
+      # Close the current sink (if it can be closed) and forget it. Call this
+      # before a process exits: a sink that is never closed can lose its last
+      # events, and a `run_finished` that never arrives is a run that never ends
+      # as far as the observatory is concerned.
+      def close!
+        current = sink
+        self.sink = nil
+        current.respond_to?(:close) ? current.close : nil
+      end
     end
 
     # One workflow run's identity and its sink. Every rune in the run shares
@@ -166,6 +176,26 @@ module Runes
       def topic(run_id, kind)
         "#{@prefix}/#{run_id}/#{kind}"
       end
+
+      # Flush and close the transport.
+      #
+      # `call` publishes at QoS 1 *without* waiting for the PUBACK (telemetry
+      # must not slow a run down), so the last events of a run sit in the socket
+      # when the process exits — a `run_finished` that never arrives leaves the
+      # observatory showing a run that is still "running" for ever. Whoever owns
+      # the sink's lifetime must close it; `Runes::Telemetry.close!` is the
+      # convenience for that.
+      def close
+        @transport.disconnect
+        @closed = true
+      rescue StandardError
+        # Closing telemetry must never raise into a caller that is finishing.
+        false
+      ensure
+        @published ||= 0
+      end
+
+      def closed? = @closed == true
     end
   end
 end

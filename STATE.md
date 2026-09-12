@@ -83,7 +83,7 @@ Where the current goal stands (it stays **active**):
   on). Envelope replay is closed but **A2A peer cards are still
   unauthenticated**, token scanning is not a sandbox, the observatory has no
   auth, and one-shot tool feedback remains. All are in the "What we're honest
-  about" list in `docs/WHY_RUNES.md` and in `doc5.md`.
+  about" list in `docs/WHY_RUNES.md` and in [`docs/How this started/doc5.md`](docs/How%20this%20started/doc5.md).
 - **Regenerate the pitch PDF:** `ruby scripts/md_to_pdf.rb docs/WHY_RUNES.md
   docs/WHY_RUNES.pdf` (plain `ruby`, not `bundle exec`: prawn is a system gem).
   The numbers it cites come from `ruby scripts/receipts.rb` (add `--suites` for

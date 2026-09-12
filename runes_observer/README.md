@@ -91,6 +91,12 @@ all classified and stored.
   The ingest drops a single message it cannot store — counted in
   `ingest_statuses.packets_dropped` — instead of tearing down the
   connection.
+![The fleet board: Planned / Working / Done, with cards for each workflow step and its duration](../docs/images/board.png)
+
+*The board after a `prospect_pipeline.rb` run: 40 cards in Done, each naming its
+rune and duration. (Planned and Working are empty because the run finished —
+the engine names a step when it starts, not before.)*
+
 - `BoardController` (`/board`) is the **fleet board**: three columns —
   Planned / Working / Done — folded from the packet stream by
   `Board::Kanban`. No new ingestion and no guessing: `plan_ready` announces N
