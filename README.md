@@ -144,6 +144,8 @@ and why it matters — is [`docs/WHY_RUNES.md`](docs/WHY_RUNES.md).
 ## 🚀 Quick Start
 
 ```bash
+git clone https://github.com/La-Voix-du-chat-artiste/runes
+cd runes
 bundle install
 cp config/.env.example config/.env
 # edit config/.env — set DEEPSEEK (preferred: V4.1 Flash, model

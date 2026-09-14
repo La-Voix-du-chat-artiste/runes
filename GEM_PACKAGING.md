@@ -50,10 +50,11 @@ gem build runes.gemspec
 gem push runes-0.3.0.gem
 ```
 
-Before the first push, update `spec.homepage` in `runes.gemspec` — it is a
-placeholder (`https://github.com/unplugandplay/runes`) because this checkout is
-git-less. `source_code_uri` and `changelog_uri` are derived from it, so they
-must point at the real repository first. `rubygems_mfa_required` is set.
+`spec.homepage` in `runes.gemspec` points at the public repository
+(`https://github.com/La-Voix-du-chat-artiste/runes`). `source_code_uri` and
+`changelog_uri` are derived from it, so if the project ever moves, update it
+there first — `changelog_uri` hard-codes the `master` branch.
+`rubygems_mfa_required` is set.
 
 ## What ships (and what must not)
 

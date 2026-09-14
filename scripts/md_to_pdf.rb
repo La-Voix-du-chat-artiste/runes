@@ -154,7 +154,7 @@ end
 
 # Project constants for the cover, in one place: the repository this renders
 # for, and the one-line description under the title.
-REPO_URL = ENV.fetch("RUNES_REPO_URL", "github.com/unplugandplay/runes")
+REPO_URL = ENV.fetch("RUNES_REPO_URL", "github.com/La-Voix-du-chat-artiste/runes")
 REPO_BLURB = ENV.fetch("RUNES_REPO_BLURB",
                        "A Ruby agent harness with a fabric, an identity, a memory and a face")
 

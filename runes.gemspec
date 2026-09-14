@@ -23,15 +23,15 @@ Gem::Specification.new do |spec|
     '(MQTT 3.1.1/5 or in-process), with A2A-over-MQTT discovery, capability-based tool ' \
     'access control, an optional WASM sandbox for untrusted tools, and a provider seam ' \
     'over its built-in OpenAI-compatible LLM router.'
-  # Placeholder until the project has a public home; update before `gem push`
-  # so source_code_uri/changelog_uri resolve. See GEM_PACKAGING.md.
-  spec.homepage    = 'https://github.com/unplugandplay/runes'
+  # The project's public home. `source_code_uri`/`changelog_uri` derive from it,
+  # so it must match the remote you actually publish to. See GEM_PACKAGING.md.
+  spec.homepage    = 'https://github.com/La-Voix-du-chat-artiste/runes'
   spec.license     = 'MIT'
   spec.required_ruby_version = '>= 3.3'
 
   spec.metadata = {
     'source_code_uri'       => spec.homepage,
-    'changelog_uri'         => "#{spec.homepage}/blob/main/DEVELOPMENT_LOG.md",
+    'changelog_uri'         => "#{spec.homepage}/blob/master/DEVELOPMENT_LOG.md",
     'rubygems_mfa_required' => 'true'
   }
 
