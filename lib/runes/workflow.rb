@@ -22,6 +22,7 @@
 #   * `cmd` does NOT inherit Roast's shell behaviour for a command String
 #     (W5-1): Strings are shell-split and run as argv; `shell: true` opts in.
 #   * `Workflow.from_file` deletes its tmpdir before returning (W5-13).
+require 'date'
 require_relative "telemetry"
 # Workflow files reference these by name, and the engine is where a workflow's
 # constants have to be available: the mission format, the content-addressed
@@ -29,6 +30,7 @@ require_relative "telemetry"
 require_relative "kanban"
 require_relative "doc_store"
 require_relative "index"
+require_relative "runtime"
 require_relative "rune"
 require_relative "workflow_policy"
 require_relative "command_runner"
@@ -49,6 +51,13 @@ require_relative "plugins/agent"
 require_relative "plugins/call"
 require_relative "plugins/map"
 require_relative "plugins/repeat"
+
+# CRuby-only engine extensions (docs/spinel/spec-tier-c.md §C3): the dynamic
+# conveniences a compiled kernel replaces with static bindings.
+require_relative "workflow/config_field"
+require_relative "plugins/ruby_delegation"
+require_relative "workflow/templates"
+require_relative "telemetry_sink"
 
 module Runes
   class Workflow

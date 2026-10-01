@@ -11,9 +11,9 @@ module Runes
     class Call < Runes::SystemRune
       plugin :call, description: "Invoke a named execute(:scope) block"
 
-      class Config < Runes::Cog::Config; end
+      class Config < Runes::Rune::Config; end
 
-      class Input < Runes::Cog::Input
+      class Input < Runes::Rune::Input
         attr_accessor :value, :index
 
         def initialize
@@ -32,7 +32,7 @@ module Runes
       end
 
       # Opaque handle on the called scope; `from` knows how to read it.
-      class Output < Runes::Cog::Output
+      class Output < Runes::Rune::Output
         attr_reader :execution_manager
 
         def initialize(execution_manager)

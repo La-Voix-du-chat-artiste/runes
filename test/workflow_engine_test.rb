@@ -713,7 +713,7 @@ class WorkflowEngineTest < Minitest::Test
             kwarg?(:missing),
             kwargs,
             tmpdir,
-            tmpdir.directory?,
+            File.directory?(tmpdir.to_s),
             template("greeting", name: "World")
           ]
         end
@@ -733,7 +733,7 @@ class WorkflowEngineTest < Minitest::Test
     assert_equal true, has_name
     assert_equal false, has_missing
     assert_equal({ name: "World" }, kwargs)
-    assert_kind_of Pathname, tmp
+    assert_kind_of String, tmp
     assert_equal true, is_dir
     assert_equal "Hello World", rendered
   end
@@ -974,7 +974,7 @@ class WorkflowEngineTest < Minitest::Test
     assert_nil config.valid_working_directory
 
     config.working_directory(Dir.pwd)
-    assert_equal Pathname.new(Dir.pwd), config.valid_working_directory
+    assert_equal File.expand_path(Dir.pwd), config.valid_working_directory
   end
 
   def test_config_base_options_and_deep_dup
@@ -1015,7 +1015,7 @@ class WorkflowEngineTest < Minitest::Test
     assert_equal({ a: 1, b: [2, 3] }, fenced.json)
     assert_equal({ a: 1, b: [2, 3] }, fenced.json!)
     assert_nil output_class.new("no json here").json
-    assert_raises(JSON::ParserError) { output_class.new("no json here").json! }
+    assert_raises(Runes::Json::ParseError) { output_class.new("no json here").json! }
 
     numbered = output_class.new("total: 1,234.6 usd")
     assert_in_delta 1234.6, numbered.float

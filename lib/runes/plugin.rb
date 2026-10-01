@@ -1,4 +1,4 @@
-require "set"
+# frozen_string_literal: true
 
 module Runes
   # A plugin is a named capability the harness can load — the same idea as a
@@ -8,7 +8,8 @@ module Runes
   # workflow DSL is assembled from plugins (Chat, Agent, Ruby, Cmd, Map,
   # Repeat, Call) rather than hard-coded verbs. Registering another plugin
   # with `kind: :rune` makes it available inside workflows with no change to
-  # the DSL.
+  # the DSL (on CRuby; a compiled kernel binds the builtin verbs statically —
+  # see Runes::Runtime).
   #
   #   class Runes::Plugins::Greet < Runes::Plugin
   #     plugin :greet, description: "Say hello"
@@ -22,9 +23,24 @@ module Runes
     class DefinitionError < Error; end
     class UnknownPlugin < Error; end
 
-    Definition = Struct.new(:name, :kind, :description, :klass, keyword_init: true) do
-      def key = [kind, name]
-      def to_s = "#{kind}:#{name}"
+    # Plain class (no keyword_init Struct) to stay inside the kernel subset.
+    class Definition
+      attr_reader :name, :kind, :description, :klass
+
+      def initialize(name:, kind:, description:, klass:)
+        @name = name
+        @kind = kind
+        @description = description
+        @klass = klass
+      end
+
+      def key
+        [kind, name]
+      end
+
+      def to_s
+        "#{kind}:#{name}"
+      end
     end
 
     class << self
@@ -70,7 +86,7 @@ module Runes
       end
 
       def names(kind: :rune)
-        all(kind: kind).map(&:name).sort
+        all(kind: kind).map { |v| v.name }.sort
       end
 
       def definitions
@@ -159,9 +175,17 @@ module Runes
 
     attr_reader :context, :options
 
-    def plugin_name = self.class.plugin_name
-    def plugin_kind = self.class.plugin_kind
-    def describe = "#{plugin_kind}:#{plugin_name}"
+    def plugin_name
+      self.class.plugin_name
+    end
+
+    def plugin_kind
+      self.class.plugin_kind
+    end
+
+    def describe
+      "#{plugin_kind}:#{plugin_name}"
+    end
 
     # Plugins override this. `context` is whatever the caller passed in
     # (for the workflow DSL it is the workflow run context).

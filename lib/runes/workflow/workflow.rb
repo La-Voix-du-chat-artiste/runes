@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-require "tmpdir"
-require "pathname"
-
+require_relative "../compat"
+require_relative "../random_facade"
 require_relative "errors"
 require_relative "util"
 require_relative "workflow_params"
@@ -30,7 +29,9 @@ module Runes
       # it and raise `Runes::WorkflowTimeoutError` (W5-10).
       def from_file(workflow_path, params = Runes::WorkflowParams.new, timeout: nil)
         timeout = workflow_timeout if timeout.nil?
-        Dir.mktmpdir("runes-") do |tmpdir|
+        tmpdir = File.join(ENV['TMPDIR'] || '/tmp', "runes-#{Runes::Random.hex(4)}")
+        Runes::Compat.mkdir_p(tmpdir)
+        begin
           workflow = new(
             workflow_path,
             Runes::WorkflowContext.new(
@@ -43,6 +44,9 @@ module Runes
           workflow.prepare!
           workflow.start!
           workflow
+        ensure
+          # A fresh tmpdir per run (W5-13): nothing leaks across runs.
+          Runes::Compat.rm_rf(tmpdir)
         end
       end
 
@@ -71,14 +75,15 @@ module Runes
       params = @workflow_context.respond_to?(:params) ? @workflow_context.params : nil
       return nil if params.nil?
 
-      { 'targets' => Array(params.targets), 'args' => Array(params.args),
-        'kwargs' => (params.kwargs || {}).transform_keys(&:to_s) }
+      kwargs = {}
+      (params.kwargs || {}).each { |key, value| kwargs[key.to_s] = value }
+      { 'targets' => Array(params.targets), 'args' => Array(params.args), 'kwargs' => kwargs }
     rescue StandardError
       nil
     end
 
     def initialize(workflow_path, workflow_context)
-      @workflow_path = Pathname.new(workflow_path)
+      @workflow_path = File.expand_path(workflow_path.to_s)
       @workflow_context = workflow_context
       @workflow_definition = File.read(workflow_path)
       @config_procs = []
@@ -103,15 +108,16 @@ module Runes
     end
 
     # Loads a local `cogs/<name>.rb` (or a gem when `from:` is given) and
-    # registers the class it defines as a `:rune` plugin.
+    # registers the class it defines as a `:rune` plugin. CRuby only: a
+    # compiled kernel has its plugins built in (Runes::Runtime).
     def use(*loadables, from: nil)
       if from
-        require from.to_s
+        Runes::Runtime.require_cog(from.to_s)
       else
-        dir = File.dirname(@workflow_path.realpath.to_s)
+        dir = File.dirname(File.realpath(@workflow_path))
         loadables.each do |loadable|
           begin
-            require File.join(dir, "cogs", loadable.to_s)
+            Runes::Runtime.require_cog(File.join(dir, 'cogs', loadable.to_s))
           rescue LoadError => e
             raise InvalidLoadableReference, "could not load cogs/#{loadable}: #{e.message}"
           end
@@ -119,7 +125,7 @@ module Runes
       end
 
       loadables.each do |loadable|
-        rune_class = resolve_loadable(loadable)
+        rune_class = Runes::Runtime.resolve_rune_class(loadable)
         raise InvalidLoadableReference, "#{loadable} class not found" unless rune_class
 
         unless rune_class.is_a?(Class) && rune_class < Runes::Rune
@@ -195,19 +201,20 @@ module Runes
 
     private
 
+    # The workflow FILE is evaluated as source — which an AOT compiler
+    # cannot do. The actual eval lives behind Runes::Runtime: CRuby
+    # instance_evals it; a compiled kernel raises (a workflow shipped in a
+    # compiled binary is built in at compile time, not loaded from disk).
     def extract_dsl_procs!
-      instance_eval(@workflow_definition, @workflow_path.realpath.to_s, 1)
+      Runes::Runtime.eval_workflow_source(self, @workflow_definition, File.realpath(@workflow_path))
     end
 
-    # Checks `Runes::Plugins::<Camelized>` first (the tidy place for a plugin),
-    # then the top-level `<Camelized>` constant (the Roast `cogs/foo.rb`
-    # convention).
+    # Constant resolution for `use` — lives behind Runes::Runtime because
+    # const_get/const_defined? are exactly the dynamic-constant access a
+    # compiled kernel refuses (CRuby provides the lookup; a compiled kernel
+    # raises since `use` is unavailable there anyway).
     def resolve_loadable(loadable)
-      camelized = Runes::Util.camelize(loadable)
-      ["Runes::Plugins::#{camelized}", camelized].each do |constant|
-        return Object.const_get(constant) if Object.const_defined?(constant)
-      end
-      nil
+      Runes::Runtime.resolve_rune_class(loadable)
     end
   end
 end

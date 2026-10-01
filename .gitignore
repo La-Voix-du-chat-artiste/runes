@@ -16,6 +16,12 @@ log/
 tmp/
 workspace/
 
+# --- Spinel kernel build output (scripts/spinel_build.rb) -----------------
+build/
+
+# --- Local Spinel compiler checkout (docs/spinel/*; build it per README) --
+/spinel/
+
 # --- Large / vendored binaries -------------------------------------------
 ruby.wasm
 *.wasm

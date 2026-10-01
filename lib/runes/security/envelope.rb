@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
-require 'json'
 require_relative 'nonce_cache'
-require 'openssl'
+require_relative 'crypto_backend'
+require_relative '../compat'
+require_relative '../json_facade'
+require_relative '../random_facade'
 
 module Runes
   module Security
@@ -81,7 +83,7 @@ module Runes
         # covers canonical(payload) — i.e. WITHOUT those three fields — so
         # an existing signature on the input is stripped and replaced.
         def sign(payload_hash, identity, fresh: false, ts: Time.now.to_i,
-                 nonce: SecureRandom.hex(16))
+                 nonce: nil)
           unless payload_hash.is_a?(Hash)
             raise EnvelopeError, "sign: expected a Hash payload, got #{payload_hash.class}"
           end
@@ -93,7 +95,8 @@ module Runes
           if fresh
             # Signed, so a relay cannot refresh an old envelope to make it
             # look new: changing ts or nonce invalidates the signature.
-            payload = payload.merge(TS_FIELD => Integer(ts), NONCE_FIELD => nonce.to_s)
+            freshness = nonce.nil? ? Runes::Random.hex(16) : nonce.to_s
+            payload = payload.merge(TS_FIELD => Integer(ts), NONCE_FIELD => freshness)
           end
           signature = identity.sign(canonical(payload))
           payload.merge(
@@ -218,9 +221,11 @@ module Runes
         def strip_signature(hash)
           return {} unless hash.is_a?(Hash)
 
-          hash.each_with_object({}) do |(key, value), out|
+          out = {}
+          hash.each do |key, value|
             out[key] = value unless SIGNATURE_FIELDS.include?(key.to_s)
           end
+          out
         end
 
         # The algorithm label this module signs with.
@@ -265,15 +270,15 @@ module Runes
             seen[key] = true
           end
 
-          inner = pairs.sort_by(&:first).map do |key, value|
+          inner = pairs.sort_by { |v| v.first }.map do |key, value|
             "#{encode_string(key, path)}:#{canonical_value(value, path.empty? ? key : "#{path}.#{key}")}"
           end.join(',')
           "{#{inner}}"
         end
 
         def encode_string(value, path)
-          JSON.generate(value)
-        rescue JSON::GeneratorError, Encoding::UndefinedConversionError, Encoding::InvalidByteSequenceError => e
+          Runes::Json.generate(value)
+        rescue Runes::Json::ParseError, Encoding::UndefinedConversionError, Encoding::InvalidByteSequenceError => e
           raise EnvelopeError, "canonical: non-UTF8 string at #{path.empty? ? '<root>' : path}: #{e.class}"
         end
 
@@ -294,7 +299,7 @@ module Runes
         # Array#pack/String#unpack because `base64` is a bundled gem in
         # Ruby >= 3.4 and may be unavailable under Bundler.
         def encode_signature(signature)
-          [signature].pack('m0')
+          Runes::Compat.base64_encode(signature)
         end
 
         def decode_signature(raw)
@@ -303,19 +308,17 @@ module Runes
             raise VerificationError.new(:malformed, 'malformed signature encoding (expected base64)')
           end
 
-          text.unpack1('m0')
+          Runes::Compat.base64_decode(text)
         rescue ArgumentError, TypeError
           raise VerificationError.new(:malformed, 'malformed signature encoding (expected base64)')
         end
 
         def verify_with(key, signature, bytes)
-          return false unless key.respond_to?(:verify)
-
-          # OpenSSL's Ed25519 verification is constant-time over the key
-          # material and does not short-circuit on the signature prefix.
-          key.verify(nil, signature, bytes)
-        rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError
-          false
+          # The key is the peer's raw 32-byte Ed25519 public key (see
+          # TrustStore#key_for). Verification itself goes through the
+          # CryptoBackend seam so this file stays OpenSSL-free; a failure or
+          # a missing backend means "not verified", never an exception.
+          Runes::Security::CryptoBackend.verify(signature, bytes, key)
         end
       end
     end

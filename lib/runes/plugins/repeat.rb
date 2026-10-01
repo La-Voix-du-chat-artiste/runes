@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../compat"
 require_relative "../rune"
 require_relative "../workflow/system_rune"
 require_relative "call"
@@ -22,7 +23,7 @@ module Runes
       class IterationLimitExceededError < Runes::Error; end
       class TimeoutError < Runes::Error; end
 
-      class Config < Runes::Cog::Config
+      class Config < Runes::Rune::Config
         # A hard cap: reaching it raises instead of stopping quietly, so a
         # runaway loop is reported rather than silently truncated.
         def max_iterations(limit)
@@ -80,7 +81,7 @@ module Runes
         end
       end
 
-      class Input < Runes::Cog::Input
+      class Input < Runes::Rune::Input
         attr_accessor :value, :index, :max_iterations
 
         def initialize
@@ -101,7 +102,7 @@ module Runes
         end
       end
 
-      class Output < Runes::Cog::Output
+      class Output < Runes::Rune::Output
         attr_reader :execution_managers
 
         def initialize(execution_managers)
@@ -180,7 +181,7 @@ module Runes
       end
 
       def monotonic
-        Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        Runes::Compat.monotonic
       end
 
       # The explicit config cap wins; otherwise the safety-net default unless

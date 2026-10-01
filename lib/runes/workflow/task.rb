@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../compat'
+
 module Runes
   # A unit of asynchronous work, backed by a Ruby Thread.
   #
@@ -203,14 +205,14 @@ module Runes
     # `timeout`. Returns the tasks that were still running when it elapsed.
     def drain(tasks = nil, timeout: STOP_JOIN_TIMEOUT_S)
       pending = tasks || tasks_in_flight
-      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout.to_f
+      deadline = Runes::Compat.monotonic + timeout.to_f
       pending.each do |task|
-        remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        remaining = deadline - Runes::Compat.monotonic
         break if remaining <= 0
 
         task.thread&.join(remaining)
       end
-      pending.reject(&:finished?)
+      pending.reject { |v| v.finished? }
     end
 
     # Tasks that started and have not finished.

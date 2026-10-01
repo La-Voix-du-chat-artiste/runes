@@ -1,5 +1,5 @@
-require 'json'
 require_relative '../guard_telemetry'
+require_relative '../json_facade'
 require_relative '../transport/topic_filter'
 
 module Runes
@@ -135,10 +135,12 @@ module Runes
       end
 
       def validated_rules(tool, rules)
-        rules.each_with_object({}) do |(action, patterns), h|
-          patterns = validated_patterns(tool, action, patterns)
-          h[action] = patterns if patterns
+        out = {}
+        rules.each do |action, patterns|
+          validated = validated_patterns(tool, action, patterns)
+          out[action] = validated if validated
         end
+        out
       end
 
       def validated_patterns(tool, action, patterns)
@@ -152,11 +154,13 @@ module Runes
       # S-W2: surface the "guard is inert as configured" state at boot so
       # operators know the baseline grants '#' on dangerous builtins.
       def warn_if_inert
-        inert = BUILTIN_BASELINE.keys.filter_map do |tool|
+        inert = []
+        BUILTIN_BASELINE.keys.each do |tool|
           rules = tools_policy[tool]
-          next nil unless rules.is_a?(Hash)
+          next unless rules.is_a?(Hash)
+
           allow_all = rules.select { |_a, pats| pats.is_a?(Array) && pats.include?('#') }.keys
-          "#{tool}(#{allow_all.join(',')})" unless allow_all.empty?
+          inert << "#{tool}(#{allow_all.join(',')})" unless allow_all.empty?
         end
         return if inert.empty?
 
@@ -166,8 +170,12 @@ module Runes
 
       def deep_dup(obj)
         case obj
-        when Hash  then obj.each_with_object({}) { |(k, v), h| h[k] = deep_dup(v) }
-        when Array then obj.map { |v| deep_dup(v) }
+        when Hash
+          out = {}
+          obj.each { |k, v| out[k] = deep_dup(v) }
+          out
+        when Array
+          obj.map { |v| deep_dup(v) }
         else obj
         end
       end
@@ -178,7 +186,7 @@ module Runes
       def load_policy(policy_file)
         return {} if policy_file.nil?
 
-        JSON.parse(File.read(policy_file))
+        Runes::Json.parse(File.read(policy_file))
       rescue Errno::ENOENT
         warn "[Guard] no policy file at #{policy_file}; using the builtin baseline."
         {}

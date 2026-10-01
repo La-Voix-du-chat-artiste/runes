@@ -760,8 +760,7 @@ module Runes
         end
 
         wire = group ? TopicFilter.shared_filter(group, filter) : filter.to_s
-        subscription = Subscription.new(id: SecureRandom.hex(6), filter: filter.to_s, group: group,
-                                        qos: qos, block: block, client: self)
+        subscription = Subscription.new(SecureRandom.hex(6), filter.to_s, group, qos, block, self)
         # Register BEFORE SUBSCRIBE: a retained message can follow the SUBACK
         # immediately, and the reader must already be able to match it.
         register(subscription)

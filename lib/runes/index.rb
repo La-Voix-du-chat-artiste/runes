@@ -34,7 +34,9 @@ module Runes
       @codes
     end
 
-    def paths = codes.values.flatten
+    def paths
+      codes.values.flatten
+    end
 
     # @param from [String, nil] the file the reference was written in, so a
     #   per-epic mission code resolves inside its own epic first
@@ -64,8 +66,11 @@ module Runes
     # Resolve every reference in a text: what it points at, and what it does not.
     def link(text, from: nil)
       refs = references(text)
-      resolved = refs.to_h { |code| [code, resolve(code, from: from)] }
-      { resolved: resolved.compact, missing: resolved.select { |_code, path| path.nil? }.keys }
+      resolved = {}
+      refs.each { |code| resolved[code] = resolve(code, from: from) }
+      missing = []
+      resolved.each { |code, path| missing << code if path.nil? }
+      { resolved: resolved.reject { |_code, path| path.nil? }, missing: missing }
     end
 
     def reload!
@@ -79,7 +84,9 @@ module Runes
     def scan
       @scanned = true
       @codes = {}
-      @globs.flat_map { |glob| Dir.glob(File.join(@root, glob)) }.sort.each do |path|
+      paths = []
+      @globs.each { |glob| paths.concat(Dir.glob(File.join(@root, glob))) }
+      paths.sort.each do |path|
         next unless File.file?(path)
 
         text = File.read(path)
@@ -91,13 +98,19 @@ module Runes
     end
 
     def normalize(reference)
-      token = reference.to_s.strip.delete_prefix("#").upcase
+      token = reference.to_s.strip.sub(/\A#/, '').upcase
       token.match?(CODE_PATTERN) ? token : nil
     end
 
     def epic_dir(path)
       parts = File.expand_path(path.to_s).split(File::SEPARATOR)
-      index = parts.rindex { |part| part.match?(/\A[A-Za-z0-9_]+_\d{4}-\d{2}-\d{2}\z/) }
+      index = nil
+      (parts.length - 1).downto(0) do |i|
+        if parts[i].match?(/\A[A-Za-z0-9_]+_\d{4}-\d{2}-\d{2}\z/)
+          index = i
+          break
+        end
+      end
       index ? parts[0..index].join(File::SEPARATOR) : nil
     end
   end

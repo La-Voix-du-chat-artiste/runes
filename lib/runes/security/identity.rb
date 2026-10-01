@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-require 'openssl'
-require 'digest'
-require 'fileutils'
+require_relative 'crypto_backend'
+require_relative 'ed25519_der'
+require_relative '../compat'
+require_relative '../sha256_facade'
 
 module Runes
   module Security
@@ -22,6 +23,11 @@ module Runes
     # (overridable with RUNES_AGENT_KEY for containers/secret stores).
     # The private key is NEVER logged or printed: #inspect redacts it and no
     # error message embeds key material.
+    #
+    # Key material is raw 32-byte strings at the boundary; PKCS#8/SPKI
+    # DER+PEM encoding goes through Runes::Security::Ed25519Der (pure
+    # subset), and signing/derivation through the CryptoBackend seam — so
+    # this file compiles under Spinel with no OpenSSL anywhere.
     class Identity
       ALGORITHM = 'ed25519'
       DEFAULT_KEY_ENV = 'RUNES_AGENT_KEY'
@@ -79,57 +85,63 @@ module Runes
         # Build an Identity from a PEM private key string.
         def from_pem(agent_id, pem, source: 'memory')
           id = normalize_agent_id(agent_id)
-          key = begin
-            OpenSSL::PKey.read(pem.to_s)
-          rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError => e
-            raise IdentityError, "identity: malformed private key for #{id} (#{source}): #{e.class}"
-          end
-
-          unless private_key?(key)
-            raise IdentityError, "identity: #{source} for #{id} is not a private key (fail closed)"
-          end
-          unless ed25519?(key)
-            raise IdentityError,
-                  "identity: #{source} for #{id} is #{key.oid} (expected #{ALGORITHM.upcase})"
-          end
-
-          new(id, key)
+          seed = parse_private_pem(pem, id, source)
+          new(id, seed)
         end
 
         # Generate a fresh in-memory Ed25519 identity (no file writes).
         def generate(agent_id)
-          new(normalize_agent_id(agent_id), OpenSSL::PKey.generate_key('ED25519'))
-        rescue OpenSSL::PKey::PKeyError => e
-          raise IdentityError, "identity: Ed25519 key generation failed: #{e.message}"
+          id = normalize_agent_id(agent_id)
+          pair = begin
+            CryptoBackend.generate_keypair
+          rescue CryptoBackend::UnavailableError => e
+            raise IdentityError, "identity: Ed25519 key generation failed: #{e.message}"
+          end
+          new(id, pair[:seed])
         end
 
         # SHA-256 hex of the DER-encoded public key — the stable key id and
         # the value signed into envelopes as `kid`.
         def fingerprint_of(public_key_pem)
-          key = OpenSSL::PKey.read(public_key_pem.to_s)
-          Digest::SHA256.hexdigest(key.public_to_der)
-        rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError => e
-          raise IdentityError, "identity: cannot fingerprint public key: #{e.class}"
+          raw = public_raw(public_key_pem)
+          Runes::SHA256.hex(Ed25519Der.public_spki_der(raw))
+        rescue Ed25519Der::DerError => e
+          raise IdentityError, "identity: cannot fingerprint public key: #{e.message}"
         end
 
-        def ed25519?(key)
-          key.respond_to?(:oid) && key.oid.to_s.upcase == ALGORITHM.upcase
+        def ed25519_oid_name
+          ALGORITHM.upcase
         end
 
-        # `OpenSSL::PKey::PKey#private_key?` does not exist for Ed25519 in
-        # the openssl gem; a public-only key fails #private_to_pem instead.
-        def private_key?(key)
-          if key.respond_to?(:private_key?)
-            key.private_key?
-          else
-            key.private_to_pem
-            true
-          end
-        rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError
-          false
+        # Parse a PEM into a raw public key (private PEMs reduced to their
+        # public half). Used by TrustStore and deploy tooling.
+        def public_raw(pem)
+          parsed = Ed25519Der.parse_pem(pem)
+          parsed[:kind] == :private ? CryptoBackend.public_from_private(parsed[:seed]) : parsed[:raw]
+        rescue Ed25519Der::DerError => e
+          raise e
+        rescue CryptoBackend::UnavailableError => e
+          raise IdentityError, "identity: cannot derive public key: #{e.message}"
         end
 
         private
+
+        def parse_private_pem(pem, id, source)
+          parsed = Ed25519Der.parse_pem(pem)
+          unless parsed[:kind] == :private
+            raise IdentityError, "identity: #{source} for #{id} is not a private key (fail closed)"
+          end
+
+          parsed[:seed]
+        rescue Ed25519Der::DerError => e
+          message = e.message
+          if message.include?('expected Ed25519')
+            raise IdentityError,
+                  "identity: #{source} for #{id} is not #{ed25519_oid_name} (#{message})"
+          end
+
+          raise IdentityError, "identity: malformed private key for #{id} (#{source}): #{message}"
+        end
 
         def normalize_agent_id(agent_id)
           id = agent_id.to_s
@@ -153,13 +165,13 @@ module Runes
         # process wins the race, its key is loaded instead.
         def write_key!(identity, path)
           directory = File.dirname(path)
-          FileUtils.mkdir_p(directory, mode: 0o700)
+          Runes::Compat.mkdir_p(directory)
           if File.exist?(path)
             existing = read_file!(path)
             return from_pem(identity.agent_id, existing, source: path)
           end
 
-          tmp = File.join(directory, ".#{identity.agent_id}.pem.#{Process.pid}.#{rand(1 << 32).to_s(16)}")
+          tmp = File.join(directory, ".#{identity.agent_id}.pem.#{Runes::Random.hex(6)}")
           begin
             File.open(tmp, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |f|
               f.write(identity.private_key_pem)
@@ -181,28 +193,29 @@ module Runes
         end
       end
 
-      attr_reader :agent_id, :private_key
+      attr_reader :agent_id
 
-      def initialize(agent_id, private_key)
+      def initialize(agent_id, seed)
         @agent_id = agent_id.to_s
-        @private_key = private_key
+        @seed = seed.to_s
+        raise IdentityError, "identity: bad private key material for #{@agent_id}" unless @seed.bytesize == 32
       end
 
       # PEM-encoded public key (safe to publish / write to a TrustStore).
       def public_key_pem
-        @public_key_pem ||= @private_key.public_to_pem
+        @public_key_pem ||= Ed25519Der.public_pem(raw_public_key)
       end
 
       # PEM-encoded private key. Callers must treat this as a secret: never
       # log it, never put it in a message or an Agent Card.
       def private_key_pem
-        @private_key_pem ||= @private_key.private_to_pem
+        @private_key_pem ||= Ed25519Der.private_pem(@seed)
       end
 
       # Full SHA-256 hex of the DER public key — the envelope `kid` and the
       # trust-store lookup key.
       def fingerprint
-        @fingerprint ||= Digest::SHA256.hexdigest(@private_key.public_to_der)
+        @fingerprint ||= Runes::SHA256.hex(Ed25519Der.public_spki_der(raw_public_key))
       end
 
       # Truncated fingerprint for logs and human display only.
@@ -214,16 +227,16 @@ module Runes
 
       # Ed25519 signs the raw bytes (no pre-hash): pass canonical form.
       def sign(bytes)
-        @private_key.sign(nil, bytes.to_s)
+        CryptoBackend.sign(bytes, @seed)
+      rescue CryptoBackend::UnavailableError => e
+        raise IdentityError, "identity: signing unavailable: #{e.message}"
       end
 
       # @return [Boolean] true only when the signature is valid for bytes
       def verify(bytes, signature)
         return false if signature.nil?
 
-        @private_key.verify(nil, signature.to_s, bytes.to_s)
-      rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError
-        false
+        CryptoBackend.verify(signature.to_s, bytes.to_s, raw_public_key)
       end
 
       # Never expose key material through logs, errors or `p`/`puts`.
@@ -234,6 +247,16 @@ module Runes
 
       def to_s
         inspect
+      end
+
+      private
+
+      def raw_public_key
+        @raw_public_key ||= begin
+          CryptoBackend.public_from_private(@seed)
+        rescue CryptoBackend::UnavailableError => e
+          raise IdentityError, "identity: public derivation unavailable: #{e.message}"
+        end
       end
     end
   end

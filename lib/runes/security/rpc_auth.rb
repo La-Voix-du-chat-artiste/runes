@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-require 'json'
-require 'openssl'
-require 'digest'
-require 'securerandom'
+require_relative 'crypto_backend'
+require_relative '../compat'
+require_relative '../json_facade'
+require_relative '../random_facade'
+require_relative '../sha256_facade'
 
 require_relative 'nonce_cache'
 
@@ -40,29 +41,31 @@ module Runes
       class << self
         # Deterministic digest of the request body without auth fields.
         def body_digest(args)
-          payload = args.each_with_object({}) do |(key, value), out|
+          payload = {}
+          args.each do |key, value|
             name = key.to_s
-            out[name] = value unless AUTH_FIELDS.include?(name)
+            payload[name] = value unless AUTH_FIELDS.include?(name)
           end
-          Digest::SHA256.hexdigest(JSON.generate(payload.sort.to_h))
-        rescue JSON::GeneratorError, TypeError
+          Runes::SHA256.hex(Runes::Json.generate(payload.sort.to_h))
+        rescue Runes::Json::ParseError, TypeError
           # Non-JSON values (only possible for in-process callers):
           # Hash#inspect is deterministic for the JSON-native types.
-          Digest::SHA256.hexdigest(payload.sort.to_h.inspect)
+          Runes::SHA256.hex(payload.sort.to_h.inspect)
         end
 
         def mac(secret, tool_id, ts, nonce, args)
           message = "#{tool_id}\n#{ts}\n#{nonce}\n#{body_digest(args)}"
-          OpenSSL::HMAC.hexdigest('SHA256', secret.to_s, message)
+          Runes::Compat.hex_encode(Runes::Security::CryptoBackend.hmac_sha256(secret.to_s, message))
         end
 
         # Add a fresh ts/nonce/mac to a copy of `args`. `token` is added by
         # the caller (it is the shared secret itself, kept separate).
-        def sign(secret, tool_id, args, ts: Time.now.to_i, nonce: SecureRandom.hex(16))
+        def sign(secret, tool_id, args, ts: Time.now.to_i, nonce: nil)
+          freshness = nonce.nil? ? Runes::Random.hex(16) : nonce.to_s
           args.merge(
             'ts' => Integer(ts),
-            'nonce' => nonce.to_s,
-            'mac' => mac(secret, tool_id, ts, nonce, args)
+            'nonce' => freshness,
+            'mac' => mac(secret, tool_id, ts, freshness, args)
           )
         end
 
@@ -85,8 +88,8 @@ module Runes
 
         # Constant-time string comparison (same shape as the secret check).
         def secure_compare(left, right)
-          a = left.to_s.b
-          b = right.to_s.b
+          a = left.to_s
+          b = right.to_s
           return false unless a.bytesize == b.bytesize
 
           diff = 0

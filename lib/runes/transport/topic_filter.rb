@@ -12,20 +12,21 @@ module Runes
     #   #   matches the remainder, valid ONLY as the final level
     #   `$share/<group>/<filter>` is stripped here, so callers may pass
     #   either form; the group name is validated (T5-8).
+    #
+    # NOTE (spinel): methods are `def self.` rather than module_function —
+    # the kernel subset exposes singleton methods only (docs/spinel/spec-tier-a.md).
     module TopicFilter
-      module_function
-
       # A shared-group name is one topic level: a '/' inside it would
       # silently rewrite the filter into a different subscription (T5-8), so
       # it is rejected loudly rather than going quietly deaf.
       SHARE_GROUP_RE = /\A[^\/+#\u0000]+\z/.freeze
 
-      def shared?(filter)
+      def self.shared?(filter)
         filter.to_s.start_with?("$share/")
       end
 
       # "$share/g/a/+/b" -> ["g", "a/+/b"]; anything else -> [nil, filter]
-      def split_shared(filter)
+      def self.split_shared(filter)
         text = filter.to_s
         parts = text.split("/", 3)
         return [nil, text] unless parts[0] == "$share" && parts.size == 3
@@ -36,7 +37,7 @@ module Runes
         [group, parts[2]]
       end
 
-      def shared_filter(group, filter)
+      def self.shared_filter(group, filter)
         group = group.to_s
         unless group.match?(SHARE_GROUP_RE)
           raise ArgumentError,
@@ -50,7 +51,7 @@ module Runes
       # `#` is a wildcard only as the final level; a filter that uses it
       # anywhere else is malformed and must be rejected (MQTT 3.1.1
       # §4.7.1.2) rather than matched as a literal or as a wildcard.
-      def valid_filter?(filter)
+      def self.valid_filter?(filter)
         filter = filter.to_s
         return false if filter.empty?
 
@@ -59,7 +60,7 @@ module Runes
       end
 
       # True when `topic` matches `filter` (wildcards allowed in filter).
-      def match?(filter, topic)
+      def self.match?(filter, topic)
         topic = topic.to_s
         _group, filter = split_shared(filter)
         filter = filter.to_s
@@ -87,7 +88,7 @@ module Runes
       end
 
       # A concrete topic must not contain wildcards (MQTT 3.1.1 §4.7).
-      def valid_topic?(topic)
+      def self.valid_topic?(topic)
         topic = topic.to_s
         !topic.empty? && !topic.include?("+") && !topic.include?("#") && !topic.include?("\u0000")
       end

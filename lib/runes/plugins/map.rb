@@ -14,7 +14,7 @@ module Runes
       # Raised when an iteration that did not run is addressed.
       class MapIterationDidNotRunError < Runes::Error; end
 
-      class Config < Runes::Cog::Config
+      class Config < Runes::Rune::Config
         # `parallel(n)` with n > 0 caps concurrency; n <= 0 means unlimited.
         def parallel(value)
           @values[:parallel] = value.to_i.positive? ? value.to_i : nil
@@ -42,7 +42,7 @@ module Runes
         end
       end
 
-      class Input < Runes::Cog::Input
+      class Input < Runes::Rune::Input
         attr_accessor :items, :initial_index
 
         def initialize
@@ -64,7 +64,7 @@ module Runes
         end
       end
 
-      class Output < Runes::Cog::Output
+      class Output < Runes::Rune::Output
         attr_reader :execution_managers
 
         def initialize(execution_managers)
@@ -143,7 +143,7 @@ module Runes
         worker_count.times { queue << :runes_map_stop }
 
         workers = Array.new(worker_count) do
-          Thread.new do
+          thread = Thread.new do
             loop do
               work = queue.pop
               break if work == :runes_map_stop
@@ -155,11 +155,11 @@ module Runes
                 stop_mutex.synchronize { stopped = true }
               end
             end
-          end.tap do |thread|
-            thread.report_on_exception = false if thread.respond_to?(:report_on_exception=)
           end
+          thread.report_on_exception = false if thread.respond_to?(:report_on_exception=)
+          thread
         end
-        workers.each(&:join)
+        workers.each { |v| v.join }
 
         raise errors.first if errors.any?
 

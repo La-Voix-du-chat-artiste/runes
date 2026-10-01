@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require_relative "../rune"
-require_relative "../command_runner"
+# NOTE: the default command runner (Runes::CommandRunner, Open3-based) is
+# required by the engine entries, not here — a compiled kernel injects
+# Runes::ProcessRunner::Native instead (docs/spinel/spec-tier-c.md §C2).
 
 module Runes
   module Plugins
@@ -24,7 +26,7 @@ module Runes
         end
       end
 
-      class Config < Runes::Cog::Config
+      class Config < Runes::Rune::Config
         def fail_on_error!
           @values[:fail_on_error] = true
         end
@@ -118,7 +120,7 @@ module Runes
         alias quiet! no_display!
       end
 
-      class Input < Runes::Cog::Input
+      class Input < Runes::Rune::Input
         attr_accessor :command, :args, :stdin
 
         def initialize
@@ -139,22 +141,22 @@ module Runes
           when String
             self.command = input_return_value
           when Array
-            values = input_return_value.map(&:to_s)
+            values = input_return_value.map { |v| v.to_s }
             self.command = values.shift
             self.args = values
           when Hash
             raise InvalidInputError,
                   "cmd takes a command String or an argv Array, not a Hash " \
-                  "(got #{input_return_value.keys.map(&:inspect).join(', ')}); " \
+                  "(got #{input_return_value.keys.map { |v| v.inspect }.join(', ')}); " \
                   "write `{ \"git log --oneline\" }` or `{ [\"git\", \"log\"] }`"
           end
         end
       end
 
-      class Output < Runes::Cog::Output
-        include Runes::Cog::Output::WithJson
-        include Runes::Cog::Output::WithNumber
-        include Runes::Cog::Output::WithText
+      class Output < Runes::Rune::Output
+        include Runes::Rune::Output::WithJson
+        include Runes::Rune::Output::WithNumber
+        include Runes::Rune::Output::WithText
 
         attr_reader :out, :err, :status
 

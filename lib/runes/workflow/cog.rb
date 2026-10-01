@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "json"
 require_relative "util"
 require_relative "errors"
+require_relative "../json_facade"
 
 module Runes
   class Rune
@@ -26,10 +26,17 @@ module Runes
     end
 
     # ------------------------------------------------------------------
-    # Config: the base configuration object. `field` generates Roast-style
-    # dual-purpose getter/setters plus `use_default_<key>!`.
+    # Config: the base configuration object. Config DSL methods are written
+    # literally per rune (the `field` helper for third-party runes is
+    # CRuby-only — lib/runes/workflow/config_field.rb).
+    #
+    # Includes the workflow-param accessors in the class body: AOT
+    # compilation has no per-object `extend`; ConfigManager sets only
+    # `workflow_context` per instance.
     # ------------------------------------------------------------------
     class Config
+      include Runes::WorkflowParamAccessors
+
       class ConfigError < Runes::Error; end
       class InvalidConfigError < ConfigError; end
 
@@ -59,25 +66,9 @@ module Runes
         self.class.new(Runes.deep_dup(@values))
       end
 
-      class << self
-        # Defines `key` (get with no args / set with one) and
-        # `use_default_<key>!`. `validator` may coerce and raise.
-        def field(key, default, &validator)
-          define_method(key) do |*args|
-            if args.empty?
-              value = @values[key]
-              value.nil? ? Runes.deep_dup(default) : value
-            else
-              new_value = args.first
-              @values[key] = validator ? validator.call(new_value) : new_value
-            end
-          end
-
-          define_method("use_default_#{key}!") do
-            @values[key] = Runes.deep_dup(default)
-          end
-        end
-      end
+      # NOTE: the `field` DSL for third-party runes is CRuby-only
+      # (lib/runes/workflow/config_field.rb) — it needs dynamic
+      # define_method, which a compiled kernel does not provide.
 
       # --- base options (shared by every rune) --------------------------
 
@@ -119,9 +110,9 @@ module Runes
         raw = @values[:working_directory]
         return nil if raw.nil?
 
-        path = Pathname.new(raw).expand_path
-        raise InvalidConfigError, "working directory '#{path}' does not exist" unless path.exist?
-        raise InvalidConfigError, "working directory '#{path}' is not a directory" unless path.directory?
+        path = File.expand_path(raw.to_s)
+        raise InvalidConfigError, "working directory '#{path}' does not exist" unless File.exist?(path)
+        raise InvalidConfigError, "working directory '#{path}' is not a directory" unless File.directory?(path)
 
         path
       end
@@ -148,8 +139,6 @@ module Runes
         @coerce_ran = true
       end
 
-      private
-
       # Subclasses use this from validate! to allow a second pass with a
       # legitimately nil value after coerce has run.
       def coerce_ran?
@@ -173,7 +162,7 @@ module Runes
 
         def json
           json!
-        rescue JSON::ParserError
+        rescue Runes::Json::ParseError
           nil
         end
 
@@ -183,12 +172,12 @@ module Runes
           candidates = extract_json_candidates(input)
           candidates.each do |candidate|
             begin
-              return JSON.parse(candidate.strip, symbolize_names: true)
-            rescue JSON::ParserError, TypeError
+              return Runes::Json.parse(candidate.strip, max_nesting: 32, symbolize_names: true)
+            rescue Runes::Json::ParseError, TypeError
               next
             end
           end
-          raise JSON::ParserError, "Could not parse JSON from input:\n---\n#{input}\n---"
+          raise Runes::Json::ParseError, "Could not parse JSON from input:\n---\n#{input}\n---"
         end
 
         def extract_json_candidates(input)
@@ -277,11 +266,11 @@ module Runes
 
         def extract_number_candidates(input)
           candidates = [input.strip]
-          lines = input.lines.map(&:strip).reject(&:empty?)
+          lines = input.lines.map { |v| v.strip }.reject { |v| v.empty? }
           candidates.concat(lines.reverse)
           lines.reverse.each do |line|
             matches = line.scan(/-?[\d\s$¢£€¥.,_]+(?:[eE][+-]?\d+)?/)
-            candidates.concat(matches.map(&:strip).reverse)
+            candidates.concat(matches.map { |v| v.strip }.reverse)
           end
           candidates.compact.uniq
         end
@@ -299,7 +288,7 @@ module Runes
         end
 
         def lines
-          raw_text.lines.map(&:strip)
+          raw_text.lines.map { |v| v.strip }
         end
       end
 

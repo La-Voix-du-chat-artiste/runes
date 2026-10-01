@@ -175,6 +175,6 @@ draft because sending has a human's name on it.
 That is the offer: keep the surface you need, and make the engine a file you can
 read, test in a second, watch on a board, and change before lunch.
 
-*Companion documents: [`WHY_RUNES.md`](WHY_RUNES.md) for why any of this matters,
+*Companion documents: [`WHY_RUNES_V2.md`](WHY_RUNES_V2.md) for why any of this matters,
 and [`EXAMPLE_CRM_PIPELINE.md`](EXAMPLE_CRM_PIPELINE.md) for the pipeline's
 receipts and boundaries.*

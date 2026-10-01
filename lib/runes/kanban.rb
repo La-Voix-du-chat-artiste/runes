@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "date"
+require_relative 'compat'
 
 module Runes
   # A mission's Kanban, as the Mermaid `.mmd` file a human, an agent or an app
@@ -57,11 +57,30 @@ module Runes
     # file a human and another app read.
     TITLE_LIMIT = 160
 
-    Task = Struct.new(:title, :assignee, :done, :column, keyword_init: true) do
-      # Free text after the assignee suffix is preserved verbatim (it is how a
-      # verdict reason survives a round-trip; see #advance).
+    # Plain class (no keyword_init Struct) to stay inside the kernel subset.
+    # Free text after the assignee suffix is preserved verbatim (it is how a
+    # verdict reason survives a round-trip; see #advance).
+    class Task
+      attr_accessor :title, :assignee, :done, :column
+
+      def initialize(title, assignee = nil, done = false, column = 'todo')
+        # Kwargs-compat shim for callers that predate the positional
+        # constructor (title:/assignee:/done:/column: arrive as one Hash).
+        if title.is_a?(Hash)
+          h = title
+          title = h[:title]
+          assignee = h[:assignee]
+          done = h[:done] || false
+          column = h[:column] || 'todo'
+        end
+        @title = title
+        @assignee = assignee
+        @done = done
+        @column = column
+      end
+
       def line
-        text = "    - [#{done ? "x" : " "}] #{title}"
+        text = "    - [#{done ? 'x' : ' '}] #{title}"
         text += " (Assigné: #{assignee})" if assignee
         text
       end
@@ -94,8 +113,7 @@ module Runes
           next unless (match = stripped.match(/\A-\s*\[([ xX])\]\s*(.+?)\s*\z/))
 
           title, assignee = split_assignee(match[2])
-          columns[current] << Task.new(title: title, assignee: assignee,
-                                       done: match[1].downcase == "x", column: current)
+          columns[current] << Task.new(title, assignee, match[1].downcase == 'x', current)
         end
 
         { header: header, columns: columns }
@@ -117,7 +135,7 @@ module Runes
           "code" => code || parsed_header["code"],
           "mission" => mission || parsed_header["mission"],
           "epic" => epic || parsed_header["epic"],
-          "created_at" => (created_at || parsed_header["created_at"] || Date.today).to_s,
+          "created_at" => (created_at || parsed_header["created_at"] || Runes::Compat.utc_date).to_s,
           "status" => COLUMNS.fetch(status_key)
         }
 
@@ -196,9 +214,7 @@ module Runes
       def add(text, title:, column: "todo", assignee: nil)
         parsed = parse(text)
         destination = normalize_column(column)
-        parsed[:columns].fetch(destination) << Task.new(title: title, assignee: assignee,
-                                                        done: destination == "done",
-                                                        column: destination)
+        parsed[:columns].fetch(destination) << Task.new(title, assignee, destination == "done", destination)
         render_parsed(parsed, rederive: true)
       end
 
@@ -210,13 +226,12 @@ module Runes
       # rule applies here, so every mutation takes `flock` for the whole
       # read-modify-write and writes in place rather than truncating first.
       def update_file(path)
-        require "fileutils"
         # Opening with CREAT would leave an empty mission behind when the caller
         # has the path wrong — a file that then validates as "no columns" and
         # reads like a bug in the app. Refuse instead.
         raise Error, "kanban: #{path} does not exist" unless File.file?(path)
 
-        FileUtils.mkdir_p(File.dirname(path))
+        Runes::Compat.mkdir_p(File.dirname(path))
         File.open(path, File::RDWR) do |file|
           file.flock(File::LOCK_EX)
           begin
@@ -243,8 +258,7 @@ module Runes
 
       # A fresh file (no read-modify-write to protect).
       def write(path, text)
-        require "fileutils"
-        FileUtils.mkdir_p(File.dirname(path))
+        Runes::Compat.mkdir_p(File.dirname(path))
         File.write(path, text)
         path
       end
@@ -254,10 +268,13 @@ module Runes
       # lets one entity reference another by name in free text (`"Décliner
       # #E-001"`).
       def next_code(existing_texts, prefix: "E")
-        highest = Array(existing_texts).filter_map do |text|
-          text.to_s[/\b#{Regexp.escape(prefix)}-(\d+)\b/, 1]&.to_i
-        end.max.to_i
-        format("%s-%03d", prefix, highest + 1)
+        highest = 0
+        Array(existing_texts).each do |text|
+          match = text.to_s.match(/\b#{Regexp.escape(prefix)}-(\d+)\b/)
+          candidate = match ? match[1].to_i : 0
+          highest = candidate if candidate > highest
+        end
+        prefix.to_s + '-' + Runes::Compat.pad_left((highest + 1).to_s, 3)
       end
 
       # `M-001` in a header, `#M-001` in prose: the app resolves the latter.
@@ -298,12 +315,13 @@ module Runes
       def coerce_task(entry, column)
         task = case entry
                when Task then entry
-               when String then Task.new(title: entry, done: column == "done", column: column)
+               when String then Task.new(entry, nil, column == "done", column)
                when Hash
-                 Task.new(title: entry[:title] || entry["title"],
-                          assignee: entry[:assignee] || entry["assignee"],
-                          done: entry.key?(:done) ? entry[:done] : column == "done",
-                          column: column)
+                 done = entry.key?(:done) ? entry[:done] : column == "done"
+                 Task.new(entry[:title] || entry["title"],
+                          entry[:assignee] || entry["assignee"],
+                          done,
+                          column)
                else
                  raise Error, "kanban: cannot render a #{entry.class} as a task"
                end
@@ -330,7 +348,7 @@ module Runes
       # The mission's status follows its tasks: someone has to be able to see
       # at a glance whether anything is left.
       def derive_status(columns)
-        return "done" if columns.values.flatten.all?(&:done) && columns.values.flatten.any?
+        return "done" if columns.values.flatten.all? { |v| v.done } && columns.values.flatten.any?
         return "blocked" if columns.fetch("blocked").any?
         return "in_progress" if columns.fetch("in_progress").any? || columns.fetch("done").any?
 

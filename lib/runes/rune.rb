@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require "securerandom"
-
 require_relative "plugin"
 require_relative "workflow/errors"
 require_relative "workflow/util"
+require_relative "compat"
+require_relative "random_facade"
 
 module Runes
   # Base class for every workflow step. A Rune is a `:rune` plugin: the plugin
@@ -13,13 +13,13 @@ module Runes
   #   class Runes::Plugins::Greet < Runes::Rune
   #     plugin :greet
   #
-  #     class Input < Runes::Cog::Input
+  #     class Input < Runes::Rune::Input
   #       attr_accessor :name
   #       def validate! = raise(InvalidInputError, "'name' is required") if name.nil?
   #       def coerce(value) = (super; @name = value.to_s)
   #     end
   #
-  #     class Output < Runes::Cog::Output
+  #     class Output < Runes::Rune::Output
   #       attr_reader :text
   #       def initialize(text) = (super(); @text = text)
   #       def raw_text = text
@@ -35,23 +35,25 @@ module Runes
     class << self
       # Nested `Config` if the rune defines one, else the shared base.
       def config_class
-        @config_class ||= nested_or(:Config, Runes::Cog::Config)
+        @config_class ||= find_nested_const(:Config, Runes::Rune::Config)
       end
 
       # Nested `Input` if the rune defines one, else the shared base.
       def input_class
-        @input_class ||= nested_or(:Input, Runes::Cog::Input)
+        @input_class ||= find_nested_const(:Input, Runes::Rune::Input)
       end
 
       # Nested `Params` if the rune defines one, else the shared base
       # (system runes use this to accept `run:`).
       def params_class
-        @params_class ||= nested_or(:Params, Runes::Cog::Params)
+        @params_class ||= find_nested_const(:Params, Runes::Rune::Params)
       end
 
-      # Anonymous runes get a UUID name so they are still addressable.
+      # Anonymous runes get a UUID-shaped random name so they are still
+      # addressable. Ids only — never cryptographic (Runes::Random's rule).
       def generate_fallback_name
-        SecureRandom.uuid.to_sym
+        hex = Runes::Random.hex(16)
+        "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}".to_sym
       end
 
       # Builds the instance described by a `Params` object. System runes
@@ -64,12 +66,33 @@ module Runes
 
       # Looks for a nested constant on the rune class or on any ancestor rune
       # class (so `Runes::SystemRune::Params` is inherited by its subclasses)
-      # and falls back to the shared base.
-      def nested_or(const_name, default)
-        ancestor = ancestors.find do |klass|
-          klass.is_a?(Class) && klass <= Runes::Rune && klass.const_defined?(const_name, false)
+      # and falls back to the shared base. One LITERAL lookup per kind — a
+      # compiled kernel cannot do const access with a computed name.
+      def find_nested_const(name, default)
+        target = nil
+        ancestors.each do |klass|
+          next unless klass.is_a?(Class) && klass <= Runes::Rune
+
+          target = case name
+                   when :Config then nested_config_of(klass)
+                   when :Input then nested_input_of(klass)
+                   when :Params then nested_params_of(klass)
+                   end
+          break if target
         end
-        ancestor ? ancestor.const_get(const_name, false) : default
+        target || default
+      end
+
+      def nested_config_of(klass)
+        klass.const_defined?(:Config, false) ? klass.const_get(:Config, false) : nil
+      end
+
+      def nested_input_of(klass)
+        klass.const_defined?(:Input, false) ? klass.const_get(:Input, false) : nil
+      end
+
+      def nested_params_of(klass)
+        klass.const_defined?(:Params, false) ? klass.const_get(:Params, false) : nil
       end
     end
 
@@ -113,7 +136,7 @@ module Runes
       telemetry = input_context.respond_to?(:telemetry) ? input_context.telemetry : nil
       scope = input_context.respond_to?(:telemetry_scope) ? input_context.telemetry_scope : nil
       step_index = telemetry&.next_step_index
-      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      started = Runes::Compat.monotonic
       telemetry&.step_started!(rune: self, scope: scope, index: step_index)
       @task = group.async do
         input = self.class.input_class.new
@@ -144,7 +167,7 @@ module Runes
           telemetry.step_finished!(
             rune: self, scope: scope, index: step_index,
             status: (@failed ? "failed" : (@skipped ? "skipped" : "ok")),
-            duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(1),
+            duration_ms: ((Runes::Compat.monotonic - started) * 1000).round(1),
             output: telemetry_output_text, error: telemetry_error_text
           )
         end
@@ -213,16 +236,20 @@ module Runes
 
     def coerce_and_validate_input!(input, return_value)
       input.validate!
-    rescue Runes::Cog::Input::InvalidInputError
+    rescue Runes::Rune::Input::InvalidInputError
       input.coerce(return_value)
       input.validate!
     end
   end
 
-  # Roast spelling: `Runes::Cog` is `Runes::Rune`, so `Runes::Cog::Input`,
-  # `Runes::Cog::Output`, `Runes::Cog::Config` and `Runes::Cog::Params` all
+  # Roast spelling: `Runes::Cog` is `Runes::Rune`, so `Runes::Rune::Input`,
+  # `Runes::Rune::Output`, `Runes::Rune::Config` and `Runes::Rune::Params` all
   # resolve. `Cog::Input::InvalidInputError` is the Roast-compatible error.
   Cog = Rune unless defined?(Runes::Cog)
 end
 
+# cog.rb includes WorkflowParamAccessors in Config's class body — the
+# module must exist first (whole-program compilers reorder freely; CRuby
+# does not).
+require_relative "workflow/workflow_params"
 require_relative "workflow/cog"

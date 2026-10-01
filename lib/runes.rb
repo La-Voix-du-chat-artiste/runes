@@ -6,8 +6,16 @@
 # database, no network. The only optional dependency is `wasmtime`, which
 # the WASM sandbox needs; it is not a gemspec runtime dependency, so the
 # requires that transitively pull it in are guarded (see GEM_PACKAGING.md).
+require_relative 'runes/compat'
+require_relative 'runes/json_facade'
+require_relative 'runes/sha256_facade'
+require_relative 'runes/random_facade'
+# CRuby backends for the facades (stdlib JSON / OpenSSL / SecureRandom). The
+# Spinel kernel entry wires the pure backends instead and never loads this.
+require_relative 'runes/backends/cruby'
 require_relative 'runes/telemetry'
 require_relative 'runes/guard_telemetry'
+require_relative 'runes/guard_telemetry_sink'
 require_relative 'runes/request_ledger'
 require_relative 'runes/kanban'
 require_relative 'runes/doc_store'
@@ -23,6 +31,11 @@ rescue LoadError
   nil
 end
 require_relative 'runes/a2a'
+# settings.rb defaults to SQLite when the gem is loadable (see the
+# DEFAULT_SETTINGS_STORE resolution there); the explicit assignment is only
+# a belt-and-braces harness preference.
+require_relative 'runes/core/settings_sqlite'
+Runes::Core::Settings.store_class = Runes::Core::SettingsStore::SQLite
 require_relative 'runes/core/settings'
 require_relative 'runes/core/llm_client'
 require_relative 'runes/core/plan_parser'

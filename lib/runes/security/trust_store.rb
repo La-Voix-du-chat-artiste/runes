@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
-require 'openssl'
-require 'digest'
-
-require_relative 'identity'
+require_relative 'ed25519_der'
+require_relative '../sha256_facade'
 
 module Runes
   module Security
@@ -18,12 +16,27 @@ module Runes
     #   Runes::Security::Envelope.verify!(signed_hash, store)
     #
     # Every key is indexed BOTH by agent id and by its SHA-256 fingerprint,
-    # because envelopes carry the fingerprint as `kid`. An EMPTY store
-    # verifies nothing (Envelope.verify! raises :unknown_key) — there is no
-    # implicit trust-all. TrustStore.permissive exists for tests only and
-    # never bypasses signature verification (see #trusted?).
+    # because envelopes carry the fingerprint as `kid`. Keys are held as raw
+    # 32-byte Ed25519 public keys (the wire format Envelope verifies
+    # against); #key_for returns those bytes. Fingerprints are computed over
+    # the SPKI DER — byte-identical to the OpenSSL era, so existing `kid`
+    # values keep verifying (parity-pinned by the suite).
+    #
+    # An EMPTY store verifies nothing (Envelope.verify! raises :unknown_key)
+    # — there is no implicit trust-all. TrustStore.permissive exists for
+    # tests only and never bypasses signature verification (see #trusted?).
     class TrustStore
-      Entry = Struct.new(:agent_id, :key, :pem, :fingerprint, keyword_init: true)
+      # Plain class (no keyword_init Struct) to stay inside the kernel subset.
+      class Entry
+        attr_reader :agent_id, :raw, :pem, :fingerprint
+
+        def initialize(agent_id, raw, pem, fingerprint)
+          @agent_id = agent_id
+          @raw = raw
+          @pem = pem
+          @fingerprint = fingerprint
+        end
+      end
 
       class << self
         # Build a store from a directory of `*.pem` public keys.
@@ -42,12 +55,22 @@ module Runes
           store
         end
 
-        # SHA-256 hex of the DER public key for a PEM string or PKey.
+        # SHA-256 hex of the SPKI DER for a PEM string or raw 32-byte key.
         def fingerprint_of(key_or_pem)
-          key = key_or_pem.respond_to?(:public_to_der) ? key_or_pem : OpenSSL::PKey.read(key_or_pem.to_s)
-          Digest::SHA256.hexdigest(key.public_to_der)
-        rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError => e
-          raise TrustStoreError, "trust store: cannot fingerprint key: #{e.class}"
+          raw = extract_raw(key_or_pem)
+          Runes::SHA256.hex(Ed25519Der.public_spki_der(raw))
+        rescue Ed25519Der::DerError => e
+          raise TrustStoreError, "trust store: cannot fingerprint key: #{e.message}"
+        end
+
+        private
+
+        def extract_raw(key_or_pem)
+          text = key_or_pem.to_s
+          return text if text.bytesize == 32
+
+          parsed = Ed25519Der.parse_pem(text)
+          parsed[:kind] == :private ? TrustStore.derive_public(parsed[:seed]) : parsed[:raw]
         end
       end
 
@@ -86,30 +109,37 @@ module Runes
         raise TrustStoreError, "trust store: cannot read #{path}: #{e.class}: #{e.message}"
       end
 
-      # Register a trusted public key. A private-key PEM is accepted and
-      # reduced to its public half. Pass a nil agent_id to index by
-      # fingerprint only.
+      # Register a trusted public key (PEM — private PEMs are reduced to
+      # their public half). Pass a nil agent_id to index by fingerprint only.
       def add(agent_id, public_key_pem)
-        key = parse_public_key(public_key_pem)
+        parsed = parse_key(public_key_pem)
+        raw = parsed[:kind] == :private ? TrustStore.derive_public(parsed[:seed]) : parsed[:raw]
         id = agent_id.nil? ? nil : agent_id.to_s.strip
         id = nil if id && id.empty?
 
-        entry = Entry.new(agent_id: id, key: key, pem: key.public_to_pem,
-                          fingerprint: self.class.fingerprint_of(key))
+        entry = Entry.new(id, raw, Ed25519Der.public_pem(raw),
+                          Runes::SHA256.hex(Ed25519Der.public_spki_der(raw)))
         @by_id[id] = entry if id
         @by_fingerprint[entry.fingerprint] = entry
         entry
       end
 
-      # @param id_or_fingerprint [String] agent id or full 64-hex fingerprint
-      # @return [OpenSSL::PKey::PKey, nil]
-      def key_for(id_or_fingerprint)
-        token = id_or_fingerprint.to_s
-        return nil if token.empty?
+        # @param id_or_fingerprint [String] agent id or full 64-hex fingerprint
+        # @return [String, nil] the raw 32-byte Ed25519 public key
+        def key_for(id_or_fingerprint)
+          token = id_or_fingerprint.to_s
+          return nil if token.empty?
 
-        entry = @by_id[token] || @by_fingerprint[token]
-        entry&.key
-      end
+          entry = @by_id[token] || @by_fingerprint[token]
+          entry && entry.raw
+        end
+
+        # Derive a raw public key from a raw 32-byte private seed — through
+        # the crypto seam (CRuby: OpenSSL; spinel: FFI).
+        def self.derive_public(seed)
+          require_relative 'crypto_backend'
+          Runes::Security::CryptoBackend.public_from_private(seed)
+        end
 
       # Whether the store holds a key for +agent_id+ (or, permissively,
       # anything). NOTE: permissive only relaxes this predicate — signature
@@ -152,21 +182,21 @@ module Runes
 
       private
 
-      def parse_public_key(pem)
-        key = OpenSSL::PKey.read(pem.to_s)
-        # Re-read from the public half so a store never holds private key
-        # material even when handed a private PEM (Ed25519 PKey has no
-        # #private_key? predicate in the openssl gem).
-        key = OpenSSL::PKey.read(key.public_to_pem)
-        unless key.respond_to?(:oid) && key.oid.to_s.upcase == Identity::ALGORITHM.upcase
+      def parse_key(pem)
+        Ed25519Der.parse_pem(pem)
+      rescue Ed25519Der::DerError => e
+        message = e.message
+        if message.include?('expected Ed25519')
           raise TrustStoreError,
-                "trust store: unsupported public key type #{key.respond_to?(:oid) ? key.oid : key.class} " \
-                "(expected #{Identity::ALGORITHM.upcase})"
+                "trust store: unsupported public key type (expected #{IdentityAlgorithm::NAME})"
         end
 
-        key
-      rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError
-        raise TrustStoreError, 'trust store: malformed public key PEM'
+        raise TrustStoreError, "trust store: malformed public key PEM"
+      end
+
+      # Name kept for error messages that used to interpolate key.oid.
+      module IdentityAlgorithm
+        NAME = 'ED25519'
       end
 
       # `<dir>/<stem>.pem` -> `<dir>/<stem>.id` contents when present.

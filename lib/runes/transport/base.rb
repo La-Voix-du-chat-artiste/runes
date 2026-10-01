@@ -1,6 +1,6 @@
-require "json"
-require "securerandom"
-require_relative "topic_filter"
+require_relative 'topic_filter'
+require_relative '../json_facade'
+require_relative '../random_facade'
 
 module Runes
   module Transport
@@ -18,17 +18,50 @@ module Runes
     #   response_topic:  String  — where to send the reply
     #   correlation_id:  String  — opaque request correlation token
     #   user_properties: Hash    — a2a-status, trace ids, ...
-    Message = Struct.new(:topic, :payload, :properties, :qos, :retain, keyword_init: true) do
-      def response_topic = properties&.dig(:response_topic)
-      def correlation_id = properties&.dig(:correlation_id)
-      def user_properties = properties&.dig(:user_properties) || {}
+    #
+    # Plain class with positional construction (no keyword_init Struct) to
+    # stay inside the Spinel kernel subset.
+    class Message
+      attr_accessor :topic, :payload, :properties, :qos, :retain
+
+      def initialize(topic, payload = nil, properties = nil, qos = 0, retain = false)
+        # Kwargs-compat shim: callers that predate the positional constructor
+        # (tests, embedders) pass topic:/payload:/...; Ruby 3 forwards those
+        # as a positional Hash when the method declares no keywords. Kernel
+        # code always uses the positional form.
+        if topic.is_a?(Hash)
+          h = topic
+          topic = h[:topic]
+          payload = h[:payload]
+          properties = h[:properties]
+          qos = h[:qos] || 0
+          retain = h[:retain] || false
+        end
+        @topic = topic
+        @payload = payload
+        @properties = properties || {}
+        @qos = qos
+        @retain = retain
+      end
+
+      def response_topic
+        properties && properties[:response_topic]
+      end
+
+      def correlation_id
+        properties && properties[:correlation_id]
+      end
+
+      def user_properties
+        (properties && properties[:user_properties]) || {}
+      end
 
       def parsed
         return @parsed if defined?(@parsed)
 
         @parsed = begin
-          payload.to_s.empty? ? nil : JSON.parse(payload.to_s)
-        rescue JSON::ParserError
+          payload.to_s.empty? ? nil : Runes::Json.parse(payload.to_s)
+        rescue Runes::Json::ParseError
           nil
         end
       end
@@ -37,12 +70,24 @@ module Runes
       # Correlation Data when present, else the conventional request_id
       # field inside the envelope.
       def request_id
-        correlation_id || parsed&.dig("request_id")
+        correlation_id || (parsed && parsed['request_id'])
       end
     end
 
-    # A live subscription handle returned by #subscribe.
-    Subscription = Struct.new(:id, :filter, :group, :qos, :block, :client, keyword_init: true)
+    # A live subscription handle returned by #subscribe. Same construction
+    # rule as Message (positional, kernel subset).
+    class Subscription
+      attr_accessor :id, :filter, :group, :qos, :block, :client
+
+      def initialize(id, filter, group, qos, block, client)
+        @id = id
+        @filter = filter
+        @group = group
+        @qos = qos
+        @block = block
+        @client = client
+      end
+    end
 
     # Invoke a subscriber, isolating faults so one bad handler cannot kill a
     # transport reader thread.
@@ -70,7 +115,7 @@ module Runes
       attr_reader :client_id
 
       def initialize(client_id: nil, **_options)
-        @client_id = client_id || "runes-#{SecureRandom.hex(4)}"
+        @client_id = client_id || "runes-#{Runes::Random.hex(4)}"
         @subscriptions = []
         @mutex = Mutex.new
       end
@@ -145,8 +190,7 @@ module Runes
       # Resolve a captured block against a raw (topic, payload, properties)
       # triple. Adapters call this so Message construction stays uniform.
       def deliver(subscription, topic, payload, properties = {}, qos: 0, retain: false)
-        message = Message.new(topic: topic, payload: payload, properties: properties || {},
-                              qos: qos, retain: retain)
+        message = Message.new(topic, payload, properties || {}, qos, retain)
         Transport.deliver(subscription, message)
       end
 

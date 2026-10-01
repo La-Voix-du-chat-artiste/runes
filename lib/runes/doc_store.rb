@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-require "digest"
-require "fileutils"
+require_relative 'compat'
+require_relative 'sha256_facade'
+require_relative 'random_facade'
 
 module Runes
   # Content-addressed documents.
@@ -46,7 +47,8 @@ module Runes
     def put_file(source, ext: nil)
       raise Error, "doc store: #{source} is not a file" unless File.file?(source)
 
-      store(File.binread(source), normalize_ext(ext || File.extname(source).delete_prefix(".")))
+      extension = ext || File.extname(source).sub(/\A\./, '')
+      store(File.read(source), normalize_ext(extension))
     end
 
     # @return [String, nil] the path for a hash that is already stored
@@ -64,7 +66,7 @@ module Runes
     end
 
     def sha_of(content)
-      Digest::SHA256.hexdigest(content.to_s)
+      Runes::SHA256.hex(content.to_s)
     end
 
     # Everything on disk, newest-agnostic and cheap: the store is small and the
@@ -77,7 +79,9 @@ module Runes
       end
     end
 
-    def size = entries.size
+    def size
+      entries.size
+    end
 
     private
 
@@ -86,18 +90,18 @@ module Runes
       path = File.join(root, sha[0, 2], sha[2, 2], "#{sha}.#{ext}")
       existed = File.file?(path)
       unless existed
-        FileUtils.mkdir_p(File.dirname(path))
+        Runes::Compat.mkdir_p(File.dirname(path))
         # Write-then-rename: a reader (or another workflow) never sees a
         # half-written document under a content address.
-        tmp = "#{path}.tmp-#{Process.pid}"
-        File.binwrite(tmp, data)
+        tmp = "#{path}.tmp-#{Runes::Random.hex(4)}"
+        File.write(tmp, data)
         File.rename(tmp, path)
       end
       { sha: sha, path: path, bytes: data.bytesize, existed: existed }
     end
 
     def normalize_ext(ext)
-      value = ext.to_s.downcase.delete_prefix(".")
+      value = ext.to_s.downcase.sub(/\A\./, '')
       unless value.match?(EXT_TOKEN)
         raise Error, "doc store: #{ext.inspect} is not a usable file extension " \
                      "(a lowercase token of up to 8 characters, e.g. #{EXTS.first(3).join(', ')})"

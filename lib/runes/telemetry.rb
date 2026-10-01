@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-require "json"
-require "securerandom"
-require "time"
+require_relative 'compat'
+require_relative 'random_facade'
 
 module Runes
   # Workflow telemetry: the seam that makes a run observable.
@@ -14,10 +13,13 @@ module Runes
   # to do with it:
   #
   #   Runes::Telemetry.sink = ->(event) { ... }
-  #   Runes::Telemetry.sink = Runes::Telemetry::TransportSink.new(transport: t)
   #
   # Emitting is best-effort by design: a telemetry failure must never fail a
   # run, so every emit is rescued and swallowed (with a warning).
+  #
+  # This file is the PURE CORE (kernel subset): recording and the Context.
+  # The transport sink (`TransportSink`, `build_sink`) lives in
+  # telemetry_sink.rb (harness only).
   module Telemetry
     # Long outputs are truncated so one step cannot flood the bus or the
     # observer's database. The marker says how much was dropped.
@@ -32,18 +34,6 @@ module Runes
 
       def enabled?
         !sink.nil?
-      end
-
-      # Build a sink from a spec string: "mqtt"/"auto"/"1" publish on the
-      # fabric, "off"/nil disable. Used by bin/runes-workflow.
-      def build_sink(spec, settings: nil, transport: nil)
-        value = spec.to_s.strip.downcase
-        return nil if value.empty? || %w[0 false no off none].include?(value)
-
-        require_relative "transport" unless defined?(Runes::Transport)
-        transport ||= Runes::Transport.build(kind: nil, settings: settings)
-        transport.connect unless transport.connected?
-        TransportSink.new(transport: transport)
       end
 
       # The event a viewer needs to lay out a timeline: a monotonic-free,
@@ -72,7 +62,7 @@ module Runes
       def initialize(workflow:, sink: Telemetry.sink, run_id: nil, params: nil)
         @workflow = workflow.to_s
         @sink = sink
-        @run_id = (run_id || SecureRandom.hex(8)).to_s
+        @run_id = (run_id || Runes::Random.hex(8)).to_s
         @params = params
         @started_at = Telemetry.now
         @step_mutex = Mutex.new
@@ -118,8 +108,10 @@ module Runes
       # consumed in-process (tests, an embedded sink) or as JSON on the wire.
       def event(kind, fields)
         base = { "run_id" => @run_id, "kind" => kind, "workflow" => @workflow,
-                 "at" => Telemetry.now.iso8601(3) }
-        base.merge(fields.compact.transform_keys(&:to_s))
+                 "at" => Runes::Compat.utc_iso8601(Telemetry.now) }
+        merged = base
+        fields.compact.each { |key, value| merged[key.to_s] = value }
+        merged
       end
 
       private
@@ -145,57 +137,6 @@ module Runes
         "#{text.byteslice(0, MAX_FIELD_BYTES)}… (+#{dropped} bytes dropped)"
       end
     end
-
-    # Publishes each event on the fabric so anything listening — the
-    # observatory, a TUI, another agent — can watch runs happen live.
-    #
-    #   runes/workflows/<run_id>/run_started
-    #   runes/workflows/<run_id>/step_finished  ...
-    class TransportSink
-      PREFIX = "runes/workflows"
-
-      attr_reader :transport, :published
-
-      def initialize(transport:, prefix: PREFIX)
-        @transport = transport
-        @prefix = prefix
-        @published = 0
-        @mutex = Mutex.new
-      end
-
-      def call(event)
-        kind = event["kind"].to_s
-        run_id = event["run_id"].to_s
-        return false if kind.empty? || run_id.empty?
-
-        @transport.publish(topic(run_id, kind), JSON.generate(event), qos: 1)
-        @mutex.synchronize { @published += 1 }
-        true
-      end
-
-      def topic(run_id, kind)
-        "#{@prefix}/#{run_id}/#{kind}"
-      end
-
-      # Flush and close the transport.
-      #
-      # `call` publishes at QoS 1 *without* waiting for the PUBACK (telemetry
-      # must not slow a run down), so the last events of a run sit in the socket
-      # when the process exits — a `run_finished` that never arrives leaves the
-      # observatory showing a run that is still "running" for ever. Whoever owns
-      # the sink's lifetime must close it; `Runes::Telemetry.close!` is the
-      # convenience for that.
-      def close
-        @transport.disconnect
-        @closed = true
-      rescue StandardError
-        # Closing telemetry must never raise into a caller that is finishing.
-        false
-      ensure
-        @published ||= 0
-      end
-
-      def closed? = @closed == true
-    end
   end
 end
+

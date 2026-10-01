@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "capabilities/guard"
+require_relative "compat"
 
 module Runes
   # Opt-in capability policy for workflow runes (doc5.md E5-6).
@@ -46,7 +47,10 @@ module Runes
 
         # Install a guard from an explicit path or RUNES_WORKFLOW_POLICY.
         # Returns the guard, or nil when no policy is configured (the default).
-        def install(policy_file = nil, fragments: [], env: ENV)
+        # `env` defaults to a snapshot of the process environment (Spinel
+        # cannot pass ENV itself as a value — see Runes::Compat.env_snapshot).
+        def install(policy_file = nil, fragments: [], env: nil)
+          env = Runes::Compat.env_snapshot if env.nil?
           file = policy_file.to_s.strip.empty? ? env["RUNES_WORKFLOW_POLICY"] : policy_file
           return reset! if file.to_s.strip.empty?
 

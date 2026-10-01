@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'json'
+require_relative '../compat'
 
 module Runes
   module Security
@@ -60,7 +60,9 @@ module Runes
       ].freeze
       # Allow version suffixes without listing every one (`ruby3.2`,
       # `python3.12`); keep the un-suffixed names above for docs/tests.
-      INTERPRETER_RE = /\A(?:#{Regexp.union(INTERPRETERS).source})(?:[0-9]+(?:\.[0-9]+)*)?\z/.freeze
+      # Names are plain alphanumeric tokens, so a literal alternation is
+      # exact — no Regexp.union needed (kernel subset).
+      INTERPRETER_RE = /\A(?:#{INTERPRETERS.join('|')})(?:[0-9]+(?:\.[0-9]+)*)?\z/.freeze
 
       # Wrappers that only run what follows them. They are transparent to
       # the allowlist because the command they reach is checked too.
@@ -96,7 +98,16 @@ module Runes
 
       # Result of a policy evaluation.
       #   category: :empty | :metacharacters | :path | :dangerous | :allowlist
-      Verdict = Struct.new(:category, :message, :token, keyword_init: true)
+      # Plain class (no keyword_init Struct) to stay inside the kernel subset.
+      class Verdict
+        attr_accessor :category, :message, :token
+
+        def initialize(category, message, token = nil)
+          @category = category
+          @message = message
+          @token = token
+        end
+      end
 
       class << self
         # Evaluate `cmd` and return nil when it is allowed, or a Verdict
@@ -144,7 +155,7 @@ module Runes
           text = raw.to_s.strip
           return nil if text.empty?
 
-          text.split(',').map(&:strip).reject(&:empty?)
+          text.split(',').map { |v| v.strip }.reject { |v| v.empty? }
         end
 
         # True when `cmd`'s executable token(s) pass the allowlist and
@@ -197,7 +208,7 @@ module Runes
         # `timeout 5 ruby -e x` -> ['timeout', 'ruby']; `nice -n 5 ls` ->
         # ['nice', 'ls']. Returns at most MAX_LAUNCHER_DEPTH entries.
         def command_position_tokens(cmd)
-          tokens = cmd.to_s.split(/\s+/).reject(&:empty?)
+          tokens = cmd.to_s.split(/\s+/).reject { |v| v.empty? }
           out = []
           i = 0
           while i < tokens.length && out.length <= MAX_LAUNCHER_DEPTH
@@ -226,7 +237,7 @@ module Runes
         private
 
         def verdict(category, message, token = nil)
-          Verdict.new(category: category, message: message, token: token)
+          Verdict.new(category, message, token)
         end
 
         # The refusal message for the command-position tokens, or nil when
@@ -267,7 +278,7 @@ module Runes
         end
 
         def basename(token)
-          File.basename(token.to_s)
+          Compat.basename(token)
         rescue ArgumentError
           token.to_s
         end

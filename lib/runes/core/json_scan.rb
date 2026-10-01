@@ -1,4 +1,4 @@
-require 'json'
+require_relative '../json_facade'
 
 module Runes
   module Core
@@ -10,15 +10,16 @@ module Runes
     # copy that was still brace-blind, so a mission whose todo text
     # contained a single `{` or `}` was silently rejected (B4-4).
     # Everything now goes through this module (E4-4).
+    #
+    # JSON parsing goes through the Runes::Json facade so this file stays
+    # inside the Spinel kernel subset (no stdlib json).
     module JsonScan
       MAX_BYTES   = 1024 * 1024
       MAX_NESTING = 32
 
-      module_function
-
       # Returns the parsed Hash, or nil when no complete object is found,
       # the payload is oversized, or the text is not valid JSON.
-      def extract_object(text, max_bytes: MAX_BYTES, max_nesting: MAX_NESTING)
+      def self.extract_object(text, max_bytes: MAX_BYTES, max_nesting: MAX_NESTING)
         str = text.to_s
         return nil if str.bytesize > max_bytes
 
@@ -39,7 +40,7 @@ module Runes
       # Index of the `}` closing the object opened at `start`, or nil.
       # Tracks string literals and escapes so braces inside string values
       # (CSS, templates, code snippets) are ignored.
-      def matching_brace(str, start)
+      def self.matching_brace(str, start)
         return nil if start.nil? || start.negative? || start >= str.length
 
         depth = 0
@@ -67,9 +68,9 @@ module Runes
         nil
       end
 
-      def parse(str, max_nesting)
-        JSON.parse(str, max_nesting: max_nesting)
-      rescue JSON::ParserError, ArgumentError
+      def self.parse(str, max_nesting)
+        Runes::Json.parse(str, max_nesting: max_nesting)
+      rescue Runes::Json::ParseError, ArgumentError
         nil
       end
     end

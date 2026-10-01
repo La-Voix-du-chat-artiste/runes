@@ -17,7 +17,7 @@ module Runes
   # `#run!` on the returned manager, then builds its `Output` from the manager
   # (see `Runes::Plugins::Call`, `Map`, `Repeat` for the shipped ones).
   class SystemRune < Rune
-    class Params < Runes::Cog::Params
+    class Params < Runes::Rune::Params
       attr_reader :run
 
       def initialize(name = nil, run: nil)

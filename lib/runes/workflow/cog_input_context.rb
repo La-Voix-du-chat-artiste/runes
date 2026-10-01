@@ -71,21 +71,98 @@ module Runes
     end
 
     # Binds the output accessor trio for one registered rune *type*, e.g.
-    # `ruby(name)`, `ruby?(name)`, `ruby!(name)`. Called once per plugin at
-    # prepare time, before any scope runs.
+    # `ruby(name)`, `ruby?(name)`, `ruby!(name)`. The seven builtin trios
+    # are DEFINED IN THE CLASS BODY below (AOT compilation has no per-object
+    # method tables); this dynamic path serves third-party runes on CRuby
+    # only (Runes::Runtime).
     def bind_rune_type(method_name)
-      context = self
-      question = "#{method_name}?"
-      bang = "#{method_name}!"
-      [method_name, question, bang].each do |name|
-        if context.respond_to?(name, true)
-          raise IllegalRuneNameError,
-                "rune name #{method_name.inspect} collides with an existing #{name.inspect} context method"
-        end
-      end
-      define_singleton_method(method_name) { |name| context.cog_output(name) }
-      define_singleton_method(question) { |name| context.cog_output?(name) }
-      define_singleton_method(bang) { |name| context.cog_output!(name) }
+      Runes::Runtime.bind_rune_type(self, method_name)
+    end
+
+    # --- builtin output-accessor trios (class-body, AOT-safe) -------------
+
+    def cmd(name)
+      cog_output(name)
+    end
+
+    def cmd?(name)
+      cog_output?(name)
+    end
+
+    def cmd!(name)
+      cog_output!(name)
+    end
+
+    def ruby(name)
+      cog_output(name)
+    end
+
+    def ruby?(name)
+      cog_output?(name)
+    end
+
+    def ruby!(name)
+      cog_output!(name)
+    end
+
+    def chat(name)
+      cog_output(name)
+    end
+
+    def chat?(name)
+      cog_output?(name)
+    end
+
+    def chat!(name)
+      cog_output!(name)
+    end
+
+    def agent(name)
+      cog_output(name)
+    end
+
+    def agent?(name)
+      cog_output?(name)
+    end
+
+    def agent!(name)
+      cog_output!(name)
+    end
+
+    def call(name)
+      cog_output(name)
+    end
+
+    def call?(name)
+      cog_output?(name)
+    end
+
+    def call!(name)
+      cog_output!(name)
+    end
+
+    def map(name)
+      cog_output(name)
+    end
+
+    def map?(name)
+      cog_output?(name)
+    end
+
+    def map!(name)
+      cog_output!(name)
+    end
+
+    def repeat(name)
+      cog_output(name)
+    end
+
+    def repeat?(name)
+      cog_output?(name)
+    end
+
+    def repeat!(name)
+      cog_output!(name)
     end
 
     def key?(name)

@@ -5,9 +5,57 @@ require_relative "util"
 require_relative "workflow_params"
 
 module Runes
-  # The object the `config do ... end` blocks are evaluated against. Methods
-  # are bound for `global` plus one per registered `:rune` plugin.
-  class ConfigContext; end
+  # The object the `config do ... end` blocks are evaluated against. The
+  # verbs are DEFINED IN THE CLASS BODY (AOT compilation has no per-object
+  # method tables); each delegates to this context's ConfigManager through
+  # the plugin registry, keeping the class constant-free.
+  class ConfigContext
+    attr_accessor :__config_manager
+
+    def global(&global_proc)
+      @__config_manager.on_global(global_proc)
+    end
+
+    def cmd(target = nil, &config_proc)
+      config_verb(:cmd, target, config_proc)
+    end
+
+    def ruby(target = nil, &config_proc)
+      config_verb(:ruby, target, config_proc)
+    end
+
+    def chat(target = nil, &config_proc)
+      config_verb(:chat, target, config_proc)
+    end
+
+    def agent(target = nil, &config_proc)
+      config_verb(:agent, target, config_proc)
+    end
+
+    def call(target = nil, &config_proc)
+      config_verb(:call, target, config_proc)
+    end
+
+    def map(target = nil, &config_proc)
+      config_verb(:map, target, config_proc)
+    end
+
+    def repeat(target = nil, &config_proc)
+      config_verb(:repeat, target, config_proc)
+    end
+
+    private
+
+    def config_verb(verb, target, config_proc)
+      klass = Runes::Plugin[verb, kind: :rune]
+      if klass.nil?
+        raise Runes::ConfigManager::ConfigManagerError,
+              "config for rune #{verb.inspect} is not registered in this runtime"
+      end
+
+      @__config_manager.on_config(klass, target, config_proc)
+    end
+  end
 
   # Collects the workflow's config blocks, applies Roast's merge precedence
   # (global -> general -> regexp-scoped in insertion order -> name-scoped) and
@@ -24,7 +72,8 @@ module Runes
       @config_procs = config_procs
       @workflow_context = workflow_context
       @config_context = ConfigContext.new
-      @global_config = Runes::Cog::Config.new
+      @config_context.__config_manager = self
+      @global_config = Runes::Rune::Config.new
       @general_configs = {}
       @regexp_scoped_configs = {}
       @name_scoped_configs = {}
@@ -36,7 +85,6 @@ module Runes
       raise ConfigManagerAlreadyPreparedError if preparing? || prepared?
 
       @preparing = true
-      bind_global
       bind_registered_runes
       @config_procs.each { |config_proc| @config_context.instance_eval(&config_proc) }
       @prepared = true
@@ -68,20 +116,16 @@ module Runes
 
     def bind_registered_runes
       Runes::Plugin.all(kind: :rune).each do |definition|
-        bind_rune(definition.name, definition.klass)
+        next if Runes::ExecutionManager::BUILTIN_VERBS.include?(definition.name)
+
+        Runes::Runtime.bind_config_verb(@config_context, definition.name, method(:on_config), definition.klass)
       end
     end
 
-    def bind_rune(method_name, rune_class)
-      on_config_method = method(:on_config)
-      rune_method = proc do |target = nil, &config_proc|
-        on_config_method.call(rune_class, target, config_proc)
-      end
-      raise IllegalRuneNameError, method_name if @config_context.respond_to?(method_name, true)
+    public
 
-      @config_context.define_singleton_method(method_name, rune_method)
-    end
-
+    # Called from ConfigContext's verb methods (a different object, so these
+    # must be public).
     def on_config(rune_class, target, config_proc)
       config = case target
       when nil
@@ -101,12 +145,7 @@ module Runes
       nil
     end
 
-    def bind_global
-      on_global_method = method(:on_global)
-      @config_context.define_singleton_method(:global) do |&global_proc|
-        on_global_method.call(global_proc)
-      end
-    end
+    public
 
     def on_global(global_proc)
       extend_workflow_params(@global_config)
@@ -114,10 +153,10 @@ module Runes
       nil
     end
 
-    # Config objects also get the workflow-param accessors (Roast binds them
-    # per object; extending is the stdlib-only equivalent).
+    # Config objects carry the workflow-param accessors via INCLUDE in the
+    # class body (`Runes::Rune::Config`): AOT compilation has no per-object
+    # extend. Only `workflow_context` is set per object.
     def extend_workflow_params(config)
-      config.extend(Runes::WorkflowParamAccessors)
       config.workflow_context = @workflow_context
     end
 

@@ -306,7 +306,7 @@ class TestThirdAudit < Minitest::Test
 
   def test_settings_configure_busy_timeout_and_wal
     s = Runes::Core::Settings.new(root: @tmp)
-    db = s.instance_variable_get(:@db)
+    db = s.instance_variable_get(:@store).instance_variable_get(:@db)
     mode = db.execute('PRAGMA journal_mode')
     assert_equal 'wal', mode.flatten.first.to_s.downcase
     timeout = db.execute('PRAGMA busy_timeout')

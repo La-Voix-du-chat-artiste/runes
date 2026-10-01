@@ -113,8 +113,7 @@ module Runes
         end
         raise Error, "#{describe} is not connected" unless @connected
 
-        subscription = Subscription.new(id: SecureRandom.hex(6), filter: filter, group: nil,
-                                        qos: qos, block: block, client: self)
+        subscription = Subscription.new(SecureRandom.hex(6), filter, nil, qos, block, self)
         register(subscription)
         @client.subscribe(filter => qos)
         subscription

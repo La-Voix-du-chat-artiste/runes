@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'compat'
+
 module Runes
   # Inbound dedupe: the execution half of "exactly once".
   #
@@ -47,7 +49,16 @@ module Runes
     DEFAULT_TTL_S = 900
     DEFAULT_MAX = 4096
 
-    Entry = Struct.new(:at, :outcome, keyword_init: true)
+    # Plain class (not a keyword_init Struct) to stay inside the Spinel
+    # kernel subset; two field record with positional construction.
+    class Entry
+      attr_accessor :at, :outcome
+
+      def initialize(at, outcome = nil)
+        @at = at
+        @outcome = outcome
+      end
+    end
 
     attr_reader :ttl, :max, :duplicates, :claimed
 
@@ -57,7 +68,7 @@ module Runes
     def initialize(ttl: DEFAULT_TTL_S, max: DEFAULT_MAX, clock: nil)
       @ttl = ttl.to_f
       @max = [max.to_i, 1].max
-      @clock = clock || -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+      @clock = clock || -> { Runes::Compat.monotonic }
       @entries = {}
       @mutex = Mutex.new
       @duplicates = 0
@@ -83,7 +94,7 @@ module Runes
         end
 
         @entries.delete(token) # re-insert so insertion order is also age order
-        @entries[token] = Entry.new(at: now)
+        @entries[token] = Entry.new(now)
         evict!(now)
         @claimed += 1
         true
@@ -105,7 +116,7 @@ module Runes
         if entry
           entry.outcome = text
         else
-          @entries[token] = Entry.new(at: @clock.call, outcome: text)
+          @entries[token] = Entry.new(@clock.call, text)
         end
       end
       text

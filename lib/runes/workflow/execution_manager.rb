@@ -44,6 +44,7 @@ module Runes
       @telemetry = telemetry
       @cog_input_context = CogInputContext.new(workflow_context, telemetry: telemetry, scope: scope)
       @execution_context = ExecutionContext.new
+      @execution_context.__runes_manager = self
       @outputs = nil
       @outputs_bang = nil
       @task_group = nil
@@ -55,7 +56,6 @@ module Runes
       raise ExecutionManagerAlreadyPreparedError if preparing? || prepared?
 
       @preparing = true
-      bind_outputs
       Runes::Workflow.register_builtin_runes! if defined?(Runes::Workflow)
       bind_registered_runes
       my_execution_procs.each { |execution_proc| @execution_context.instance_eval(&execution_proc) }
@@ -220,48 +220,46 @@ module Runes
 
     def bind_registered_runes
       Runes::Plugin.all(kind: :rune).each do |definition|
-        bind_rune(definition.name, definition.klass)
-        @cog_input_context.bind_rune_type(definition.name)
+        next if BUILTIN_VERBS.include?(definition.name)
+
+        Runes::Runtime.bind_rune_verb(@execution_context, definition.name, method(:on_execute), definition.klass)
+        @cog_input_context.bind_rune_type(definition.name) if Runes::Runtime.dynamic_bindings?
       end
     end
 
-    def bind_rune(method_name, rune_class)
-      on_execute_method = method(:on_execute)
-      rune_method = proc do |*args, **kwargs, &input_proc|
-        on_execute_method.call(rune_class, args, kwargs, input_proc)
-      end
-      raise IllegalRuneNameError, method_name if @execution_context.respond_to?(method_name, true)
+    # The seven DSL verbs, defined in the class body (the only form AOT
+    # compilation supports — per-object define_singleton_method is out).
+    # Dispatch goes through the plugin registry, so a verb whose plugin is
+    # not registered (e.g. chat/agent in the reduced kernel) fails with a
+    # clear error instead of a compile-time constant error.
+    BUILTIN_VERBS = %i[cmd ruby chat agent call map repeat].freeze
 
-      @execution_context.define_singleton_method(method_name, rune_method)
-    end
+    public
 
-    def on_execute(rune_class, rune_args, rune_kwargs, input_proc)
-      params = rune_class.params_class.new(*rune_args, **rune_kwargs)
-      add_rune(rune_class.new_from_params(params, input_proc))
-    end
-
-    def bind_outputs
-      on_outputs_method = method(:on_outputs)
-      on_outputs_bang_method = method(:on_outputs!)
-      @execution_context.define_singleton_method(:outputs) do |&outputs_proc|
-        on_outputs_method.call(outputs_proc)
-      end
-      @execution_context.define_singleton_method(:outputs!) do |&outputs_proc|
-        on_outputs_bang_method.call(outputs_proc)
-      end
-    end
-
+    # Called from ExecutionContext#outputs/#outputs! (a different object, so
+    # these must be public).
     def on_outputs(outputs_proc)
       raise OutputsAlreadyDefinedError if @outputs || @outputs_bang
 
       @outputs = outputs_proc
     end
 
-    def on_outputs!(outputs_proc)
+    def on_outputs_bang(outputs_proc)
       raise OutputsAlreadyDefinedError if @outputs || @outputs_bang
 
       @outputs_bang = outputs_proc
     end
+
+    public
+
+    # Called from ExecutionContext's verb methods (a different object, so
+    # this must be public).
+    def on_execute(rune_class, rune_args, rune_kwargs, input_proc)
+      params = rune_class.params_class.new(*rune_args, **rune_kwargs)
+      add_rune(rune_class.new_from_params(params, input_proc))
+    end
+
+    private
 
     # Memoized. `outputs!` re-raises access errors; `outputs` swallows the
     # "loop was broken" cases and yields nil.
@@ -290,5 +288,61 @@ module Runes
 
   # The object `execute` blocks run against (separate from the manager so a
   # rune's DSL method cannot accidentally see manager internals).
-  class ExecutionContext; end
+  #
+  # The seven verbs + outputs are DEFINED IN THE CLASS BODY: AOT compilation
+  # has no per-object method tables, so per-instance define_singleton_method
+  # is out. Dispatch goes through the plugin registry (Runes::Plugin), which
+  # keeps this class constant-free — a reduced kernel without chat/agent
+  # still compiles, and calling a missing verb raises a clear error.
+  class ExecutionContext
+    attr_accessor :__runes_manager
+
+    def cmd(*args, **kwargs, &blk)
+      execute_verb(:cmd, args, kwargs, blk)
+    end
+
+    def ruby(*args, **kwargs, &blk)
+      execute_verb(:ruby, args, kwargs, blk)
+    end
+
+    def chat(*args, **kwargs, &blk)
+      execute_verb(:chat, args, kwargs, blk)
+    end
+
+    def agent(*args, **kwargs, &blk)
+      execute_verb(:agent, args, kwargs, blk)
+    end
+
+    def call(*args, **kwargs, &blk)
+      execute_verb(:call, args, kwargs, blk)
+    end
+
+    def map(*args, **kwargs, &blk)
+      execute_verb(:map, args, kwargs, blk)
+    end
+
+    def repeat(*args, **kwargs, &blk)
+      execute_verb(:repeat, args, kwargs, blk)
+    end
+
+    def outputs(&outputs_proc)
+      @__runes_manager.on_outputs(outputs_proc)
+    end
+
+    def outputs!(&outputs_proc)
+      @__runes_manager.on_outputs_bang(outputs_proc)
+    end
+
+    private
+
+    def execute_verb(verb, args, kwargs, blk)
+      klass = Runes::Plugin[verb, kind: :rune]
+      if klass.nil?
+        raise Runes::ExecutionManager::ExecutionManagerError,
+              "rune #{verb.inspect} is not registered in this runtime"
+      end
+
+      @__runes_manager.on_execute(klass, args, kwargs, blk)
+    end
+  end
 end

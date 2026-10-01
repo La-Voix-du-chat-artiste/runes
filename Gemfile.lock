@@ -2,6 +2,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     dotenv (3.2.0)
+    fiddle (1.1.8)
     logger (1.7.0)
     minitest (5.27.0)
     mqtt (0.7.0)
@@ -32,6 +33,7 @@ PLATFORMS
 
 DEPENDENCIES
   dotenv (~> 3.1)
+  fiddle
   minitest (~> 5.25)
   mqtt (~> 0.7)
   rake (~> 13.2)
@@ -40,6 +42,7 @@ DEPENDENCIES
 
 CHECKSUMS
   dotenv (3.2.0) sha256=e375b83121ea7ca4ce20f214740076129ab8514cd81378161f11c03853fe619d
+  fiddle (1.1.8) sha256=7fa8ee3627271497f3add5503acdbc3f40b32f610fc1cf49634f083ef3f32eee
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
   mqtt (0.7.0) sha256=52c139253b738408133a68ab8d19144a17a5934ad8c0ba6d906f899a9737de3b

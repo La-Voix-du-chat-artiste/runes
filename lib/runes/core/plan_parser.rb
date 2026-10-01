@@ -1,5 +1,5 @@
-require 'json'
 require_relative 'json_scan'
+require_relative '../json_facade'
 
 module Runes
   module Core
@@ -94,8 +94,8 @@ module Runes
           args =
             if args_str.start_with?('{')
               begin
-                JSON.parse(args_str, max_nesting: MAX_JSON_NESTING)
-              rescue JSON::ParserError
+                Runes::Json.parse(args_str, max_nesting: MAX_JSON_NESTING)
+              rescue Runes::Json::ParseError
                 { '_raw' => args_str }
               end
             elsif tool == 'write_file' && args_str.include?('|')
@@ -123,8 +123,8 @@ module Runes
       end
 
       def safe_parse(str)
-        JSON.parse(str, max_nesting: MAX_JSON_NESTING)
-      rescue JSON::ParserError, ArgumentError
+        Runes::Json.parse(str, max_nesting: MAX_JSON_NESTING)
+      rescue Runes::Json::ParseError, ArgumentError
         nil
       end
     end

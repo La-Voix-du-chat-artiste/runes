@@ -1,5 +1,5 @@
-require "securerandom"
 require_relative "base"
+require_relative "../random_facade"
 
 module Runes
   module Transport
@@ -24,15 +24,13 @@ module Runes
 
         def subscribe(filter, qos: 0, group: nil, client: nil, &block)
           group, filter = TopicFilter.split_shared(filter) if TopicFilter.shared?(filter)
-          subscription = Subscription.new(id: SecureRandom.hex(6), filter: filter,
-                                          group: group, qos: qos, block: block, client: client)
+          subscription = Subscription.new(Runes::Random.hex(6), filter, group, qos, block, client)
           retained = @mutex.synchronize do
             @subscriptions << subscription
             @retained.select { |topic, _payload| TopicFilter.match?(filter, topic) }.to_a
           end
           retained.each do |topic, payload|
-            Transport.deliver(subscription, Message.new(topic: topic, payload: payload,
-                                                        properties: { retained: true }, retain: true))
+            Transport.deliver(subscription, Message.new(topic, payload, { retained: true }, 0, true))
           end
           subscription
         end
@@ -57,18 +55,17 @@ module Runes
 
             # One delivery per group, round-robin across its members — the
             # shared-subscription semantics that replace the claim race.
-            grouped = matching.select(&:group).group_by(&:group).map do |group, members|
+            grouped = matching.select { |v| v.group }.group_by { |v| v.group }.map do |group, members|
               chosen = members[@group_cursor[group] % members.size]
               @group_cursor[group] += 1
               chosen
             end
 
-            matching.reject(&:group) + grouped
+            matching.reject { |v| v.group } + grouped
           end
 
           targets.each do |sub|
-            Transport.deliver(sub, Message.new(topic: topic, payload: payload.to_s,
-                                               properties: properties || {}, qos: qos, retain: retain))
+            Transport.deliver(sub, Message.new(topic, payload.to_s, properties || {}, qos, retain))
           end
           targets.size
         end
@@ -100,7 +97,7 @@ module Runes
 
         def reset!
           @hubs_mutex.synchronize do
-            @hubs.each_value(&:clear!)
+            @hubs.each_value { |v| v.clear! }
             @hubs.clear
           end
         end

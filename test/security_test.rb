@@ -15,6 +15,7 @@ require 'fileutils'
 require 'json'
 require 'rbconfig'
 require 'open3'
+require_relative '../lib/runes/backends/cruby'
 
 SECURITY_TEST_ROOT = Dir.mktmpdir('runes-security-test')
 ENV['RUNES_ROOT'] = SECURITY_TEST_ROOT if ENV['RUNES_ROOT'].to_s.strip.empty?
@@ -362,7 +363,7 @@ class TrustStoreTest < Minitest::Test
     assert_equal ['runes-a'], store.agent_ids
     assert store.trusted?('runes-a')
     refute store.trusted?('runes-b')
-    assert_equal @identity_a.public_key_pem, store.key_for('runes-a').public_to_pem
+    assert_equal @identity_a.public_key_pem, Runes::Security::Ed25519Der.public_pem(store.key_for('runes-a'))
     assert_equal @identity_a.fingerprint, Runes::Security::TrustStore.fingerprint_of(store.key_for('runes-a'))
     assert_includes store.fingerprints, @identity_a.fingerprint
   end
@@ -395,7 +396,7 @@ class TrustStoreTest < Minitest::Test
   def test_add_accepts_a_private_key_pem_and_reduces_it
     store = Runes::Security::TrustStore.new
     store.add('runes-a', @identity_a.private_key_pem)
-    assert_equal @identity_a.public_key_pem, store.key_for('runes-a').public_to_pem
+    assert_equal @identity_a.public_key_pem, Runes::Security::Ed25519Der.public_pem(store.key_for('runes-a'))
   end
 
   def test_no_keys_means_verification_fails_closed

@@ -11,9 +11,9 @@ module Runes
     class Ruby < Runes::Rune
       plugin :ruby, description: "Pass a Ruby value through the workflow"
 
-      class Config < Runes::Cog::Config; end
+      class Config < Runes::Rune::Config; end
 
-      class Input < Runes::Cog::Input
+      class Input < Runes::Rune::Input
         attr_accessor :value
 
         def validate!
@@ -26,7 +26,7 @@ module Runes
         end
       end
 
-      class Output < Runes::Cog::Output
+      class Output < Runes::Rune::Output
         attr_reader :value
 
         def initialize(value)
@@ -58,22 +58,10 @@ module Runes
           proc.call(*args.drop(1), **kwargs, &blk)
         end
 
-        # 1. delegate to the value, 2. Hash key lookup (calling Procs).
-        def method_missing(name, *args, **kwargs, &blk)
-          return value.public_send(name, *args, **kwargs, &blk) if value.respond_to?(name, false)
-          return super unless value.is_a?(Hash) && value.key?(name)
-
-          stored = value[name]
-          if stored.is_a?(Proc)
-            stored.call(*args, **kwargs, &blk)
-          else
-            stored
-          end
-        end
-
-        def respond_to_missing?(name, include_private = false)
-          value.respond_to?(name, false) || (value.is_a?(Hash) && value.key?(name)) || super
-        end
+        # NOTE: method_missing delegation to the wrapped value is CRuby-only
+        # (lib/runes/plugins/ruby_delegation.rb) — it needs the dynamic
+        # dispatch a compiled kernel does not provide. Compiled workflows
+        # reach the value explicitly via `value`/`[]`/`call`.
       end
 
       protected

@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-require "pathname"
-require "erb"
-
 require_relative "util"
 require_relative "errors"
+require_relative "../compat"
 
 module Runes
   # Parameters passed to a workflow: positional targets, bare symbol flags and
@@ -13,28 +11,41 @@ module Runes
     attr_reader :targets, :args, :kwargs
 
     def initialize(targets = [], args = [], kwargs = {})
-      @targets = Array(targets).map(&:to_s)
-      @args = Array(args).map { |value| value.is_a?(Symbol) ? value : value.to_s.to_sym }
-      @kwargs = (kwargs || {}).each_with_object({}) do |(key, value), hash|
-        hash[key.to_s.to_sym] = value
+      target_arr = targets.is_a?(Array) ? targets : [targets]
+      @targets = []
+      target_arr.each { |value| @targets << value.to_s }
+      arg_arr = args.is_a?(Array) ? args : [args]
+      @args = []
+      arg_arr.each do |value|
+        @args << (value.is_a?(Symbol) ? value : value.to_s.to_sym)
+      end
+      @kwargs = {}
+      (kwargs || {}).each do |key, value|
+        @kwargs[key.to_s.to_sym] = value
       end
     end
 
     # Accepts an existing WorkflowParams, a Hash-like (`targets:`/`args:`/
-    # `kwargs:`), a bare Array of targets, or nil.
+    # `kwargs:`), a bare Array of targets, or nil. The hash/array arms go
+    # through helpers so the analyzer sees a Hash-typed (resp. Array-typed)
+    # parameter at the lookup sites.
     def self.from(value)
-      case value
-      when WorkflowParams
-        value
-      when Hash
-        new(value[:targets] || value["targets"] || [],
-            value[:args] || value["args"] || [],
-            value[:kwargs] || value["kwargs"] || {})
-      when nil
-        new
-      else
-        new(Array(value))
-      end
+      return value if value.is_a?(WorkflowParams)
+      return new if value.nil?
+      return from_hash(value) if value.is_a?(Hash)
+      return new(value) if value.is_a?(Array)
+
+      new([value])
+    end
+
+    def self.from_hash(hash)
+      targets = hash['targets']
+      targets = hash[:targets] if targets.nil?
+      args = hash['args']
+      args = hash[:args] if args.nil?
+      kwargs = hash['kwargs']
+      kwargs = hash[:kwargs] if kwargs.nil?
+      new(targets || [], args || [], kwargs || {})
     end
 
     def to_h
@@ -53,9 +64,9 @@ module Runes
     def initialize(params:, tmpdir:, workflow_dir:, timeout: nil)
       @params = params
       @tmpdir = tmpdir
-      @workflow_dir = Pathname.new(workflow_dir)
+      @workflow_dir = File.expand_path(workflow_dir.to_s)
       @timeout = timeout
-      @deadline = timeout && (monotonic + timeout.to_f)
+      @deadline = timeout && (Runes::Compat.monotonic + timeout.to_f)
     end
 
     # True once the workflow's wall-clock budget is exhausted. `timeout: nil`
@@ -63,13 +74,7 @@ module Runes
     def expired?
       return false if @deadline.nil?
 
-      monotonic >= @deadline
-    end
-
-    private
-
-    def monotonic
-      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      Runes::Compat.monotonic >= @deadline
     end
   end
 
@@ -121,41 +126,12 @@ module Runes
     end
 
     def tmpdir
-      Pathname.new(workflow_context.tmpdir).realpath
+      File.realpath(workflow_context.tmpdir.to_s)
     end
 
-    # ERB template lookup, matching Roast's search order:
-    # workflow dir, workflow dir/{prompts,templates}, current dir,
-    # current dir/{prompts,templates}; each with "", ".erb", ".md.erb".
-    def template(path, args = {})
-      path = Pathname.new(path) unless path.is_a?(Pathname)
-      candidates = []
-      candidates << path if path.absolute?
-
-      bases = [workflow_context.workflow_dir, Pathname.pwd]
-      bases.each do |base|
-        [base, base / "prompts", base / "templates"].each do |dir|
-          candidates << dir / path
-          candidates << Pathname.new("#{dir / path}.erb")
-          candidates << Pathname.new("#{dir / path}.md.erb")
-        end
-      end
-
-      begin
-        expanded = Pathname.new(File.expand_path(path.to_s))
-        candidates << expanded
-        candidates << Pathname.new("#{expanded}.erb")
-        candidates << Pathname.new("#{expanded}.md.erb")
-      rescue ArgumentError
-        # `~unknown_user/...` cannot be expanded; the other candidates stand.
-      end
-
-      resolved = candidates.find(&:exist?)
-      unless resolved
-        raise Runes::CogInputContext::ContextNotFoundError, "The file '#{path}' could not be found"
-      end
-
-      ERB.new(resolved.read).result_with_hash(args)
-    end
+    # ERB template lookup is CRuby-only (lib/runes/workflow/templates.rb):
+    # it needs ERB and Pathname, which a compiled kernel does not carry.
+    # Calling `template` in a compiled workflow raises NoMethodError — inline
+    # the text instead.
   end
 end
