@@ -84,7 +84,7 @@ be, and the shape each fix took (all are in the code with comments):
 | `case/when` class narrowing on poly | `elsif` chains don't narrow; helper params inferred from call sites DO | `WorkflowParams.from` restructured into `from_hash` helpers |
 | `String#<<` / out-param mutation | **The analyzer sometimes passes the accumulator `const char*` BY VALUE** (whole-program shape-dependent): every `<<` silently dropped (found via `JSONPure.generate` returning `""`) | Emitters rewritten in pure value style (`out = out + piece`, return the accumulator) — correct in both shapes |
 | `IO::Buffer` feature detection | Whole-program builds **miss uses inside required-file lambdas/singletons** → every `IO::Buffer.new` became `raise NameError("uninitialized constant Buffer")` | A constant-assigned probe (`IO_BUFFER_PROBE`) on the kernel entry's main path keeps the feature linked |
-| `IO::Buffer.get/set_value(:U64/:S32)` | **Big-endian reads observed** vs C's native little-endian out-params (siglen decoded as 0x4000000000000000) | All multi-byte buffer access composed from `:U8` bytes (`SpinelGlue.read_u32le/write_u32le`); fixed-size reads (Ed25519 sig = 64B, HMAC = 32B) read fixed sizes |
+| `IO::Buffer.get/set_value(:U64/:S32)` | Reads came back byte-swapped vs C's native little-endian out-params (siglen decoded as 0x4000000000000000). **Not a Spinel divergence on re-test**: `IO::Buffer.new` is big-endian by default under CRuby too, and Spinel matches CRuby exactly — this was OUR assumption that `:U64` meant native order (the CRuby path read via Fiddle, which is native). Filed-reports note: withdrawn as a compiler report; kept here as the IO::Buffer default-endianness trap | All multi-byte buffer access composed from `:U8` bytes (`SpinelGlue.read_u32le/write_u32le`); fixed-size reads (Ed25519 sig = 64B, HMAC = 32B) read fixed sizes |
 | `IO::Buffer.for` | Not part of Spinel's documented buffer surface | `SpinelGlue.blob_buffer` builds byte-by-byte |
 | `send(name)` with a runtime Symbol | Literal `send(:name)` only | Static call lists; per-check `warn` tracing instead of dispatch tables |
 | Module-state predicates (`installed?`) | **Constant-folded at analysis time** (ivar still nil when the analyzer evaluates) | Self-check probes by doing (first real spawn) instead of asking |
@@ -94,10 +94,17 @@ be, and the shape each fix took (all are in the code with comments):
 | `String#bytesize/getbyte/chr`, `respond_to?`, `match?`, `Dir.glob`, `File#flock/realpath`, keyword args, blocks, threads | **Supported as hoped** | No change needed |
 
 Post-fix state: `build/runes-kernel selfcheck` passes 70/70 natively; the
-CRuby suite is unchanged-green. Items to report upstream (spinel): the
-by-value accumulator miscompile, the IO::Buffer feature-detection gap, the
-`:U64` endianness, and the analysis-time constant folding of ivar
-predicates.
+CRuby suite is unchanged-green.
+
+**Filed upstream (2026-10-01, matz/spinel):**
+[#6740](https://github.com/matz/spinel/issues/6740) — the required-file
+`IO::Buffer` linking gap, with a two-file minimal repro (verified on
+2026.09.12+3496: same expression works on the main path, raises
+`NameError` from a required file). [#6741](https://github.com/matz/spinel/issues/6741)
+— the by-value accumulator and the analysis-time ivar folding as
+shape-dependent observations (no current minimal repro; both fixed on our
+side). The `:U64` row above was re-tested and withdrawn as a compiler
+report: Spinel matches CRuby there — see its entry.
 
 ## Memory model audit (for the no-GVL runtime)
 

@@ -2332,3 +2332,17 @@ rewritten around the fleet layer.
 
 Suites: parent **739 / 4700 / 0** (`scripts/receipts.rb --suites`
 re-measures).
+
+**Post-0.4.0 addendum (2026-10-01) — upstream filings.** The VERIFY table's
+"report upstream" list was audited against live repros on spinel
+2026.09.12+3496 before filing: the required-file `IO::Buffer` gap
+reproduced minimally (two files) and was filed as
+[matz/spinel#6740](https://github.com/matz/spinel/issues/6740); the
+by-value accumulator and ivar-folding miscompiles no longer reproduce in
+any reduced shape after the kernel refactorings and were filed as
+shape-dependent observations in
+[matz/spinel#6741](https://github.com/matz/spinel/issues/6741). The
+`:U64` "endianness" entry was withdrawn as a compiler report — spinel
+matches CRuby exactly (`IO::Buffer.new` is big-endian by default); it was
+our Fiddle-vs-Buffer assumption. `docs/spinel/spec-tier-a.md` carries the
+corrections; repro artifacts live in `tmp/spinel-repros/`.
