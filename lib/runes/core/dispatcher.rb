@@ -18,6 +18,7 @@ require_relative '../version'
 require_relative '../transport'
 require_relative '../a2a'
 require_relative '../security'
+require_relative '../fleet'
 require_relative '../guard_telemetry_sink'
 require_relative '../request_ledger'
 require_relative '../agent/fabric'
@@ -111,12 +112,16 @@ module Runes
                      agent_id: nil,
                      tool_registry: nil,
                      transport: nil,
-                     request_ledger: nil)
+                     request_ledger: nil,
+                     fleet: nil)
         @broker_config = broker_config || {}
         @ui = ui
         @settings = settings || Runes::Core::Settings.new
         @workspace = @settings.workspace_root
         FileUtils.mkdir_p(@workspace)
+        # Optional fleet file (0.4.0): loaded after connect, rules run on
+        # this agent's transport, journal persisted under settings.root.
+        @fleet_path = fleet
 
         @agent_id = agent_id.nil? ? default_agent_id : validate_agent_id!(agent_id)
         # S5-4: accepted tool-RPC nonces (replay window), created lazily
@@ -220,6 +225,7 @@ module Runes
         start_workers
         announce_agent_card
         log "Workspace: #{@workspace}"
+        start_fleet if @fleet_path
         log 'Subscribed. Entering reactive loop (transport threads feed the worker pool).'
         wait_for_shutdown
       end
@@ -235,8 +241,36 @@ module Runes
       rescue Interrupt
         nil
       ensure
+        # The fleet runner unsubscribes its rule topics before the
+        # transport goes away, and closes its journal file.
+        begin
+          @fleet_runner&.stop
+        rescue StandardError => e
+          log "Fleet shutdown error: #{e.class}: #{e.message}"
+        end
         @transport&.disconnect
         log 'Stopped.'
+      end
+
+      # Fleet layer (0.4.0): load the world fail-closed, run its rules on
+      # this agent's transport with a JSONL journal under settings.root.
+      # A bad fleet file is loud in the log and leaves nothing half-wired
+      # (the loader's atomicity guarantee, §10).
+      def start_fleet
+        world = Runes::Fleet.load_file(@fleet_path)
+        journal_path = File.join(@settings.root, 'log', "fleet-#{world.name}-journal.jsonl")
+        @fleet_runner = Runes::Fleet::Runner.new(
+          world,
+          transport: @transport,
+          journal_path: journal_path,
+          notifier: ->(n) { log "[fleet] #{n['level']}: #{n['text']}" }
+        )
+        @fleet_runner.start
+        log "Fleet loaded: #{world.name} — #{world.rules.size} rule(s), " \
+            "#{world.roles.size} role(s), digest #{world.fingerprint[0, 12]}…"
+        log "Fleet journal: #{journal_path}"
+      rescue Runes::Fleet::LoadError => e
+        log "Fleet load FAILED — no fleet wired: #{e.message}"
       end
 
       def tool_rpc_enabled?

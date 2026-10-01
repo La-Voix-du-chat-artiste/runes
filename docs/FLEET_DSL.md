@@ -1,6 +1,15 @@
 # Runes Fleet DSL — Specification
 
-**Status:** Draft v0.1
+**Status:** Draft v0.1 — **world + rules implemented** (Phases A+B, 0.4.0):
+restricted-subset Prism walker (now with the §6 rule-expression mode:
+`|e|` blocks, `guard:` lambdas, `next!`, access/operators/static
+`match?`, bounded `%{field}` and `#{e.field}` templates), the five event
+sources, a hermetic rule engine on the transport seam (declaration-order
+all-match firing, `RequestLedger`-backed deterministic request ids,
+`max_actions_per_event` with dead-letter, the §10 refusal taxonomy), and
+the §8 extracts (`lib/runes/fleet/`, `test/fleet_loader_test.rb`,
+`test/fleet_rules_test.rb`). Daemon wiring (start/stop, the timer loop,
+journal persistence, observatory `/topology`) is the next phase.
 **Target release:** runes 0.4.0
 **Depends on:** the 7-rune workflow semantics (v0.3.0), `Runes::Transport` seam,
 capability guard, MQTT 5 fabric
@@ -135,14 +144,21 @@ Schemas are declared assets, not inline code.
 ### 4.4 `route`
 
 ```ruby
-route :scraper => :writer => :reviewer
-route :reviewer => :outbox, when: :accepted
+route :scraper, :writer, :reviewer            # a path: one edge per consecutive pair
+route :reviewer, :outbox, when: :accepted     # a single edge with an outcome guard
+route scraper: :metrics                       # keyword spelling, one edge per pair
 ```
+
+(The chained-rocket spelling `route :a => :b => :c` is **not valid Ruby**
+— `=>` does not chain — so the surface is positional symbols; recorded
+here because an early draft of this spec used it in its examples.)
 
 Semantics: routes are **directed edges** in the fleet graph. They are (a)
 documentation — the topology the observatory renders, (b) static validation —
-a `task` action targeting an unknown role is a load error, (c) ACL material —
-an edge :a → :b authorizes :a to publish on :b's task topic and nothing more.
+an endpoint that is not a declared agent or channel is a load error, (c) ACL
+material — an edge :a → :b authorizes :a to publish on :b's task topic (for
+an agent target) or on the channel's topic (for a channel target), and
+nothing more.
 
 `when:` is an optional guard over the producing event (same expression
 language as §6); it partitions the edge by outcome.
@@ -226,7 +242,7 @@ Unknown source name ⇒ load error (P3).
 
 | Action | Lowers to | Guard-visible? |
 |--------|-----------|----------------|
-| `task role, prompt, opts` | addressed A2A task envelope → existing `agent`/`chat` rune | yes — target must be on a declared route edge |
+| `task role, prompt, opts` | addressed A2A task envelope → existing `agent`/`chat` rune | yes — target must be the `to` of a declared route edge (a channel→role edge authorizes the event source, e.g. `route :contact_found, :scraper`) |
 | `publish channel, payload` | transport PUBLISH on the channel's topic | yes — ACL-derived |
 | `notify text, level:` | observatory/TUI event | yes |
 | `spawn role, n:` | no-op in v0.1 (process orchestration stays outside); reserved | n/a |
@@ -357,10 +373,11 @@ fleet "prospection" do
   transport :mqtt5
   group     "prospection-prompts"
 
-  channel :contact_found,    "runes/events/contacts/found",    schema: :contact
-  channel :contact_qualified,"runes/events/contacts/qualified",schema: :contact
-  channel :draft_ready,      "runes/events/drafts/ready",      schema: :draft
-  channel :metrics,          "runes/events/metrics"
+  channel :contact_found,     "runes/events/contacts/found",    schema: :contact
+  channel :contact_qualified, "runes/events/contacts/qualified",schema: :contact
+  channel :draft_ready,       "runes/events/drafts/ready",      schema: :draft
+  channel :metrics,           "runes/events/metrics"
+  channel :outbox,            "runes/events/outbox"
 
   fact :max_drafts_per_hour, 20
 
@@ -377,7 +394,8 @@ fleet "prospection" do
     tools :none
   end
 
-  route :scraper => :writer => :reviewer
+  route :scraper, :writer, :reviewer
+  route :contact_found, :scraper   # channel → role: the event may task the scraper
 
   on :contact_found do |e|
     next! unless e.email.match?(/\A[^@]+@[^@]+\z/)
@@ -431,5 +449,7 @@ end
 
 ---
 
-*Spec status: draft for review. Next step: spike the restricted AST walker
-(Prism) against `examples/prospect_pipeline.rb` to size the lowering work.*
+*Spec status: draft for review. Phase A landed (see the header). Next
+step: the rules layer (§5) — restricted `on`/`guard`/`then`, lowering each
+rule onto a `ruby` rune wrapping its actions (§9), with the §10 run-time
+error taxonomy.*

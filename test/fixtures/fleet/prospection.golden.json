@@ -1,0 +1,134 @@
+{
+  "_comment": "L2 conformance extract for examples/prospection.fleet.rb — regenerate with: ruby scripts/fleet_golden.rb examples/prospection.fleet.rb test/fixtures/fleet/prospection.golden.json",
+  "fleet": "prospection",
+  "fingerprint": "ac0abe3c50865e74b0647d05c33c612a324278166eeaa4fab00aaee3929a147d",
+  "policy_extract": {
+    "default_allow": false,
+    "roles": {
+      "reviewer": {
+        "tools": {}
+      },
+      "scraper": {
+        "tools": {
+          "exec": {
+            "allow": [
+              "curl",
+              "jq"
+            ]
+          },
+          "fs_read": "allow"
+        }
+      },
+      "writer": {
+        "tools": {
+          "fs_write": "allow"
+        }
+      }
+    }
+  },
+  "acl_extract": {
+    "reviewer": [
+      [
+        "read",
+        "runes/agents/reviewer/tasks"
+      ],
+      [
+        "write",
+        "runes/events/outbox"
+      ]
+    ],
+    "scraper": [
+      [
+        "read",
+        "runes/agents/scraper/tasks"
+      ],
+      [
+        "write",
+        "runes/agents/writer/tasks"
+      ],
+      [
+        "write",
+        "runes/events/metrics"
+      ]
+    ],
+    "writer": [
+      [
+        "read",
+        "runes/agents/writer/tasks"
+      ],
+      [
+        "write",
+        "runes/agents/reviewer/tasks"
+      ]
+    ]
+  },
+  "topology": {
+    "name": "prospection",
+    "agents": [
+      "scraper",
+      "writer",
+      "reviewer"
+    ],
+    "edges": [
+      {
+        "from": "scraper",
+        "to": "writer",
+        "when": null
+      },
+      {
+        "from": "writer",
+        "to": "reviewer",
+        "when": null
+      },
+      {
+        "from": "reviewer",
+        "to": "outbox",
+        "when": "accepted"
+      },
+      {
+        "from": "scraper",
+        "to": "metrics",
+        "when": null
+      },
+      {
+        "from": "contact_found",
+        "to": "scraper",
+        "when": null
+      }
+    ],
+    "channels": {
+      "contact_found": "runes/events/contacts/found",
+      "contact_qualified": "runes/events/contacts/qualified",
+      "draft_ready": "runes/events/drafts/ready",
+      "metrics": "runes/events/metrics",
+      "outbox": "runes/events/outbox"
+    },
+    "rules": [
+      {
+        "id": "contact_found-0",
+        "source": "channel:contact_found",
+        "line": 40
+      },
+      {
+        "id": "contact_qualified-1",
+        "source": "channel:contact_qualified",
+        "line": 45
+      },
+      {
+        "id": "draft_ready-2",
+        "source": "channel:draft_ready",
+        "line": 51
+      },
+      {
+        "id": "guard_denied-3",
+        "source": "guard_denied:guard_denied",
+        "line": 55
+      },
+      {
+        "id": "weekly_report-4",
+        "source": "schedule:weekly_report",
+        "line": 59
+      }
+    ]
+  }
+}

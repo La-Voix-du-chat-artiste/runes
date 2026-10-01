@@ -15,7 +15,16 @@ CONFIG = {
 }.freeze
 
 puts "[Runes Daemon] Starting (broker=#{CONFIG[:host]}:#{CONFIG[:port]})..."
-dispatcher = Runes::Core::Dispatcher.new(CONFIG)
+# Optional fleet file (0.4.0): `--fleet path/to/world.fleet.rb` loads the
+# declarative world + rules at boot; a bad file is logged and skipped
+# (the loader is fail-closed), the daemon keeps running without it.
+fleet_path = nil
+if (idx = ARGV.index("--fleet"))
+  fleet_path = ARGV[idx + 1]
+  abort "[Runes Daemon] --fleet needs a path" unless fleet_path
+end
+
+dispatcher = Runes::Core::Dispatcher.new(CONFIG, fleet: fleet_path)
 
 begin
   dispatcher.start

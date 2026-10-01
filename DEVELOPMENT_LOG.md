@@ -2192,3 +2192,143 @@ reads real statuses.
 
 Suites: parent **681 / 4392 / 0**, observatory **219 / 1085 / 0** (as of the
 native build; `scripts/receipts.rb --suites` re-measures).
+
+## Phase 35 — The Fleet DSL, phase A: the world layer loads fail-closed (0.4.0)
+
+**Where this sits.** 0.4.0 is the fleet layer of `docs/FLEET_DSL.md`: a
+declarative world + rules document in a restricted, statically analyzable
+Ruby subset — the Inform 7 lesson (a declared world, rules that fire on
+change) with discipline instead of natural-language parsing. Phase A ships
+the world half at L1 conformance; rules (§5) and the lowering onto the
+seven runes (§9) are the next phase.
+
+**The walker is the gate.** `Runes::Fleet.load_file` runs three stages, any
+failure raising `Fleet::LoadError` and leaving zero partial world (P3/§10):
+the `# fleet-spec: 0.1` header is checked lexically (§13, visible to grep
+and to the future L3 gate without evaluation); a Prism whitelist walker
+denies by default — eval, defs, constant reads, receiver calls,
+interpolation, globals, control flow, lambdas, backticks all abort with a
+line-numbered error (§6), with an explicit `method_missing` net because
+Prism's `accept` dispatch has no reliable visit_missing fallback; only then
+does the fixed binding evaluate the declarations (`fleet`/`agent`/
+`channel`/`route`/`fact`/`schedule`/`config`), the builders enforcing
+placement, duplicate ids, ACL-safe tokens, `runes/`-prefixed topics and
+5-field crons. One loud call recorded in code: an agent with no `tools`
+clause is a load error — default-deny is explicit, `tools :none` is how a
+role says "I only watch".
+
+**A spec correction, caught by the compiler we were writing.** The draft's
+route syntax `route :a => :b => :c` is not valid Ruby — `=>` does not chain
+inside or outside braces (the early spec example could never have
+evaluated). The surface is positional: `route :scraper, :writer,
+:reviewer` declares a path (one edge per consecutive pair),
+`route :reviewer, :outbox, when: :accepted` a guarded edge, and the keyword
+spelling stays as sugar for single pairs. §4.4 and the §12 example are
+corrected in place, and the §12 world needed its `:outbox` channel
+declared for the route to validate.
+
+**The guard can already see it.** Loading produces the §8 extracts without
+any runtime: the policy extract (every `tools` clause merged, `default_allow`
+pinned false), the ACL extract (route edges authorize exactly the target's
+`runes/agents/<id>/tasks` write or the channel topic — nothing more, no
+catch-all; the base card/status grants stay `bin/runes-acl`'s job), and the
+topology graph in the observatory's shape with `rules: []` until phase B.
+`world.fingerprint` hashes the extracts through the kernel's own
+`Runes::Json`/`Runes::SHA256` seams — the determinism certificate seed
+(§8.4) is dogfooded kernel code. `prism` becomes a declared gemspec
+dependency.
+
+Suites: parent **708 / 4581 / 0** (`scripts/receipts.rb --suites`
+re-measures).
+
+## Phase 36 — The Fleet DSL, phase B: rules fire, deterministically (0.4.0)
+
+**The rule layer (spec §5).** `on :source, guard: ->(e) { ... } do |e| ... end`
+— both spellings, one triple — loads through the same deny-by-default
+walker, now with a second, wider mode for rule expressions: exactly-|e|
+blocks and guard lambdas, `next!`, event access (`e.field`, `e[:field]`),
+the §6 operator set, static `match?`, and bounded templates in both spellings
+(`%{field}` against event fields and facts, `"#{e.field}"` through the
+same whitelisted interpolation). The escape hatches stay shut inside guards
+by name — `system`, `send`, `instance_eval`, `format`, `pack`, `extend`
+and friends are a written deny list, because the file's guarantee is
+analyzability, not adversarial sandboxing. World-mode files are untouched:
+a lambda or a receiver call outside a rule is still a load error.
+
+**Rules are data before they are behaviour (§5.2/§5.4).** Sources classify
+against the declared world — channels, schedules, agent_online/offline,
+mission_failed/step_failed, guard_denied; anything else is a load error.
+Action targets are validated twice: a load-time dry-run executes each
+block once against a probe event (every field reads truthy, so every
+statically reachable action is captured and checked — task targets must
+sit on a declared route edge, publish targets must be declared channels,
+notify levels are pinned to info/warn/error), and the engine re-validates
+every action at run time, so a branch the probe never took is refused at
+the moment it would otherwise execute. Nothing undeclared ever runs.
+
+**The engine (§5.3) is hermetic by construction.** It owns no thread and
+no clock loop: the daemon will call `tick`; tests call `dispatch` and
+`receive` directly. Semantics, exactly: rules fire in declaration order,
+all matches, actions in rule order; a guard or body that raises is a
+`rule_guard_error` refusal event, never a silent skip; every action
+carries a deterministic request id — SHA-256 over (fleet, rule, event,
+ordinal), the event id itself a digest of (source, payload) — claimed in
+the `RequestLedger`, so a redelivered event cannot execute the same action
+twice; beyond `max_actions_per_event` the whole event fails to the
+declared dead_letter channel. `task` lowers to the addressed A2A envelope
+peers already consume on `runes/agents/<id>/tasks`; `publish` writes the
+channel topic with `:now` pinned to receipt time (never wall clock inside
+guards); `notify` feeds the telemetry sink behind a rescue — a broken sink
+must never break the fleet. Schedules are cron (five fields, `*/n`, names)
+and fire only when ticked at a matching minute. The journal is an
+in-memory array of structured entries today; persisting it is daemon
+wiring, and the determinism certificate is already testable: two fresh
+engines, same event, byte-identical request ids.
+
+Suites: parent **730 / 4660 / 0** (`scripts/receipts.rb --suites`
+re-measures).
+
+## Phase 37 — The Fleet DSL, phase C: conformance, wiring, and 0.4.0 (0.4.0)
+
+**L2 — auditable (§8/§11).** The policy, ACL and topology extracts of the
+example fleet (`examples/prospection.fleet.rb`, the same file operators can
+run and the suite tests) are golden-file diffed on every suite run, with
+`scripts/fleet_golden.rb` as the intentional regeneration path; the
+fingerprint of the whole analysed world sits in the golden and in the
+engine's `fleet_boot` journal record, so a journal can always be tied to
+the exact fleet that produced it. The ACL extract round-trips through the
+real renderer: `bin/runes-acl --fleet FILE` auto-adds the fleet's roles as
+first-class broker users, merges the route-edge grants into their
+sections, prints the fleet digest in the header, and fails closed both
+ways — a fleet grant for a role that is not an agent, or an access that is
+not read/write/readwrite, aborts. A rendered fleet ACL contains no
+catch-all allow; the test says so.
+
+**Wiring.** `Fleet::Runner` wraps the engine with the process concerns it
+deliberately does not own: a timer thread that calls `tick`, a JSONL
+journal sink (boot record first, one entry per line, `tail`-able), and
+idempotent start/stop. `bin/runes-daemon --fleet path.fleet.rb` loads the
+world after connect — a bad file is loud in the log and leaves nothing
+half-wired — and the runner stops before the transport disconnects. The
+engine gained a mutex around journal commits (dispatches arrive on
+transport reader threads AND the timer thread) and the sink is fail-safe:
+a journaling error is warned about once and dropped, never fatal.
+
+**Spec corrections while wiring.** Two more draft-spec bugs met the
+compiler: §5.4's "task target on a declared route edge" made §12's own
+example unloadable (the scraper has no incoming edge), fixed by declaring
+the intended channel→role edge (`route :contact_found, :scraper`) and
+saying in §5.4 that this is how an event source authorizes tasking a role;
+and the ACL extract now grants only role-sourced edges — a channel-source
+edge authorizes the fleet runtime, which publishes under its host agent's
+ACL, a distinction the daemon's fleet-user story will complete. Also
+recorded: Prism spells the regexp node `RegularExpressionNode` in current
+versions, and a fleet file is a single source of truth — the example IS
+the fixture.
+
+**0.4.0.** Version bumped; README status, fleet section (now with the two
+commands to run one) and roadmap updated; STATE.md's resume block
+rewritten around the fleet layer.
+
+Suites: parent **739 / 4700 / 0** (`scripts/receipts.rb --suites`
+re-measures).

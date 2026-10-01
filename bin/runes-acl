@@ -46,7 +46,7 @@ module Runes
 
       def initialize(agents:, org: DEFAULT_ORG, shared_group: DEFAULT_SHARED_GROUP,
                      allow_journal: false, a2a: false, tool_rpc: false,
-                     tool_rpc_listeners: [])
+                     tool_rpc_listeners: [], fleet_grants: {}, fleet_note: nil)
         @agents = Array(agents).map { |a| a.to_s.strip }.reject(&:empty?).uniq
         raise ACLError, 'at least one --agent ID is required (fail closed)' if @agents.empty?
 
@@ -73,14 +73,41 @@ module Runes
         # so loudly in the generated file; `--tool-rpc-listener ID` narrows
         # it to the agents that actually execute tool requests.
         @tool_rpc_listeners = @tool_rpc_explicit.empty? ? @agents.dup : @tool_rpc_explicit
+
+        # Fleet round-trip (§8.2): the fleet loader's ACL extract —
+        # role => [[access, topic], ...] — merged onto the base grants.
+        # Fail closed BOTH ways: every fleet role must be one of the
+        # rendered agents (a grant nobody renders is a silent widening
+        # waiting to happen), and every grant topic must be a safe token.
+        @fleet_note = fleet_note
+        @fleet_grants = fleet_grants.transform_keys(&:to_s)
+        unknown = @fleet_grants.keys - @agents
+        unless unknown.empty?
+          raise ACLError,
+                "fleet grants exist for roles that are not --agent ids: #{unknown.join(', ')} " \
+                "(fleet roles and broker usernames must match)"
+        end
+
+        # Fleet grant topics are full MQTT topic strings, already
+        # validated fail-closed by the fleet loader (its SAFE_TOPIC);
+        # re-validating them as ACL tokens would reject every slash.
+        @fleet_grants.each_value do |pairs|
+          pairs.each do |access, _topic|
+            unless %w[read write readwrite].include?(access.to_s)
+              raise ACLError, "fleet grant access #{access.inspect} must be read/write/readwrite"
+            end
+          end
+        end
       end
 
       # Every grant for one agent as [access, topic] pairs, in emission
-      # order: reads, then writes, then opt-in blocks.
+      # order: reads, then writes, fleet-derived grants, then opt-in
+      # blocks.
       def grants(agent)
         id = validate_token(agent, 'agent id')
         out = read_topics(id).map { |topic| ['read', topic] }
         out.concat(write_topics(id).map { |topic| ['write', topic] })
+        out.concat(@fleet_grants.fetch(id, []))
         out << ['readwrite', 'runes/_log/#'] if @allow_journal
         out
       end
@@ -106,6 +133,7 @@ module Runes
         out << "#   journal:      #{@allow_journal ? 'allowed (runes/_log/#)' : 'not granted'}\n"
         out << "#   a2a:          #{@a2a ? 'granted' : 'not granted'}\n"
         out << "#   tool-rpc:     #{@tool_rpc ? 'granted' : 'not granted'}\n"
+        out << "#   fleet:        #{@fleet_note}\n" if @fleet_note
         if @tool_rpc
           scope = @tool_rpc_explicit.empty? ? 'ALL agents (no --tool-rpc-listener given)' \
                                             : @tool_rpc_listeners.join(', ')
@@ -239,6 +267,9 @@ if File.expand_path($PROGRAM_NAME) == File.expand_path(__FILE__)
          'Agent that may READ runes/tools/+/request (repeatable; default: all agents)') do |v|
       options[:tool_rpc_listeners] << v
     end
+    o.on('--fleet PATH', 'Load a .fleet.rb file: merge its ACL extract, auto-add its roles') do |v|
+      options[:fleet] = v
+    end
     o.on('-h', '--help', 'Show this help') do
       puts o
       exit 0
@@ -247,6 +278,20 @@ if File.expand_path($PROGRAM_NAME) == File.expand_path(__FILE__)
 
   begin
     parser.parse!(ARGV)
+
+    fleet_grants = {}
+    fleet_note = nil
+    if options[:fleet]
+      require_relative '../lib/runes/fleet'
+      require_relative '../lib/runes/backends/cruby' # wire the Json/SHA256 facades
+      world = Runes::Fleet.load_file(options[:fleet])
+      # The fleet DECLARES these roles exist: they become first-class
+      # agents in the rendered ACL (broker usernames = fleet role ids).
+      options[:agents] |= world.roles.keys.map(&:to_s)
+      fleet_grants = world.acl_extract
+      fleet_note = "#{world.name} (digest #{world.fingerprint[0, 12]}…, roles #{world.roles.keys.join(', ')})"
+    end
+
     acl = Runes::Security::ACL.new(
       agents: options[:agents],
       org: options[:org],
@@ -254,7 +299,9 @@ if File.expand_path($PROGRAM_NAME) == File.expand_path(__FILE__)
       allow_journal: options[:allow_journal],
       a2a: options[:a2a],
       tool_rpc: options[:tool_rpc],
-      tool_rpc_listeners: options[:tool_rpc_listeners]
+      tool_rpc_listeners: options[:tool_rpc_listeners],
+      fleet_grants: fleet_grants,
+      fleet_note: fleet_note
     )
   rescue OptionParser::ParseError, Runes::Security::ACL::ACLError => e
     warn "runes-acl: #{e.message}"

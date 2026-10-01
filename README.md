@@ -20,15 +20,18 @@ markdown it describes, so the two cannot drift). The "why" (what we are
 [`STRATEGY.md`](STRATEGY.md); the longer pitch is
 [`docs/WHY_RUNES_V2.md`](docs/WHY_RUNES_V2.md).
 
-> **Status (2026-10-01): 0.3.0 shipped — three directions opening.**
+> **Status (2026-10-01): 0.4.0 shipped — the fleet layer is real.**
 > (1) **The transport-agnostic series** — the MQTT fabric is one adapter
 > behind `Runes::Transport` (`inproc | mqtt311 | mqtt5`); the claim/lease
 > protocol was *deleted* in favour of MQTT 5 shared subscriptions; agents
 > speak A2A-over-MQTT discovery/tasks and MCP tools in both directions,
 > with per-agent Ed25519 identity and a mosquitto ACL generator. The
-> suite is **fully offline**. (2) **The fleet layer (0.4.0, specified)** —
-> a declarative *world + rules* DSL on top of the seven runes, statically
-> analyzable and guard-visible: [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
+> suite is **fully offline**. (2) **The fleet layer (0.4.0, shipped)** —
+> `.fleet.rb` files declare a world + rules in a restricted, statically
+> analyzable Ruby subset: fail-closed Prism-whitelist loading, rules that
+> fire deterministically with ledger-backed ids, and policy/ACL/topology
+> extracts golden-tested at L2 conformance — `runes-daemon --fleet
+> world.fleet.rb` runs one: [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
 > (3) **WASI guests (roadmap)** — compiling agents to WebAssembly via
 > Spinel's C output, as capability-sandboxed guests. The first mile of that
 > road is already walked: the harness **kernel compiles under Spinel
@@ -97,7 +100,7 @@ Not the syntax — the *semantics*. Frozen, so the implementation can move
 Everything else — Roast compatibility, the plugin registry, journaling,
 replay, the observatory timeline — follows from these five axioms.
 
-## 🗺️ The fleet layer — world + rules (0.4.0, specified)
+## 🗺️ The fleet layer — world + rules (0.4.0, shipped)
 
 Workflows say *how to compute a result*; fleets say *who exists, who may
 touch what, and what happens when the world changes*. The Fleet DSL
@@ -114,7 +117,7 @@ fleet "prospection" do
     tools fs_write: :allow          # default-deny, always
   end
 
-  route :scraper => :writer => :reviewer
+  route :scraper, :writer, :reviewer
 
   on :contact_qualified do |e|
     next! unless e.score > 0.7
@@ -132,6 +135,14 @@ load — no subscriptions, no grants left behind on failure); **the guard sees
 it** (policy + mosquitto ACL extracted at load time — closing the "guard does
 not see runes" gap for the declarative layer); **AOT-ready** (the subset is
 chosen to compile under Spinel with no rewrite).
+
+Run one: `bin/runes-daemon --fleet examples/prospection.fleet.rb` — the
+world loads fail-closed, rules fire with ledger-backed deterministic ids,
+and the journal (boot fingerprint first) lands in `log/fleet-*-journal.jsonl`.
+`bin/runes-acl --fleet examples/prospection.fleet.rb` renders the merged
+mosquitto ACL, fleet roles becoming first-class broker users. The
+step-by-step semantics and the L1/L2/L3 conformance levels:
+[`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
 
 ## ✨ Features
 
@@ -404,9 +415,9 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 
 | | |
 | --- | --- |
-| `lib/` | **18 800 lines** across 90 files |
-| `test/` | **12 381 lines** across 50 files |
-| Suite | **681 runs, 4 392 assertions, 0 failures** — no keys, no network |
+| `lib/` | **20 448 lines** across 98 files |
+| `test/` | **13 302 lines** across 53 files |
+| Suite | **739 runs, 4 700 assertions, 0 failures** — no keys, no network |
 | Executables | **7**: TUI, daemon, client, MCP, replay, ACL, workflow |
 | The seven runes | `agent` 728, `chat` 503, `repeat` 203, `cmd` 207, `map` 183, `ruby` 78, `call` 68 |
 | MQTT 5 adapter | **1 148 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects* |
@@ -440,9 +451,11 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 
 Ordered, and each item is either specified, spiked or scoped — not vapour:
 
-1. **The fleet layer (0.4.0, specified)** — Prism-AST restricted-subset
-   loader, static policy/ACL extraction, conformance levels L1 (runs) and L2
-   (auditable) in [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
+1. **The fleet layer's next mile (0.4.x)** — the world loads and rules run;
+   next is the observatory's `/topology` consuming fleet extracts, the L3
+   Spinel gate extending from kernel files to fleet files, and chat-driven
+   world changes through the existing planner (the loader stays the only
+   path in). Spec and conformance levels: [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
 2. **WASI guests (spikes)** — Spinel emits C for a Ruby agent; compile that
    C to `wasm32-wasi` instead of a native `.exe`: **one signed artifact,
    sandboxed everywhere.** The host daemon embeds wasmtime and grants

@@ -1,16 +1,25 @@
-# Runes — System Snapshot (0.3.0)
+# Runes — System Snapshot (0.4.0)
 
-> **Read this first when resuming.** 0.3.0 is the transport-agnostic series:
-> the claim/lease consensus was deleted in favour of MQTT 5 shared
-> subscriptions, the fabric became a pluggable `Runes::Transport`, agent
-> discovery speaks A2A-over-MQTT, tools can be served/consumed over MCP,
-> and envelopes can be signed with per-agent Ed25519 identities. Phase 17
-> added a second front door: a **Roast-compatible workflow DSL** whose
-> seven verbs (`cmd`, `ruby`, `chat`, `agent`, `map`, `repeat`, `call`)
-> are registered as `kind: :rune` plugins, so a Roast `.rb` file runs
-> unmodified. The user-facing story is `README.md`; the strategy is
+> **Read this first when resuming.** 0.4.0 shipped the **fleet layer**
+> (`docs/FLEET_DSL.md`): `.fleet.rb` files declare a world (agents,
+> channels, routes, facts, schedules) and rules (`on … do |e|`) in a
+> restricted, statically analyzable Ruby subset. Loading is fail-closed
+> (Prism whitelist walker + fixed bindings, `Fleet::LoadError`, zero
+> partial world), rules run on a hermetic engine (declaration-order
+> all-match firing, deterministic request ids through the `RequestLedger`,
+> `max_actions_per_event` with dead-letter, §10 refusal taxonomy), and the
+> daemon runs one via `bin/runes-daemon --fleet path.fleet.rb` with a
+> JSONL journal under `log/`. The §8 extracts (policy / ACL / topology +
+> fingerprint) are golden-tested at L2, and `bin/runes-acl --fleet` renders
+> the merged mosquitto ACL with fleet roles as broker users. Beneath it
+> sits 0.3.0: the transport-agnostic series (MQTT fabric as one
+> `Runes::Transport` adapter, MQTT 5 shared subscriptions instead of the
+> deleted claim/lease protocol, A2A-over-MQTT discovery, MCP tools both
+> directions, per-agent Ed25519 identities), and the Roast-compatible
+> seven-rune workflow DSL (`cmd`, `ruby`, `chat`, `agent`, `map`,
+> `repeat`, `call`). The user-facing story is `README.md`; the strategy is
 > `STRATEGY.md`; the workflow contract is `docs/WORKFLOWS.md`; the history
-> is `DEVELOPMENT_LOG.md` (Phases 16–17).
+> is `DEVELOPMENT_LOG.md` (Phases 16–37, fleet = 35–37).
 
 ## Hands off to the next session
 

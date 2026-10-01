@@ -69,3 +69,9 @@ end
 
 # The Roast-compatible workflow DSL: a `:rune` plugin per workflow verb.
 require_relative 'runes/workflow'
+
+# The Fleet DSL (0.4.0): the declarative world layer, loaded through a
+# restricted-subset Prism walker (docs/FLEET_DSL.md). prism ships as a
+# default gem on modern Rubies and is a declared gemspec dependency, so
+# the require stays unguarded like the other core seams.
+require_relative 'runes/fleet'

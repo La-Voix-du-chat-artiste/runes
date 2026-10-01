@@ -41,6 +41,7 @@ Gem::Specification.new do |spec|
   # `gem install wasmtime` (see GEM_PACKAGING.md).
   spec.add_dependency 'dotenv', '~> 3.1'
   spec.add_dependency 'mqtt', '~> 0.7'
+  spec.add_dependency 'prism', '>= 1.0'
   spec.add_dependency 'sqlite3', '>= 2.1'
 
   spec.bindir      = 'bin'
