@@ -364,6 +364,18 @@ subscriptions and **no** guard grants behind.
 L1 and L2 ship in 0.4.0. L3 is a tracking goal: the restricted subset in §6
 is *chosen* so that a L1/L2 fleet file is a L3 candidate with no rewrite.
 
+**L3 status (0.4.0):** the gate exists and passes — `test/spinel_fleet_gate_test.rb`
+compiles every `examples/*.fleet.rb` whole-program under Spinel against a
+minimal declaration stub (`test/fixtures/fleet/spinel_gate_stub.rb`) and
+runs the resulting binary; a compiler refusal SKIPs (non-blocking, §11),
+a wrong build fails. The stub records the supported guard vocabulary: an
+event field used in a guard that the stub's `FleetGateEvent` does not
+declare is a gate failure, extended deliberately. Two divergences found
+while building the gate are filed upstream as
+[matz/spinel#7213](https://github.com/matz/spinel/issues/7213)
+(`instance_exec` with a lambda raises at runtime; forwarded `&block`
+bare-call resolution) and worked around in the stub.
+
 ---
 
 ## 12. Example: the prospection pipeline, as a fleet

@@ -2334,3 +2334,37 @@ Suites: parent **739 / 4700 / 0** (`scripts/receipts.rb --suites`
 re-measures).
 
 **Post-0.4.0 (2026-10-01):** filed on the official spinel repo — [#6740](https://github.com/matz/spinel/issues/6740) (required-file `IO::Buffer` `NameError`, live two-file repro) and [#6741](https://github.com/matz/spinel/issues/6741) (by-value accumulator + analysis-time ivar folding, shape-dependent observations); the `:U64` row was withdrawn (spinel matches CRuby there). Details: `docs/spinel/spec-tier-a.md`; repros: `tmp/spinel-repros/`.
+
+## Phase 38 — The L3 gate: fleet files compile and run under Spinel (0.4.0)
+
+**What landed.** `test/spinel_fleet_gate_test.rb` compiles every
+`examples/*.fleet.rb` whole-program under Spinel against a minimal
+declaration stub (`test/fixtures/fleet/spinel_gate_stub.rb`) and runs the
+binary: `FLEET GATE OK` or failure. Non-blocking per spec §11: a compiler
+refusal SKIPs with the refusal message; a wrong build fails — a silent
+wrong answer is never skipped. The stub is deliberate about its
+vocabulary: an event field used in a guard that `FleetGateEvent` does not
+declare is a gate failure, extended on purpose. The stub stands in for
+the real loader, which stays CRuby-only (Prism + `instance_eval(string)`
+are outside Spinel's surface); compiled kernels bake the loaded world —
+the workflow pattern.
+
+**Verified on current master.** Spinel updated to f2ddd72d0
+(2026.09.12+4528, 983 commits past the previous pin): the kernel
+self-checks 70/70 natively — now **without** the IO_BUFFER_PROBE
+workaround, fixed upstream in 3a5fccc73 (#6740 confirmed) — and the old
+`<<`-style emitters also pass, matching the #6179-area fixes matz
+described. The example fleet compiles and runs clean under the gate.
+
+**Two new divergences filed** as
+[matz/spinel#7213](https://github.com/matz/spinel/issues/7213), each with
+a minimal two-file repro found by shrinking the gate: `instance_exec`
+with a *lambda* compiles but raises NoMethodError at runtime (the plain
+`&block` form works), and a block forwarded through a method's `&block`
+parameter resolves bare calls to the top-level def instead of the
+instance_eval receiver's instance method (literal blocks resolve
+correctly). The stub works around both.
+
+Suites: parent **740 / 4707 / 0, 0 skips** with SPINEL set (the kernel
+build + fleet gate skip cleanly without it — `scripts/receipts.rb
+--suites` re-measures).

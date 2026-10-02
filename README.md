@@ -416,8 +416,8 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 | | |
 | --- | --- |
 | `lib/` | **20 448 lines** across 98 files |
-| `test/` | **13 302 lines** across 53 files |
-| Suite | **739 runs, 4 700 assertions, 0 failures** — no keys, no network |
+| `test/` | **13 516 lines** across 55 files |
+| Suite | **740 runs, 4 707 assertions, 0 failures** (0 skips with `SPINEL` set) — no keys, no network |
 | Executables | **7**: TUI, daemon, client, MCP, replay, ACL, workflow |
 | The seven runes | `agent` 728, `chat` 503, `repeat` 203, `cmd` 207, `map` 183, `ruby` 78, `call` 68 |
 | MQTT 5 adapter | **1 148 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects* |
@@ -476,11 +476,12 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    step that failed").
 6. **An observatory that is an agent** — its own A2A card and MCP server, so
    any agent can ask *"what happened on the bus?"* mid-task.
-7. **The Spinel conformance gate** — the kernel half of this already runs:
-   the subset linter + self-check are in the suite and the kernel compiles
-   green (see *The compiled kernel* above). This item is the extension to
-   fleet files as the 0.4.0 loader lands, non-blocking while the compiler
-   matures.
+7. **The Spinel conformance gate** — both halves run today: kernel files
+   are lint-gated and the kernel compiles green (see *The compiled
+   kernel* above), and the L3 fleet gate compiles + runs every
+   `examples/*.fleet.rb` whole-program under Spinel (skip-on-refusal
+   while the compiler matures, wrong-builds still fail). Extending the
+   gate's vocabulary is the ongoing work, non-blocking.
 
 ## 📦 Project Layout
 
