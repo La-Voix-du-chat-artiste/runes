@@ -21,9 +21,43 @@ module Runes
       Edge = Struct.new(:from, :to, :when, keyword_init: true)
       Fact = Struct.new(:id, :value, keyword_init: true)
       Schedule = Struct.new(:id, :cron, keyword_init: true)
+      # A declared payload contract (spec §4.3). The spec is a literal
+      # hash — data, not code: "fields" maps field names to one of
+      # string/number/integer/boolean/array/object, "required" lists the
+      # fields that must be present. Deliberately tiny: it is a
+      # fail-closed gate, not a JSON-Schema engine.
+      class Schema < Struct.new(:id, :fields, :required, keyword_init: true)
+        KINDS = %w[string number integer boolean array object].freeze
+
+        # nil when the payload conforms; a short refusal reason otherwise
+        # (§4.3: an invalid payload is refused like a guard denial — it
+        # never reaches a rule guard).
+        def validate(fields)
+          missing = required.reject { |key| fields.key?(key) }
+          return "missing required field(s) #{missing.join(", ")}" unless missing.empty?
+
+          fields.each do |key, value|
+            kind = self.fields[key.to_s]
+            next if kind.nil? # undeclared fields pass: contracts narrow, never widen arbitrarily
+
+            ok = case kind
+                 when "string" then value.is_a?(String)
+                 when "number" then value.is_a?(Numeric)
+                 when "integer" then value.is_a?(Integer)
+                 when "boolean" then value == true || value == false
+                 when "array" then value.is_a?(Array)
+                 when "object" then value.is_a?(Hash)
+                 else true
+                 end
+            return "field #{key.inspect} is not a #{kind}" unless ok
+          end
+          nil
+        end
+      end
 
       attr_reader :name, :description, :transport, :group, :config,
-                  :roles, :channels, :edges, :facts, :schedules, :rules
+                  :roles, :channels, :edges, :facts, :schedules, :rules,
+                  :schemas, :rule_channels, :rule_task_targets
 
       def initialize(name:, description:, transport:, group:, config:)
         @name = name
@@ -37,6 +71,9 @@ module Runes
         @facts = {}
         @schedules = {}
         @rules = []
+        @schemas = {}
+        @rule_channels = []
+        @rule_task_targets = []
       end
 
       def role?(id) = roles.key?(id)
@@ -106,6 +143,25 @@ module Runes
         Runes::SHA256.hex(
           Runes::Json.generate([policy_extract, acl_extract, topology])
         )
+      end
+
+      # ---- the fleet runtime's own grants (spec §8.2) ----
+
+      # The broker identity a fleet runs under: `fleet-<name>` (see
+      # bin/runes-acl --fleet). The runtime publishes — never consumes —
+      # so its grants are writes only, derived from what the loaded rules
+      # can actually do (recorded by the loader's dry-run): the channels
+      # rules publish to, the roles rules task, and the dead-letter
+      # channel. Nothing else — the runtime can never widen the fleet.
+      def runtime_user
+        "fleet-#{name}"
+      end
+
+      def runtime_acl
+        writes = rule_channels.map { |id| channels.fetch(id).topic }
+        writes.concat(rule_task_targets.map { |id| "runes/agents/#{id}/tasks" })
+        writes << channels[:dead_letter].topic if channels.key?(:dead_letter)
+        writes.uniq.sort.map { |topic| ["write", topic] }
       end
 
       private

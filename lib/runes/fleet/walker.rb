@@ -33,7 +33,7 @@ module Runes
       ALLOWED_METHODS = %w[
         fleet config description transport group
         agent model tools workspace identity concurrency
-        channel route fact schedule
+        channel schema route fact schedule
         spawn cell interval
       ].freeze
 

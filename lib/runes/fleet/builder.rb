@@ -98,6 +98,7 @@ module Runes
           @facts = {}
           @schedules = {}
           @raw_rules = []
+          @schemas = {}
         end
 
         def description(text)
@@ -133,6 +134,36 @@ module Runes
           @roles[id] = builder.finalize
         end
 
+        # Schemas are declared payload contracts (spec §4.3): a name, a
+        # "fields" map (field → string/number/integer/boolean/array/
+        # object) and a "required" list — literal data, not code. A
+        # channel that names an undeclared schema is a load error (P3).
+        def schema(id, spec)
+          id = validate_id(id, "schema id")
+          raise LoadError, "fleet: duplicate schema #{id.inspect}" if @schemas.key?(id)
+          unless spec.is_a?(Hash)
+            raise LoadError, "fleet: schema #{id.inspect} must be a literal hash (got #{spec.inspect})"
+          end
+
+          fields = spec["fields"] || {}
+          required = spec["required"] || []
+          unless fields.is_a?(Hash) && required.is_a?(Array)
+            raise LoadError, "fleet: schema #{id.inspect} needs hash \"fields\" and array \"required\""
+          end
+
+          unknown = fields.values.map(&:to_s) - World::Schema::KINDS
+          unless unknown.empty?
+            raise LoadError, "fleet: schema #{id.inspect} unknown field kind(s) #{unknown.join(", ")} " \
+                             "(expected #{World::Schema::KINDS.join(", ")})"
+          end
+
+          @schemas[id] = World::Schema.new(
+            id: id,
+            fields: fields.map { |k, v| [k.to_s, v.to_s] }.to_h,
+            required: required.map(&:to_s)
+          )
+        end
+
         def channel(id, topic, schema: nil, retain: false)
           id = validate_id(id, "channel id")
           topic = topic.to_s
@@ -144,6 +175,8 @@ module Runes
             raise LoadError, "fleet: topic #{topic.inspect} is already bound to another channel"
           end
 
+          # Schema refs are validated at finalize! — declaration order
+          # between schema and channel blocks stays free (spec §4.3).
           @channels[id] = World::Channel.new(id: id, topic: topic, schema: schema&.to_sym, retain: retain == true)
         end
 
@@ -209,6 +242,13 @@ module Runes
         def finalize
           raise LoadError, "fleet: transport is required (one of #{TRANSPORTS.join(', ')})" unless @transport
 
+          @channels.each_value do |ch|
+            next unless ch.schema
+            next if @schemas.key?(ch.schema)
+
+            raise LoadError, "fleet: channel #{ch.id.inspect} names undeclared schema #{ch.schema.inspect} (spec §4.3)"
+          end
+
           edges = @raw_edges.map do |from, to, when_guard|
             unless @roles.key?(from) || @channels.key?(from)
               raise LoadError, "fleet: route source #{from.inspect} is not a declared agent or channel (spec §4.4)"
@@ -229,15 +269,18 @@ module Runes
           edges.each { |e| world.edges << e }
           @facts.each { |id, f| world.facts[id] = f }
           @schedules.each { |id, s| world.schedules[id] = s }
+          @schemas.each { |id, s| world.schemas[id] = s }
           @raw_rules.each_with_index do |(source, guard, block), index|
             kind, name = Rule.classify(source, world)
             rule = Rule.new(
               id: "#{name}-#{index}", source_kind: kind, source: name,
               guard: guard, block: block, line: block.source_location&.last
             )
-            validate_rule_actions!(rule, world, edges)
+            actions = validate_rule_actions!(rule, world, edges)
             world.rules << rule
           end
+          world.rule_channels.uniq!
+          world.rule_task_targets.uniq!
           world
         end
 
@@ -260,28 +303,51 @@ module Runes
           1
         end
 
-        # Static validation of the actions the dry-run reaches (§4.4(b)/
-        # §5.4): task targets must be declared roles reachable on a route
-        # edge, publish targets must be declared channels, notify levels
-        # are pinned. Branches the probe event does not take are re-checked
-        # by the engine at run time — nothing undeclared ever executes.
+        # Probe values must be PLAUSIBLE, not just typed: a guard like
+        # `next! unless e.email.match?(/@/)` rejects a string that does
+        # not look like an email. Extend the map when a new fleet file's
+        # guard needs more shape (the failure is loud: actions recorded
+        # stay empty and the runtime ACL shrinks). Guards over fields the
+        # probe cannot satisfy stay load-unvalidated by design — the
+        # engine re-validates every action at run time.
+        PROBE_VALUES = { "email" => "ada@example.fr", "score" => 1.0 }.freeze
+
         def validate_rule_actions!(rule, world, edges)
-          captured = RuleContext.new(world, probe_event)
-          catch(:rule_next) { captured.instance_exec(probe_event, &rule.block) }
+          actions = probe_run(rule, world, probe_event)
+          validate_actions!(rule, world, edges, actions)
+          actions.each do |action|
+            case action[:kind]
+            when :task then world.rule_task_targets << action[:target]
+            when :publish then world.rule_channels << action[:channel]
+            end
+          end
+        end
+
+        def probe_run(rule, world, event)
+          captured = RuleContext.new(world, event)
+          catch(:rule_next) { captured.instance_exec(event, &rule.block) }
+          captured.actions
         rescue StandardError
-          nil # guards/conditions over the probe event raise; what was
-          # captured before the raise is still validated below
-        ensure
-          validate_actions!(rule, world, edges, captured&.actions || [])
+          []
         end
 
         def probe_event
-          # Every field reads as its own name: any `e.foo` in a condition
-          # is truthy, so unconditioned actions run and get validated.
           @probe_event ||= Event.new(
             id: "probe", at: Time.at(0).utc, kind: :probe, source: :probe,
-            fields: Hash.new { |_h, k| k.to_s }
+            fields: plausible_fields
           )
+        end
+
+        # Every field EXISTS (so Event#method_missing serves it) and reads
+        # plausibly. The key? override is what makes method_missing see a
+        # hit — a default-proc Hash alone reports key? false for fields
+        # it would synthesize.
+        def plausible_fields
+          Hash.new { |_h, k| PROBE_VALUES.fetch(k.to_s, k.to_s) }.tap do |h|
+            def h.key?(_key)
+              true
+            end
+          end
         end
 
         def validate_actions!(rule, world, edges, actions)

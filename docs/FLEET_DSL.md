@@ -136,10 +136,23 @@ channel :dead_letter,        "runes/events/dead",               retain: true
 ```
 
 Semantics: a channel binds a **symbolic name** (usable in rules and routes)
-to a concrete transport address. `schema` names a JSON schema the payload is
-validated against before any rule guard runs (fail-closed: invalid payload is
-a `guard.denied`-style refusal event, never a rule firing on garbage).
-Schemas are declared assets, not inline code.
+to a concrete transport address. `schema` names a declared payload contract
+the event is validated against BEFORE any rule guard runs (fail-closed: an
+invalid payload is a refusal event published to the `:dead_letter` channel,
+never a rule firing on garbage — §10 `SchemaError`). Schemas are declared
+assets, not inline code (§6 literals):
+
+```ruby
+schema :contact, {
+  "required" => %w[email],
+  "fields"   => { "email" => "string", "score" => "number", "tags" => "array" }
+}
+```
+
+Field kinds: `string`, `number`, `integer`, `boolean`, `array`, `object`.
+Undeclared fields pass (contracts narrow, not widen arbitrarily); a channel
+that names an undeclared schema is a **load error**. Declaration order is
+free — references resolve at load.
 
 ### 4.4 `route`
 
@@ -213,12 +226,17 @@ end
 | Source | Fires when | Payload |
 |--------|-----------|---------|
 | `on :channel_name` | PUBLISH matches the channel's topic pattern, after schema validation | validated event object |
-| `on :agent_online` / `:agent_offline` | retained status transition (Agent Card / LWT) | `{agent, role, at}` |
-| `on :mission_failed` / `:step_failed` | lifecycle signals already on the journal/bus | `{mission, step, error}` |
+| `on :agent_online` / `:agent_offline` | retained status transition (Agent Card / LWT) | `{agent, role, at}` || `on :mission_failed` / `:step_failed` | lifecycle signals already on the journal/bus | `{mission, step, error}` |
 | `on :guard_denied` | the capability guard refuses anything in this fleet | `{tool, action, resource, agent}` |
 | `on :weekly_report` (schedule name) | timer | `{}` |
 
 Unknown source name ⇒ load error (P3).
+
+**Presence semantics (implemented):** a rule fires on a real *transition*.
+A retained card replay seeds the runner's state map but never fires — a
+fleet restart does not re-notify every agent that happens to be online.
+Repeated live status with no change does not fire either; the first live
+sighting of an agent does.
 
 ### 5.3 Evaluation semantics
 
@@ -311,6 +329,10 @@ Loading a fleet file produces, in addition to the runtime object:
 2. **ACL extract** — per-role mosquitto `acl_file` fragment: exactly the
    topics a role publishes and subscribes, derived from channels, routes and
    rules. Fed to the existing `bin/runes-acl` generator; no catch-all allow.
+   The fleet runtime itself runs under its own broker identity,
+   `fleet-<name>`: `bin/runes-acl --fleet` renders it as a dedicated user
+   whose grants are exactly what the loaded rules can publish (task topics,
+   rule-published channels, dead-letter) — writes only, never reads.
 3. **Topology graph** — agents + route edges + rule edges, in the same shape
    the observatory's `/topology` already renders.
 4. **Determinism certificate** (test artefact) — for the conformance suite:

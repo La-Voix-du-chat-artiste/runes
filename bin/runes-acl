@@ -46,7 +46,8 @@ module Runes
 
       def initialize(agents:, org: DEFAULT_ORG, shared_group: DEFAULT_SHARED_GROUP,
                      allow_journal: false, a2a: false, tool_rpc: false,
-                     tool_rpc_listeners: [], fleet_grants: {}, fleet_note: nil)
+                     tool_rpc_listeners: [], fleet_grants: {}, fleet_note: nil,
+                     extra_users: {})
         @agents = Array(agents).map { |a| a.to_s.strip }.reject(&:empty?).uniq
         raise ACLError, 'at least one --agent ID is required (fail closed)' if @agents.empty?
 
@@ -95,6 +96,24 @@ module Runes
           pairs.each do |access, _topic|
             unless %w[read write readwrite].include?(access.to_s)
               raise ACLError, "fleet grant access #{access.inspect} must be read/write/readwrite"
+            end
+          end
+        end
+
+        # Extra users are whole sections (the fleet runtime's broker
+        # identity, etc): user => [[access, topic], ...]. The username
+        # must be a safe token; topics are validated fail-closed by their
+        # producer (the fleet loader's SAFE_TOPIC) and are emitted as-is.
+        @extra_users = extra_users.transform_keys(&:to_s)
+        @extra_users.each_key do |user|
+          validate_token(user, 'extra user')
+          pairs = @extra_users[user]
+          unless pairs.is_a?(Array)
+            raise ACLError, "extra user #{user.inspect} grants must be an array of [access, topic] pairs"
+          end
+          pairs.each do |access, _topic|
+            unless %w[read write readwrite].include?(access.to_s)
+              raise ACLError, "extra user #{user.inspect} access #{access.inspect} must be read/write/readwrite"
             end
           end
         end
@@ -156,6 +175,12 @@ module Runes
           out << "\n# ---- agent: #{agent} ----\n"
           out << "user #{agent}\n"
           grants(agent).each { |access, topic| out << "topic #{access} #{topic}\n" }
+        end
+
+        @extra_users.each do |user, pairs|
+          out << "\n# ---- user: #{user} (fleet runtime — publishes only, from the loaded rules) ----\n"
+          out << "user #{user}\n"
+          pairs.uniq.sort.each { |access, topic| out << "topic #{access} #{topic}\n" }
         end
 
         out << "\n# Default deny: anything not listed above is refused by mosquitto.\n"
@@ -281,6 +306,7 @@ if File.expand_path($PROGRAM_NAME) == File.expand_path(__FILE__)
 
     fleet_grants = {}
     fleet_note = nil
+    extra_users = {}
     if options[:fleet]
       require_relative '../lib/runes/fleet'
       require_relative '../lib/runes/backends/cruby' # wire the Json/SHA256 facades
@@ -289,7 +315,11 @@ if File.expand_path($PROGRAM_NAME) == File.expand_path(__FILE__)
       # agents in the rendered ACL (broker usernames = fleet role ids).
       options[:agents] |= world.roles.keys.map(&:to_s)
       fleet_grants = world.acl_extract
-      fleet_note = "#{world.name} (digest #{world.fingerprint[0, 12]}…, roles #{world.roles.keys.join(', ')})"
+      # The fleet runtime itself gets its own broker identity, granted
+      # exactly what the loaded rules publish — never more.
+      extra_users[world.runtime_user] = world.runtime_acl
+      fleet_note = "#{world.name} (digest #{world.fingerprint[0, 12]}…, roles #{world.roles.keys.join(', ')}, " \
+                   "runtime #{world.runtime_user})"
     end
 
     acl = Runes::Security::ACL.new(
@@ -301,7 +331,8 @@ if File.expand_path($PROGRAM_NAME) == File.expand_path(__FILE__)
       tool_rpc: options[:tool_rpc],
       tool_rpc_listeners: options[:tool_rpc_listeners],
       fleet_grants: fleet_grants,
-      fleet_note: fleet_note
+      fleet_note: fleet_note,
+      extra_users: extra_users
     )
   rescue OptionParser::ParseError, Runes::Security::ACL::ACLError => e
     warn "runes-acl: #{e.message}"

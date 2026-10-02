@@ -11,6 +11,17 @@ fleet "prospection" do
   channel :metrics,           "runes/events/metrics"
   channel :outbox,            "runes/events/outbox"
 
+  # Declared payload contracts (spec §4.3): literal data, validated
+  # fail-closed before any rule guard sees an event.
+  schema :contact, {
+    "required" => %w[email],
+    "fields"   => { "email" => "string", "score" => "number", "name" => "string" }
+  }
+  schema :draft, {
+    "required" => %w[risk],
+    "fields"   => { "risk" => "string", "contact" => "string" }
+  }
+
   fact :max_drafts_per_hour, 20
   fact :outreach_tone, "professional"
 

@@ -415,9 +415,9 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 
 | | |
 | --- | --- |
-| `lib/` | **20 448 lines** across 98 files |
-| `test/` | **13 516 lines** across 55 files |
-| Suite | **740 runs, 4 707 assertions, 0 failures** (0 skips with `SPINEL` set) — no keys, no network |
+| `lib/` | **20 605 lines** across 98 files |
+| `test/` | **13 737 lines** across 56 files |
+| Suite | **747 runs, 4 750 assertions, 0 failures** (0 skips with `SPINEL` set) — no keys, no network |
 | Executables | **7**: TUI, daemon, client, MCP, replay, ACL, workflow |
 | The seven runes | `agent` 728, `chat` 503, `repeat` 203, `cmd` 207, `map` 183, `ruby` 78, `call` 68 |
 | MQTT 5 adapter | **1 148 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects* |
@@ -451,11 +451,15 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 
 Ordered, and each item is either specified, spiked or scoped — not vapour:
 
-1. **The fleet layer's next mile (0.4.x)** — the world loads and rules run;
-   next is the observatory's `/topology` consuming fleet extracts, the L3
-   Spinel gate extending from kernel files to fleet files, and chat-driven
-   world changes through the existing planner (the loader stays the only
-   path in). Spec and conformance levels: [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
+1. **The fleet layer's next mile (0.4.x)** — hardening landed: declared
+   payload schemas validated fail-closed (§4.3), shared-group subscriptions
+   so N runners split events instead of double-firing, presence *transitions*
+   (retained replays no longer re-notify), and the fleet runtime's own
+   broker identity (`fleet-<name>`, rendered by `bin/runes-acl --fleet` with
+   exactly what the loaded rules publish). Still open: observatory
+   `/topology` consuming fleet extracts, chat-driven world changes through
+   the planner (the loader stays the only path in), and the spec's v0.2
+   items (mutable cells, nested fleets, rule priorities): [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
 2. **WASI guests (spikes)** — Spinel emits C for a Ruby agent; compile that
    C to `wasm32-wasi` instead of a native `.exe`: **one signed artifact,
    sandboxed everywhere.** The host daemon embeds wasmtime and grants

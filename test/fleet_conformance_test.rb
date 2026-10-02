@@ -110,7 +110,7 @@ class FleetConformanceTest < Minitest::Test
       runner, transport = runner_with_hub(journal_path: path, tick_every: 60)
       runner.start
 
-      transport.publish("runes/events/contacts/qualified", Runes::Json.generate({ "score" => 0.9, "name" => "acme" }))
+      transport.publish("runes/events/contacts/qualified", Runes::Json.generate({ "score" => 0.9, "name" => "acme", "email" => "ada@example.fr" }))
       runner.stop
 
       lines = File.readlines(path, chomp: true).map { |l| JSON.parse(l) }

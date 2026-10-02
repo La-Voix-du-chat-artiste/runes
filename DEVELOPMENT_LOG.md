@@ -2368,3 +2368,36 @@ correctly). The stub works around both.
 Suites: parent **740 / 4707 / 0, 0 skips** with SPINEL set (the kernel
 build + fleet gate skip cleanly without it — `scripts/receipts.rb
 --suites` re-measures).
+
+## Phase 39 — Fleet hardening: schemas, shared runners, transitions, an identity (0.4.x)
+
+**Declared payload schemas (spec §4.3).** `schema :contact, { "required"
+=> ..., "fields" => {...} }` declares a literal contract (string / number /
+integer / boolean / array / object); a channel naming an undeclared schema
+is a load error, declaration order stays free. The engine validates before
+any rule guard sees an event: a missing required field or a wrong kind is
+refused to the dead-letter channel with the reason — never a rule firing
+on garbage. The example fleet declares and enforces both its contracts.
+
+**One runner per fleet.** Rule sources now subscribe under the fleet's
+`group`, so N runners serving one fleet split events through the
+transport's shared-subscription semantics instead of double-firing; the
+per-process ledger then suffices for idempotency (the suite proves two
+runners share four events exactly once each). Schedules stay the
+documented exception: tick runs on every runner, so the timer belongs on
+one of them.
+
+**Presence is a transition (spec §5.2).** Retained card replays seed the
+state map but never fire; unchanged live status never fires; only real
+changes do. A fleet restart no longer re-notifies every online agent.
+
+**The fleet's broker identity.** The loader's dry-run now RECORDS what
+rules reach — the channels they publish to, the roles they task — and the
+world derives `runtime_user` (`fleet-<name>`) plus a write-only grant list:
+task topics, rule channels, dead-letter, nothing else, no catch-all.
+`bin/runes-acl --fleet` renders that identity as its own user section.
+The probe event grew a plausibility map (`email` looks like an email,
+`score` is numeric) because guards must be *passed*, not merely typed, to
+reach actions; guards the probe can't satisfy stay engine-enforced.
+
+Suites: parent **747 / 4750 / 0, 0 skips** with SPINEL set.

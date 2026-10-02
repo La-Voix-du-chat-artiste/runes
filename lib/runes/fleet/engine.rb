@@ -52,17 +52,26 @@ module Runes
         @journal = []
         @journal_mutex = Mutex.new
         @subscriptions = []
+        @presence_states = {}
         @started = false
       end
 
       def started? = @started
 
-      # Subscribe every rule source to the transport seam. Atomic with
-      # respect to the World: the World was fully validated at load, so
-      # if start runs at all the subscriptions describe a complete fleet.
-      # The boot record (§8.4) lands in the journal with the world's
-      # determinism fingerprint, so a journal can always be tied to the
-      # exact fleet that produced it.
+      # Subscribe every rule source to the transport seam — under the
+      # fleet's shared group, so N runners serving one fleet split the
+      # events instead of double-firing (one delivery per group, the
+      # MQTT 5 shared-subscription semantics; the per-process ledger then
+      # suffices for idempotency). Schedules are the exception: tick runs
+      # on every runner, so schedule rules fire once PER RUNNER — with
+      # multiple runners, host the timer on one of them (the Runner's
+      # tick_every can be set to 0 on the others).
+      #
+      # Atomic with respect to the World: the World was fully validated
+      # at load, so if start runs at all the subscriptions describe a
+      # complete fleet. The boot record (§8.4) lands in the journal with
+      # the world's determinism fingerprint, so a journal can always be
+      # tied to the exact fleet that produced it.
       def start
         return if @started
 
@@ -103,8 +112,18 @@ module Runes
           state = payload.strip
           return unless %w[online offline].include?(state)
 
+          # §5.2 says TRANSITION: a retained card replay (e.g. right after
+          # this runner starts) is state, not news — it seeds the map but
+          # never fires. Live messages fire only when the state actually
+          # changes, so a fleet restart does not re-notify every agent.
+          agent = m[1]
+          previous = @presence_states[agent]
+          @presence_states[agent] = state
+          return if message.retain
+          return if previous == state
+
           dispatch(:presence, state == "online" ? :agent_online : :agent_offline,
-                   { "agent" => m[1], "status" => state })
+                   { "agent" => agent, "status" => state })
         elsif topic == GUARD_DENIED_TOPIC
           dispatch(:guard_denied, :guard_denied, parse_payload(payload, topic) || {})
         elsif (m = topic.match(%r{\Arunes/prompts/([^/]+)/progress\z}))
@@ -119,6 +138,17 @@ module Runes
 
           fields = parse_payload(payload, topic)
           return unless fields
+
+          # §4.3 fail-closed: a payload that violates the channel's
+          # declared schema is refused like a guard denial — it never
+          # reaches a rule guard (parse_payload already dead-letters).
+          if channel.schema && (schema = world.schemas[channel.schema])
+            reason = schema.validate(fields)
+            if reason
+              schema_refusal(topic, "schema #{channel.schema}: #{reason}")
+              return
+            end
+          end
 
           dispatch(:channel, channel.id, fields)
         end
@@ -179,7 +209,7 @@ module Runes
       end
 
       def subscribe(topic)
-        @subscriptions << @transport.subscribe(topic) { |message| receive(message) }
+        @subscriptions << @transport.subscribe(topic, group: @world.group) { |message| receive(message) }
       end
 
       # ---- §5.3 evaluation ----

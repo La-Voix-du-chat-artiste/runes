@@ -58,7 +58,12 @@ module Runes
         @at = at
         @kind = kind
         @source = source
-        @fields = fields.transform_keys(&:to_s)
+        # Synthesizing field hashes (the loader's dry-run probe carries a
+        # default proc and a key? override) are kept as-is — copying them
+        # would materialize every synthesized field as real memory and
+        # drop the synthesizers. Real payloads are plain hashes and get
+        # normalized to string keys.
+        @fields = fields.is_a?(Hash) && fields.default_proc ? fields : fields.transform_keys(&:to_s)
       end
 
       def [](key) = fields[key.to_s]

@@ -108,6 +108,8 @@ class FleetGateWorld
 
   def config(hash = nil, **_kw); end
 
+  def schema(_id, _spec); end
+
   def agent(_id, &block)
     instance = FleetGateAgent.new
     instance.instance_eval(&block) if block
