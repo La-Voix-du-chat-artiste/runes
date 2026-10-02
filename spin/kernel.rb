@@ -51,14 +51,6 @@ Runes::Security::CryptoBackend.backend = Runes::Security::CryptoBackends::Native
 # The compiled `cmd` rune spawns through posix_spawn instead of Open3.
 Runes::Plugins::Cmd.command_runner = Runes::ProcessRunner::Native
 
-# Feature-detection probe (spinel 2026.09.12): in whole-program builds the
-# IO::Buffer runtime support is only linked when the analyzer sees a use on
-# the main path — uses confined to required-file lambdas and singleton
-# methods get missed, and every IO::Buffer.new becomes a raise. A constant
-# assignment here is unreachable-for-DCE and keeps the feature linked.
-IO_BUFFER_PROBE = IO::Buffer.new(8)
-IO_BUFFER_PROBE.set_value(:U64, 0, 0x52554e4553) # 'RUNES'
-
 # Nonces and key material must come from the CSPRNG, never the PRNGPure id
 # generator: use the FFI random when the binder found one.
 if Runes::Native.installed?('random_bytes')
