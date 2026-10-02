@@ -2401,3 +2401,26 @@ The probe event grew a plausibility map (`email` looks like an email,
 reach actions; guards the probe can't satisfy stay engine-enforced.
 
 Suites: parent **747 / 4750 / 0, 0 skips** with SPINEL set.
+
+---
+
+**Session close (2026-10-02).** Everything above is committed and pushed;
+HEAD is `c4606c4` on `origin/master`, working tree clean (only the
+pre-existing untracked `docs/2609.20804v1.pdf`). Suite: parent **747 /
+4750 / 0, 0 skips** with `SPINEL` set (both gates compile and run:
+kernel 70/70 on spinel f2ddd72d0 without the IO_BUFFER_PROBE workaround,
+and the L3 fleet gate compiles the schema-bearing example clean).
+
+Open threads for next time, in roadmap order: (1) fleet — observatory
+`/topology` consuming the extracts (observer-side), chat-driven world
+changes through the planner, spec v0.2 items (mutable cells, nested
+fleets, rule priorities); (2) WASI — the in-process transport guest as
+the first real guest, then the compiled fleet runtime (bake a loaded
+world into a kernel — the workflow pattern); (3) upstream — watch
+[matz/spinel#7213](https://github.com/matz/spinel/issues/7213) (the two
+`instance_eval` divergences; the stub workarounds become deletable on
+fix) and [#6741](https://github.com/matz/spinel/issues/6741) (the
+shape-dependent pair — likely fixed by the #6179/#6619-era work); (4)
+the observatory suite was erroring (22 errors last measure) — parked,
+owner's eyes needed. No hidden debt: docs, receipts, and golden files
+are current.
