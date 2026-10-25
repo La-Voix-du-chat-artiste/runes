@@ -53,6 +53,7 @@ Gem::Specification.new do |spec|
   spec.files = Dir.chdir(gem_root) do
     %w[
       lib/**/*.rb
+      wasm/*.rb
       bin/*
       tools/**/*
       examples/**/*

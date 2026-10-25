@@ -13,13 +13,15 @@ module Runes
   # Pluggable messaging. The harness talks to Runes::Transport::Base only,
   # so MQTT is a choice, not a requirement:
   #
-  #   inproc  — process-local hub (tests, offline demos, embeds); supports
-  #             shared groups and properties
-  #   mqtt311 — classic `mqtt` gem; maximum compatibility, no groups
-  #   mqtt5   — MQTT 5 with shared subscriptions + PUBLISH properties
-  #   auto    — mqtt5 if the broker takes it, else mqtt311, else inproc
-  module Transport
-    KINDS = %w[inproc mqtt311 mqtt5 auto].freeze
+    #   inproc      — process-local hub (tests, offline demos, embeds); supports
+    #                 shared groups and properties
+    #   mqtt311     — classic `mqtt` gem; maximum compatibility, no groups
+    #   mqtt5       — MQTT 5 with shared subscriptions + PUBLISH properties
+    #   wasi_guest  — the fabric state lives in a WASI guest (ruby.wasm by
+    #                 default); the first long-lived guest, same Base contract
+    #   auto        — mqtt5 if the broker takes it, else mqtt311, else inproc
+    module Transport
+      KINDS = %w[inproc mqtt311 mqtt5 auto wasi_guest].freeze
 
     class << self
       # @param kind [String, nil] inproc|mqtt311|mqtt5|auto (RUNES_TRANSPORT)
@@ -35,6 +37,9 @@ module Runes
         when "mqtt5"
           require_relative "transport/mqtt5"
           MQTT5.new(**mqtt_options(settings, options))
+        when "wasi_guest", "wasiguest"
+          require_relative "transport/wasi_guest"
+          WasiGuest.new(**options)
         when "auto"
           auto(settings: settings, **options)
         else

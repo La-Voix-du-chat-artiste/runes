@@ -104,6 +104,8 @@ class PackagingTest < Minitest::Test
     assert_includes files, 'config/policy.json'
     assert files.any? { |f| f.start_with?('tools/') }, 'tools/ should ship'
     assert files.any? { |f| f.start_with?('examples/') }, 'examples/ should ship'
+    assert_includes files, 'wasm/transport_guest.rb'
+    assert_includes files, 'wasm/wasm_host.rb'
 
     assert_empty files.grep(%r{\A(config/\.env(?![.\w])|log/|tmp/|workspace/|runes_observer/|docs/(epics|missions)/)}),
                  'packaged file list leaks secrets or local state'
