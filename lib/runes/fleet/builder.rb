@@ -21,11 +21,20 @@ module Runes
       SAFE_ID = /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/.freeze
       SAFE_TOPIC = %r{\Arunes/[A-Za-z0-9][A-Za-z0-9/+._-]*\z}.freeze
       TRANSPORTS = %i[inproc mqtt311 mqtt5 auto].freeze
-      RESERVED = {
-        "spawn" => "process orchestration stays outside the DSL (spec §5.4)",
-        "cell" => "mutable cells are v0.2 (spec §4.5/§14.3)",
-        "interval" => "dynamic schedules stay in host code — use cron: (spec §4.6)"
-      }.freeze
+
+      # The reserved words must be REAL methods on every builder binding:
+      # `spawn` collides with Kernel#spawn, which implicit self would
+      # happily call (exec attempt at load time) before method_missing
+      # ever fires. Intercepting explicitly is the whole defence.
+      module Reserves
+        def reserves(*words)
+          words.each do |word|
+            define_method(word) do |*|
+              raise LoadError, "fleet: `#{word}` is reserved — #{RESERVED[word.to_s]}"
+            end
+          end
+        end
+      end
 
       def self.build(source, path:, args: {})
         top = TopBuilder.new(args)
@@ -47,6 +56,9 @@ module Runes
       # Only `fleet` exists at the top level (spec §4.1: exactly one fleet
       # block per file).
       class TopBuilder
+        extend Reserves
+        reserves :spawn, :cell, :interval
+
         def initialize(args)
           @args = args.transform_keys(&:to_s)
           @world_builder = nil
@@ -81,6 +93,9 @@ module Runes
       end
 
       class WorldBuilder
+        extend Reserves
+        reserves :spawn, :cell, :interval
+
         DEFAULT_CONFIG = { "env" => "development", "max_actions_per_event" => 16 }.freeze
 
         attr_reader :name
@@ -327,6 +342,11 @@ module Runes
           captured = RuleContext.new(world, event)
           catch(:rule_next) { captured.instance_exec(event, &rule.block) }
           captured.actions
+        rescue Runes::Fleet::LoadError
+          # A reserved keyword inside a rule body is structural, not
+          # guard-dependent: it must refuse the load loudly, never shrink
+          # to "the probe could not satisfy this rule" silence.
+          raise
         rescue StandardError
           []
         end
@@ -390,6 +410,9 @@ module Runes
       # loud: an agent without a tools clause is a load error, never an
       # implicit empty set — the explicit form of "nothing" is `tools :none`.
       class RoleBuilder
+        extend Reserves
+        reserves :spawn, :cell, :interval
+
         def initialize(id)
           @id = id
           @model = nil

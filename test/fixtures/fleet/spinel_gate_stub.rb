@@ -127,15 +127,13 @@ class FleetGateWorld
     return unless block
 
     context = FleetGateContext.new
-    # Guards arrive as lambdas. Spinel (2026.09.12+4528) compiles
-    # instance_exec with a &lambda but the call is not wired at runtime
-    # (NoMethodError) — so the lambda is invoked through a literal block
-    # here. Guards that call fact() are out of the gate's vocabulary for
-    # now: a top-level fallback would shadow the world's own fact()
-    # declaration inside the instance_eval'd block (bare calls resolve to
-    # the top-level def there), which is itself a Spinel divergence we
-    # are not papering over in the stub.
-    context.instance_exec(@event) { |e| guard.call(e) } if guard
+    # Guards arrive as lambdas and take the same instance_exec path as the
+    # block body. matz/spinel#7213 (instance_exec with a &lambda raising
+    # NoMethodError; bare calls in a forwarded block shadowed by top-level
+    # defs) is fixed upstream in 703e278e8/093ede743, so the literal-block
+    # wrapper and the top-level-shadowing caveat are deleted — the stub now
+    # requires spinel 2026.09.12+6411 (a2bd89005) or newer.
+    context.instance_exec(@event, &guard) if guard
     context.instance_exec(@event, &block)
   end
 end

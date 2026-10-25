@@ -26,6 +26,15 @@ end
 
 begin
   require "runes/transport"
+  # The CRuby wiring every facade defaults to needing (lib/runes.rb loads it
+  # in the harness; the observatory bypasses that file): the Json/SHA256/
+  # Random backends, the OpenSSL crypto backend behind Runes::Security, and
+  # the runtime overrides that let the workflow engine evaluate source files
+  # instead of assuming it IS a compiled Spinel kernel. Without this line
+  # signature verification raises IdentityError and any Workflow.from_file
+  # raises StaticBindingError — the parked "observatory suite is erroring"
+  # batch was exactly this omission. Only stdlib, no client library pulled in.
+  require "runes/backends/cruby"
   # Signature state is the other half of "who published this" (doc5.md O0.3):
   # the transport tells us what arrived, Runes::Security tells us whether the
   # envelope is backed by a key we trust. Only stdlib OpenSSL, so this cannot

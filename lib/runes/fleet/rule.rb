@@ -87,6 +87,16 @@ module Runes
     class RuleContext
       NOTIFY_LEVELS = %i[info warn error].freeze
 
+      # Reserved words are intercepted as REAL methods here too: a rule
+      # body runs with implicit self on this context, and `spawn` would
+      # otherwise reach Kernel#spawn and attempt a process exec. The load
+      # probe re-raises the LoadError, so the file refuses loudly (§13).
+      RESERVED.each_key do |word|
+        define_method(word) do |*|
+          raise LoadError, "fleet: `#{word}` is reserved — #{RESERVED[word]}"
+        end
+      end
+
       attr_reader :actions
 
       def initialize(world, event)

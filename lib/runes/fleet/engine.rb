@@ -62,10 +62,16 @@ module Runes
       # fleet's shared group, so N runners serving one fleet split the
       # events instead of double-firing (one delivery per group, the
       # MQTT 5 shared-subscription semantics; the per-process ledger then
-      # suffices for idempotency). Schedules are the exception: tick runs
-      # on every runner, so schedule rules fire once PER RUNNER — with
-      # multiple runners, host the timer on one of them (the Runner's
-      # tick_every can be set to 0 on the others).
+      # suffices for idempotency). Two consequences are accepted, not
+      # accidental (spec §5.2): schedules fire once PER RUNNER — host the
+      # timer on one of them (the Runner's tick_every can be set to 0 on
+      # the others); and presence updates reach exactly one runner each,
+      # so a runner computes transitions on the subsequence it witnesses —
+      # every notification still fires exactly once fleet-wide, but a
+      # transition whose endpoints were split across runners (offline on
+      # A, back online on B) is attributed to the runner that saw the
+      # change. Un-splitting a stateful stream would need a single
+      # presence owner — the same trade the schedule exception makes.
       #
       # Atomic with respect to the World: the World was fully validated
       # at load, so if start runs at all the subscriptions describe a
@@ -76,13 +82,17 @@ module Runes
         return if @started
 
         @started = true
+        # The boot record commits BEFORE any subscription: a retained replay
+        # (delivered synchronously by inproc during subscribe, racily by the
+        # MQTT 5 reader thread) must never precede it — the journal's first
+        # line is always the fleet that wrote the rest (§8.4).
+        commit([{ "kind" => "fleet_boot", "fleet" => world.name,
+                  "fingerprint" => world.fingerprint,
+                  "at" => Runes::Compat.utc_iso8601(@now.call) }])
         subscribe_channels
         subscribe(PRESENCE_TOPIC) if rules_for(:presence).any?
         subscribe(GUARD_DENIED_TOPIC) if rules_for(:guard_denied).any?
         subscribe(LIFECYCLE_TOPIC) if rules_for(:lifecycle).any?
-        commit([{ "kind" => "fleet_boot", "fleet" => world.name,
-                  "fingerprint" => world.fingerprint,
-                  "at" => Runes::Compat.utc_iso8601(@now.call) }])
         self
       end
 
@@ -170,16 +180,22 @@ module Runes
           next unless guard_passes?(rule, event, entries)
 
           context = RuleContext.new(world, event)
-          caught = catch(:rule_next) do
+          rule_failed = false
+          catch(:rule_next) do
             begin
               context.instance_exec(event, &rule.block)
             rescue StandardError => e
-              # §5.3.2 — a rule body that raises is a refusal event.
+              # §5.3.2 — a rule body that raises is a refusal event, and the
+              # refusal covers the WHOLE rule: actions recorded before the
+              # raise are discarded here, never half-executed. Other rules
+              # for this event are unaffected (all-match, per-rule isolation).
               record(entries, rule, event, "rule_guard_error", error: "#{e.class}: #{e.message}")
+              rule_failed = true
               next
             end
             nil
           end
+          next if rule_failed
 
           context.actions.each_with_index do |action, ordinal|
             count += 1

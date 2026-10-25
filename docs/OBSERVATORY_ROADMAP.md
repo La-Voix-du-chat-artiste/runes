@@ -373,6 +373,38 @@ do `run_command`?").
 edge with the right counts; a changed card produces a second revision and a
 visible diff.
 
+### O1.3b The declared fleet on the topology page — ✅ DONE (Phase 40)
+
+The fleet DSL's §8 extracts said `world.topology` was "the shape the
+observatory's /topology renders" — now it is. `FleetDeclaration` loads a
+`.fleet.rb` through the harness's own loader (no new transport
+subscriptions, nothing started) and the page renders the **declared**
+fleet beside the **observed** one: roles with model and tool grants and an
+observed/silent pill, declared routes with the live task/reply counters
+when traffic exists, the declared channels and rules with their line
+numbers, and the §8.4 fingerprint that ties the panel to the exact file
+version. The reconciliation is the point: `roles_silent` (declared, never
+observed — a fleet that never started), `agents_undeclared` (observed,
+never declared — a typo or a stranger), `edges_silent` (declared route,
+no traffic) and `edges_undeclared` (observed link with no declared route).
+A file that fails to load renders its refusal on the page — the observed
+graph is never held hostage by a fleet file being edited.
+
+Path resolution mirrors `JournalTail`: `RUNES_OBSERVER_FLEET` names a file
+(an operator who names a file means it; a missing one is an error, not
+silence), `off` disables, and without either the sibling checkout's
+`examples/prospection.fleet.rb` is used when present. The load is cached
+per `[path, mtime]`, so editing the file is visible on the next request.
+Deliberately **not** done here: no card revisions, no rule priorities —
+the panel consumes the static extracts only.
+
+**Acceptance met:** 8 service tests (the extracts as plain structs,
+fingerprint, a load failure rendered as an error rather than raised, a
+missing explicit file, mtime re-load, the four drift buckets, off-mode)
+and 4 controller tests (panel beside the graph, drift pills, a broken
+file leaving the page intact, no panel when off). **Verified live** by the
+same suite against the example fleet.
+
 ### O1.4 Trace waterfall, export, and a CI oracle — **waterfall built, Phase 21**
 
 `/interactions/:id` groups a request correctly but reads as a list. Make it

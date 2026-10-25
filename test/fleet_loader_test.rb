@@ -259,6 +259,47 @@ class FleetLoaderTest < Minitest::Test
     end
   end
 
+  # `spawn` collides with Kernel#spawn: implicit self reaches Ruby's own
+  # method before method_missing ever fires, so the reserved word must be
+  # intercepted as a REAL method on every evaluation binding — top level,
+  # world, agent role and rule body alike — or a fleet file could attempt
+  # a process exec at load time (spec §13: parse, then refuse, never run).
+  def test_spawn_is_intercepted_before_kernel_in_every_binding
+    assert_load_error(/reserved.*process orchestration/) do
+      Runes::Fleet.load(header + "spawn :a\n")
+    end
+    assert_load_error(/reserved.*process orchestration/) do
+      Runes::Fleet.load(header + <<~RUBY)
+        fleet "x" do
+          transport :inproc
+          spawn :a
+        end
+      RUBY
+    end
+    assert_load_error(/reserved.*process orchestration/) do
+      Runes::Fleet.load(header + <<~RUBY)
+        fleet "x" do
+          transport :inproc
+          agent :a do
+            tools :none
+            spawn :a
+          end
+        end
+      RUBY
+    end
+    assert_load_error(/reserved.*process orchestration/) do
+      Runes::Fleet.load(header + <<~RUBY)
+        fleet "x" do
+          transport :inproc
+          channel :c, "runes/x/c"
+          on :c do |e|
+            spawn :a
+          end
+        end
+      RUBY
+    end
+  end
+
   def test_header_is_enforced
     err = assert_raises(Runes::Fleet::LoadError) do
       Runes::Fleet.load("fleet \"x\" do\n  transport :inproc\nend\n")

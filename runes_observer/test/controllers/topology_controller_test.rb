@@ -86,4 +86,94 @@ class TopologyControllerTest < ActionDispatch::IntegrationTest
     assert_match(/1 inbound with no stated sender/, response.body)
     assert_equal 0, response.body.scan(/class="wire wire--/).size
   end
+
+  # ---- the declared fleet (FleetDeclaration): the §8 extracts beside the
+  # ---- observed graph, with the drift between them
+
+  DECLARED_FLEET = <<~'RUBY'
+    # fleet-spec: 0.1
+    fleet "declared" do
+      transport :inproc
+      group "declared-g"
+      channel :events, "runes/declared/events"
+      agent :lead do
+        model "m1"
+        tools fs_read: :allow
+      end
+      agent :worker do
+        model "m2"
+        tools :none
+      end
+      route :lead, :worker
+      on :events do |e|
+        task :worker, "go"
+      end
+    end
+  RUBY
+
+  def with_fleet_file(source)
+    dir = Dir.mktmpdir("runes-topo-fleet-")
+    path = File.join(dir, "declared.fleet.rb")
+    File.write(path, source)
+    old = ENV["RUNES_OBSERVER_FLEET"]
+    ENV["RUNES_OBSERVER_FLEET"] = path
+    FleetDeclaration.reset_cache!
+    yield
+  ensure
+    ENV["RUNES_OBSERVER_FLEET"] = old
+    FleetDeclaration.reset_cache!
+    FileUtils.remove_entry(dir) if dir && Dir.exist?(dir)
+  end
+
+  def test_the_declared_fleet_renders_beside_the_observed_graph
+    seed_delegation
+
+    with_fleet_file(DECLARED_FLEET) do
+      get topology_path
+
+      assert_response :success
+      assert_match "Declared fleet", response.body
+      assert_match "declared · digest", response.body
+      # the fingerprint's first digest chunk is the §8.4 tie-back
+      assert_match(/digest <span class="mono">[0-9a-f]{12}/, response.body)
+      # roles with the observed/silent pill — both are observed here
+      assert_equal 2, response.body.scan(/pill pill--online">observed/).size
+      # the declared route with its observed counters
+      assert_match(/<span class="mono">lead<\/span> <span class="faint">→<\/span> <span class="mono">worker<\/span>/, response.body)
+      assert_match "channel:events", response.body
+    end
+  end
+
+  def test_drift_flags_silent_roles_and_undeclared_agents
+    seed_delegation # observed: lead, worker — the fleet also declares :clerk, never seen
+
+    with_fleet_file(DECLARED_FLEET.sub("agent :worker", "agent :clerk do\n        model \"m\"\n        tools :none\n      end\n      agent :worker")) do
+      get topology_path
+
+      assert_response :success
+      assert_match(/1 declared role silent/, response.body)
+    end
+  end
+
+  def test_a_broken_fleet_file_renders_its_error_without_breaking_the_page
+    seed_delegation
+
+    with_fleet_file("# fleet-spec: 0.1\nfleet \"x\" do\n  transport :inproc\n  spawn :a\nend\n") do
+      get topology_path
+
+      assert_response :success
+      assert_match "could not be loaded", response.body
+      assert_match(/reserved/, response.body)
+      assert_match "Fleet graph", response.body, "the observed graph still renders"
+    end
+  end
+
+  def test_no_declared_panel_when_the_feature_is_off
+    seed_delegation
+
+    get topology_path
+
+    assert_response :success
+    assert_no_match(/Declared fleet/, response.body)
+  end
 end

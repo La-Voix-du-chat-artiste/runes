@@ -186,6 +186,7 @@ bin/rails runes:reset                # delete every observed packet and agent
 | `RUNES_MQTT_PORT` | `1883` | Broker port |
 | `RUNES_TRANSPORT` | `auto` | Ingest adapter: `auto` (mqtt5 → mqtt311 → inproc), `mqtt5`, `mqtt311`, `inproc` |
 | `RUNES_HARNESS_LIB` | `../lib` | Where `Runes::Transport` is loaded from |
+| `RUNES_OBSERVER_FLEET` | sibling harness `examples/prospection.fleet.rb`, if it exists | A `.fleet.rb` file whose §8 extracts render on `/topology` as the declared fleet beside the observed graph, with the drift between them (silent roles/routes, undeclared agents/links); `off` disables, any other value is a path (a bad file renders its error, never breaks the page) |
 | `RUNES_OBSERVER_JOURNAL` | sibling harness `log/journal.jsonl`, if it exists | Journal file to tail; `off` disables, any other value is a path (waited for) |
 | `RUNES_OBSERVER_JOURNAL_INTERVAL_S` | `2` | How often the journal tail polls |
 | `RUNES_OBSERVER_TRUST_DIR` | `$RUNES_TRUST_DIR`, else the harness `config/trust` | Public keys used to verify signed envelopes; a missing directory means an empty store, so signed traffic reads `untrusted` |
@@ -197,7 +198,7 @@ bin/rails runes:reset                # delete every observed packet and agent
 ## Tests
 
 ```bash
-bin/rails test     # 215 runs, 1 069 assertions
+bin/rails test     # 231 runs, 1 148 assertions
 ```
 
 Covers the topic classifier (every Runes topic shape, including the A2A

@@ -9,7 +9,10 @@ all-match firing, `RequestLedger`-backed deterministic request ids,
 `max_actions_per_event` with dead-letter, the §10 refusal taxonomy), and
 the §8 extracts (`lib/runes/fleet/`, `test/fleet_loader_test.rb`,
 `test/fleet_rules_test.rb`). Daemon wiring (start/stop, the timer loop,
-journal persistence, observatory `/topology`) is the next phase.
+journal persistence) landed with 0.4.0; the observatory side of §8.3
+landed as Phase 40 — `runes_observer` `FleetDeclaration` renders the
+declared fleet on `/topology` beside the observed graph, with the drift
+between them.
 **Target release:** runes 0.4.0
 **Depends on:** the 7-rune workflow semantics (v0.3.0), `Runes::Transport` seam,
 capability guard, MQTT 5 fabric
@@ -238,6 +241,17 @@ fleet restart does not re-notify every agent that happens to be online.
 Repeated live status with no change does not fire either; the first live
 sighting of an agent does.
 
+**Presence under N runners (accepted trade, same class as schedules):**
+rule sources subscribe under the fleet's shared group, so each status
+update reaches exactly one runner. A runner computes transitions on the
+subsequence it witnesses: every notification still fires **exactly once**
+fleet-wide (no duplicates), but a transition whose endpoints were split
+across runners is attributed to the runner that saw the state change, and
+a transition entirely inside another runner's subsequence is invisible to
+this one. Un-splitting a stateful stream would require a single presence
+owner; until the fleet needs one enough to build it, this is the documented
+behaviour (pinned in `test/fleet_hardening_test.rb`).
+
 ### 5.3 Evaluation semantics
 
 1. **Order.** Rules are evaluated in declaration order. All matching rules
@@ -246,7 +260,10 @@ sighting of an agent does.
    misread. Rationale recorded here for future debate.)
 2. **Isolation.** A guard never mutates. A guard that raises is a load-time
    error if the failure is provable statically; otherwise it is a runtime
-   refusal event (`rule_guard_error`), never a silent skip.
+   refusal event (`rule_guard_error`), never a silent skip. The same
+   applies to a rule *body*: a raise refuses the **whole** rule — actions
+   the body recorded before raising are discarded, never half-executed;
+   the other rules for the event still fire.
 3. **Idempotency.** Every action carries a deterministic `request_id`
    (fleet, rule, event id). The existing `Runes::RequestLedger` dedupe
    applies: a redelivered event can never execute the same action twice.
@@ -386,17 +403,22 @@ subscriptions and **no** guard grants behind.
 L1 and L2 ship in 0.4.0. L3 is a tracking goal: the restricted subset in §6
 is *chosen* so that a L1/L2 fleet file is a L3 candidate with no rewrite.
 
-**L3 status (0.4.0):** the gate exists and passes — `test/spinel_fleet_gate_test.rb`
+**L3 status (0.4.x):** the gate exists and passes — `test/spinel_fleet_gate_test.rb`
 compiles every `examples/*.fleet.rb` whole-program under Spinel against a
 minimal declaration stub (`test/fixtures/fleet/spinel_gate_stub.rb`) and
 runs the resulting binary; a compiler refusal SKIPs (non-blocking, §11),
 a wrong build fails. The stub records the supported guard vocabulary: an
 event field used in a guard that the stub's `FleetGateEvent` does not
-declare is a gate failure, extended deliberately. Two divergences found
-while building the gate are filed upstream as
+declare is a gate failure, extended deliberately. The two divergences
+originally filed as
 [matz/spinel#7213](https://github.com/matz/spinel/issues/7213)
-(`instance_exec` with a lambda raises at runtime; forwarded `&block`
-bare-call resolution) and worked around in the stub.
+(`instance_exec` with a lambda raising NoMethodError; bare calls in a
+forwarded `&block` shadowed by top-level defs) are **fixed upstream**
+(703e278e8/093ede743, verified on spinel 2026.09.12+6411, a2bd89005) and
+the stub's workarounds are deleted — the gate now requires that spinel
+or newer. The shape-dependent pair filed as
+[matz/spinel#6741](https://github.com/matz/spinel/issues/6741) is closed
+the same way (already unreproducible on the new compiler).
 
 ---
 

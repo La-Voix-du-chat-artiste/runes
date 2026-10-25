@@ -7,6 +7,11 @@ ENV["RUNES_OBSERVER_JOURNAL"] = "off"
 # Same reasoning for signatures: the checkout may carry a real trust store,
 # and a test that silently trusts keys it never created is not a test.
 ENV["RUNES_OBSERVER_TRUST_DIR"] = File.join(Dir.tmpdir, "runes-observer-untrusted")
+# Same reasoning for the declared-fleet panel: without this, every topology
+# test renders the developer's real fleet file (the sibling checkout's
+# example), so counts and pills depend on whatever the last local edit left
+# in it. FleetDeclarationTest builds its own file from a tmpdir instead.
+ENV["RUNES_OBSERVER_FLEET"] = "off"
 require_relative "../config/environment"
 require "rails/test_help"
 

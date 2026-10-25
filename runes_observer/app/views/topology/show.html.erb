@@ -82,6 +82,126 @@
   </div>
 </section>
 
+<%# The DECLARED half: a loaded .fleet.rb (FleetDeclaration) beside the
+    observed graph above, with the drift between the two. Feature is off
+    unless a fleet file resolves (RUNES_OBSERVER_FLEET, else the harness
+    checkout's example fleet when present). %>
+<% if @declaration || @declaration_error %>
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Declared fleet</span>
+      <span class="panel__count">
+        <% if @declaration %>
+          <%= @declaration.name %> · digest <span class="mono"><%= @declaration.fingerprint[0, 12] %></span>
+        <% end %>
+      </span>
+    </div>
+    <div class="panel__body">
+      <% if @declaration_error %>
+        <p class="panel__empty">
+          The fleet file could not be loaded — the observed graph above is unaffected.
+          <span class="mono"><%= @declaration_error %></span>
+        </p>
+      <% else %>
+        <p class="faint small">
+          <span class="mono"><%= @declaration.path %></span>
+          · transport <%= @declaration.transport %><%= " · group #{@declaration.group}" if @declaration.group.present? %>
+          · runtime user <span class="mono"><%= @declaration.runtime_user %></span>
+        </p>
+        <% if @drift.quiet? %>
+          <p class="panel__count">Declaration and observation agree.</p>
+        <% else %>
+          <p>
+            <% unless @drift.roles_silent.empty? %>
+              <span class="pill pill--unknown"><%= @drift.roles_silent.size %> declared role<%= "s" unless @drift.roles_silent.size == 1 %> silent</span>
+            <% end %>
+            <% unless @drift.agents_undeclared.empty? %>
+              <span class="pill pill--offline"><%= @drift.agents_undeclared.size %> undeclared agent<%= "s" unless @drift.agents_undeclared.size == 1 %></span>
+            <% end %>
+            <% unless @drift.edges_silent.empty? %>
+              <span class="pill pill--unknown"><%= @drift.edges_silent.size %> declared route<%= "s" unless @drift.edges_silent.size == 1 %> with no traffic</span>
+            <% end %>
+            <% unless @drift.edges_undeclared.empty? %>
+              <span class="pill pill--offline"><%= @drift.edges_undeclared.size %> undeclared link<%= "s" unless @drift.edges_undeclared.size == 1 %></span>
+            <% end %>
+          </p>
+        <% end %>
+
+        <table class="data">
+          <thead>
+            <tr><th>Role</th><th>Model</th><th>Tools</th><th>Observed</th></tr>
+          </thead>
+          <tbody>
+            <% @declaration.roles.each do |role| %>
+              <% seen = @nodes.any? { |n| n.agent_id == role.id } %>
+              <tr>
+                <td class="mono"><%= role.id %></td>
+                <td class="mono faint"><%= role.model.empty? ? "—" : role.model %></td>
+                <td class="mono faint"><%= role.tools %></td>
+                <td><% if seen %><span class="pill pill--online">observed</span><% else %><span class="pill pill--unknown">silent</span><% end %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+
+        <% unless @declaration.edges.empty? %>
+          <table class="data">
+            <thead>
+              <tr><th>Route</th><th class="num">Tasks seen</th><th class="num">Replies</th></tr>
+            </thead>
+            <tbody>
+              <% @declaration.edges.each do |edge| %>
+                <% observed = @observed_by_pair[[edge.from, edge.to]] %>
+                <tr>
+                  <td><span class="mono"><%= edge.from %></span> <span class="faint">→</span> <span class="mono"><%= edge.to %></span></td>
+                  <% if observed %>
+                    <td class="num"><%= observed.tasks %></td>
+                    <td class="num"><%= observed.replies %></td>
+                  <% else %>
+                    <td class="num faint">silent</td>
+                    <td class="num faint">—</td>
+                  <% end %>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        <% end %>
+
+        <table class="data">
+          <thead>
+            <tr><th>Channel</th><th>Topic</th><th>Schema</th><th>Retain</th></tr>
+          </thead>
+          <tbody>
+            <% @declaration.channels.each do |ch| %>
+              <tr>
+                <td class="mono"><%= ch.id %></td>
+                <td class="mono faint"><%= ch.topic %></td>
+                <td class="mono faint"><%= ch.schema || "—" %></td>
+                <td><%= ch.retain ? "yes" : "—" %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+
+        <table class="data">
+          <thead>
+            <tr><th>Rule</th><th>Source</th><th class="num">Line</th></tr>
+          </thead>
+          <tbody>
+            <% @declaration.rules.each do |rule| %>
+              <tr>
+                <td class="mono"><%= rule.id %></td>
+                <td class="mono faint"><%= rule.source %></td>
+                <td class="num faint"><%= rule.line %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% end %>
+    </div>
+  </section>
+<% end %>
+
 <% if @edges.any? %>
   <section class="panel">
     <div class="panel__head">

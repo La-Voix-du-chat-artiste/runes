@@ -37,16 +37,7 @@ module Runes
 
         @running = true
         engine.start
-        @thread = Thread.new do
-          while @running
-            begin
-              engine.tick
-            rescue StandardError => e
-              warn "[Fleet] tick failed: #{e.class}: #{e.message}"
-            end
-            sleep @tick_every
-          end
-        end
+        start_timer_thread if @tick_every.positive?
         self
       end
 
@@ -70,12 +61,31 @@ module Runes
 
       private
 
+      # tick_every <= 0 hosts NO timer: the documented way to run an
+      # event-serving runner that never fires schedules (a `sleep 0` here
+      # would spin a core — schedules belong on a timer-hosting runner).
+      def start_timer_thread
+        @thread = Thread.new do
+          while @running
+            begin
+              engine.tick
+            rescue StandardError => e
+              warn "[Fleet] tick failed: #{e.class}: #{e.message}"
+            end
+            sleep @tick_every
+          end
+        end
+      end
+
       def jsonl_sink(path)
         @journal_path = path
         dir = File.dirname(path)
         FileUtils.mkdir_p(dir) unless Dir.exist?(dir)
-        @file = File.open(path, "a")
+        # Opened lazily: stop closes the file, so a restarted Runner must
+        # journal again instead of writing to a closed handle (the engine's
+        # commit rescues that as a warning and drops the sink — silent loss).
         lambda do |entries|
+          @file ||= File.open(path, "a")
           entries.each { |entry| @file.puts(Runes::Json.generate(entry)) }
           @file.flush
         end
