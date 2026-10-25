@@ -10,8 +10,11 @@
 > `max_actions_per_event` with dead-letter, §10 refusal taxonomy), and the
 > daemon runs one via `bin/runes-daemon --fleet path.fleet.rb` with a
 > JSONL journal under `log/`. The §8 extracts (policy / ACL / topology +
-> fingerprint) are golden-tested at L2, and `bin/runes-acl --fleet` renders
-> the merged mosquitto ACL with fleet roles as broker users. Beneath it
+> fingerprint) are golden-tested at L2, `bin/runes-acl --fleet` renders
+> the merged mosquitto ACL with fleet roles as broker users, and the
+> observatory's `/topology` renders the declared fleet beside the observed
+> graph with the drift between them (`FleetDeclaration`,
+> `RUNES_OBSERVER_FLEET`). Beneath it
 > sits 0.3.0: the transport-agnostic series (MQTT fabric as one
 > `Runes::Transport` adapter, MQTT 5 shared subscriptions instead of the
 > deleted claim/lease protocol, A2A-over-MQTT discovery, MCP tools both
@@ -72,12 +75,39 @@ Where the current goal stands (it stays **active**):
   `request_id` before any work is queued, so a redelivered QoS 1 PUBLISH, a
   session replay or a publisher retry runs the planner once and gets the first
   copy's outcome back — prompts, A2A tasks, delegations and tool RPCs.
-- **Next, in order:** the P1 views — `O1.6` plugin catalog, `O1.7` plan chain,
-  `O1.5` alerts (impersonation and guard denials are already detected and
-  waiting for an `Alert` row; `O1.8`, the fleet board, landed in Phase 31) —
-  then `O0.4` retention/rollups at real volume; optionally a durable request
-  ledger if anyone turns MQTT session expiry on. Auth gates O1.2: it is remote
-  execution.
+  Phase 40 reviewed Phase 39 and fixed what the probes proved: a rule body
+  that raises no longer half-executes its recorded actions (§5.3.2 whole-rule
+  refusal), `Runner` with `tick_every <= 0` no longer spins a busy timer
+  thread, `fleet_boot` always journals first (retained replays raced ahead of
+  it), and the presence-under-shared-group subsequence caveat is documented
+  and pinned. The same review caught `spawn :a` in a fleet file reaching
+  `Kernel#spawn` (process exec at load time) — reserved words are now real
+  methods on every evaluation binding, and the loader's probe re-raises
+  reserved-word refusals. The parked "observatory suite erroring (22 errors)"
+  was the Phase-38 capability seam never wired in the observer initializer —
+  one `require "runes/backends/cruby"`. Thread 1 (observer-side) landed:
+  `FleetDeclaration` loads a `.fleet.rb` and `/topology` renders the declared
+  fleet beside the observed one with the drift between them (silent roles,
+  undeclared agents/links) — `RUNES_OBSERVER_FLEET`, `off` in tests.
+- **Next, in order:** the durable, scoped backlog is **`ENHANCEMENT.md`**
+  (WASI round-trip diagnosis, fleet v0.2 + planner worlds, observatory P1,
+  pipeline promotion, gated optional). In short: (1) fleet — chat-driven
+  world changes through the planner, spec v0.2 items (mutable cells,
+  nested fleets, rule priorities); the P1 views — `O1.6` plugin catalog,
+  `O1.7` plan chain, `O1.5` alerts (impersonation and guard denials are
+  already detected and waiting for an `Alert` row), then `O0.4`
+  retention/rollups at real volume; optionally a durable request ledger if
+  anyone turns MQTT session expiry on. Auth gates O1.2: it is remote
+  execution. WASI: the in-process transport
+  guest landed (Phase 41 — `Runes::Transport::WasiGuest`, the fabric state
+  in a long-lived guest behind a framed file bridge; see
+  `docs/wasi-transport-guest.md`); the real-wasm round trip is **closed**
+  (2026-10-24: the VM now runs in a child OS process because
+  wasmtime-ruby holds the CRuby GVL while guest code runs; the canary is
+  green), so next is the compiled fleet runtime reusing the bridge. Spinel:
+  pin bumped to a2bd89005 (+6411) with both upstream filings (#7213,
+  #6741) fixed and the gate stub's workarounds deleted — see the
+  Phase 40 follow-through in DEVELOPMENT_LOG.md.
 - **Next (the pipeline story):** the write-ownership question is answered in
   code (`Runes::Kanban.update_file` locks the read-modify-write), so what is
   left is promotion: an MCP tool surface so any harness can *query* the CRM
@@ -102,8 +132,8 @@ Where the current goal stands (it stays **active**):
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 636 runs / 2879 assertions / 0 failures
-cd runes_observer && bin/rails test   # observatory: 219 runs / 1085 assertions / 0 failures
+bundle exec rake test                 # parent harness: 764 runs / 4810 assertions / 0 failures (SPINEL set)
+cd runes_observer && bin/rails test   # observatory: 231 runs / 1148 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
 

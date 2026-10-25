@@ -2424,3 +2424,183 @@ shape-dependent pair — likely fixed by the #6179/#6619-era work); (4)
 the observatory suite was erroring (22 errors last measure) — parked,
 owner's eyes needed. No hidden debt: docs, receipts, and golden files
 are current.
+
+## Phase 40 — The review pass, the parked observatory errors, and the declared fleet (0.4.x)
+
+**The review found four flaws in Phase 39, all confirmed by probe before
+fixing.**
+
+1. *A rule body that raises still half-ran.* Actions recorded before the
+   raise executed anyway — journal showed `rule_guard_error` AND `action`,
+   the task published. §5.3.2 now refuses the WHOLE rule: actions recorded
+   before a raise are discarded, never half-executed; the other rules for
+   the event still fire (all-match, per-rule isolation). Pinned in
+   `test_rule_body_raise_discards_actions_recorded_before_the_raise`.
+2. *`tick_every: 0` spun a core.* The Engine comment recommends `tick_every
+   = 0` for non-timer runners, but `while @running … sleep 0` is a busy
+   loop. `tick_every <= 0` now hosts no timer thread; manual `tick`
+   delegation still fires schedules (tested both ways).
+3. *`fleet_boot` was not guaranteed first.* Inproc delivers retained
+   messages synchronously DURING subscribe, so a retained channel event
+   journalled BEFORE the boot record (and MQTT 5 made it a race). The boot
+   record now commits before any subscription — the journal's first line
+   is always the fleet that wrote the rest (§8.4, as the Runner doc
+   already promised).
+4. *Presence under N shared-group runners is lossy at subsequence
+   boundaries* — probe: sequence `online offline online online offline
+   online` (five true transitions) produced up×2/down×2 fleet-wide; the
+   final `up` was lost because its endpoints split across runners. This
+   is inherent to splitting a stateful stream; the alternative (plain
+   subscriptions) would duplicate task/publish actions fleet-wide. Kept
+   exactly-once (the same trade as the schedule exception), documented
+   precisely in FLEET_DSL.md §5.2 and the Engine, and pinned with
+   `test_presence_notifications_fire_exactly_once_fleet_wide`.
+
+**The probe that kept giving: `spawn :a` in a fleet file attempted a
+PROCESS EXEC at load time.** The reserved-word defence relied on
+`method_missing`, but `Kernel#spawn` is a real (private) method reachable
+via implicit self on every builder binding — `method_missing` never fires.
+`spawn`/`cell`/`interval` are now REAL methods on TopBuilder, WorldBuilder,
+RoleBuilder and the rule-body `RuleContext` (`Runes::Fleet::RESERVED` lives
+in load_error.rb, which all of them load), and the loader's dry-run probe
+re-raises `Fleet::LoadError` instead of swallowing it into "the probe could
+not satisfy this rule". A reserved word now refuses the load loudly at
+every binding level — top, world, role, rule body — pinned by
+`test_spawn_is_intercepted_before_kernel_in_every_binding`. The existing
+reserved-keyword tests only ever exercised `cell` and `interval`; `spawn`
+— the one that collides with Kernel — was the untested one.
+
+**The parked observatory suite (thread 4: "22 errors, owner's eyes
+needed") was one missing require.** The Phase-38 capability seam moved all
+backend wiring into `lib/runes/backends/cruby.rb`; the harness loads it in
+`lib/runes.rb`, but the observatory initializer (predating the seam)
+required `runes/security` without it — so `Runes::Security` had no crypto
+backend (18 IdentityErrors) and `Workflow.from_file` assumed it WAS a
+compiled Spinel kernel (4 StaticBindingErrors + 1 failure). One
+`require "runes/backends/cruby"` in `runes_observer/config/initializers/
+runes_transport.rb`: **219 runs / 1085 / 0 failures / 0 errors**, exactly
+the recorded green state.
+
+**Thread 1 (observer-side): the declared fleet on `/topology`.**
+`FleetDeclaration` loads a `.fleet.rb` through the harness's own loader —
+consuming the §8 extracts, starting nothing — and the topology page
+renders the DECLARED fleet beside the OBSERVED one: roles (model, tool
+grants, observed/silent pill), declared routes with live task/reply
+counters when traffic exists, channels, rules with line numbers, and the
+§8.4 fingerprint tying the panel to the exact file version. The
+reconciliation is the value: `roles_silent` (declared, never observed),
+`agents_undeclared` (observed, never declared — typo or stranger),
+`edges_silent`, `edges_undeclared`. A file that fails to load renders its
+refusal on the page; the observed graph is never held hostage by a fleet
+file being edited. `RUNES_OBSERVER_FLEET` names a file (missing explicit
+file = error, not silence), `off` disables (the test-suite default, so
+tests never render the developer's real fleet), otherwise the sibling
+checkout's example fleet when present; cached per `[path, mtime]` so an
+edit is visible on the next request. 8 service tests + 4 controller
+tests. Spec v0.2 items (mutable cells, nested fleets, rule priorities)
+and chat-driven world changes remain open.
+
+Suites: parent **752 / 4775 / 0, 0 skips** with SPINEL set; observatory
+**231 / 1148 / 0, 0 skips**.
+
+**Spinel follow-through (same day).** Both parked upstream filings came
+back fixed: [matz/spinel#7213](https://github.com/matz/spinel/issues/7213)
+(instance_exec with a lambda; forwarded-block bare-call shadowing — fixed
+in 703e278e8/093ede743) and
+[#6741](https://github.com/matz/spinel/issues/6741) (the shape-dependent
+pair — already unreproducible). The pin moved **f2ddd72d0 → a2bd89005**
+(2026.09.12+4528 → +6411, 1 883 commits), the kernel self-checks **70/70**
+natively on the new compiler, the whole suite stays **752 / 4775 / 0, 0
+skips**, and the gate stub's #7213 workarounds are **deleted** — guards
+now take the direct `instance_exec(&lambda)` path (FLEET_DSL.md §11
+records the new minimum). The spinel/ checkout and build/ binary carry
+the new pin.
+
+## Phase 41 — The first real WASI guest: the in-process transport guest (0.4.x)
+
+Thread 2, first step. Until now the WASM sandbox ran one-shot stateless
+tool scripts; the transport guest is the first **long-lived, stateful**
+guest: the fabric state (subscriptions, retained messages, shared-group
+round-robin) lives *in the guest*, and the host adapter
+(`Runes::Transport::WasiGuest`, a normal `Base`) reaches it through a
+framed file protocol on the guest's WASI p1 preopen — numbered JSON files,
+`tmp`+`rename` both directions, both sides skipping `tmp_*` (a tmp hit
+means write-in-progress; the rename is the visibility point). Acks land
+after the op is applied, so a publish can never overtake the subscribe it
+depends on across the bridge. `Transport.build(kind: "wasi_guest")` wires
+it; groups and properties are supported; `disconnect` stops the guest,
+joins the VM, removes the scratch dir.
+
+**Why files, not pipes** (each reason found empirically, `tmp/wasm_*`
+probes since deleted): `ruby -e` works under ruby.wasm, freeing stdin in
+principle — but a FIFO stdin busy-polls under wasmtime (the spin wedges
+the whole VM), and guest stdout to a FIFO never reliably reaches the
+host; a regular file for guest→host works, and the preopen inbox rounds
+out host→guest. **No third-party requires:** ruby.wasm ships without the
+`json` gem, so the guest carries its own minimal JSON-subset codec
+(interoperable with the host's full JSON both directions; payloads are
+opaque strings, never parsed in-guest). Append-mode log opens and
+path-existence lookups are the least uniform WASI p1 bits across runtimes,
+so the guest log is whole-file rewrites and mkdir is try/rescue.
+
+**One program, three runtimes.** `wasm/transport_guest.rb` is plain Ruby:
+the suite spawns it with CRuby (`spawn` injection — every protocol and
+contract behavior tested hermetically), the adapter's default spawn
+embeds the same bytes via `ruby -e` under wasmtime, and a Spinel build
+stays inside the subset — the compiled fleet runtime (next thread-2 step)
+reuses this bridge, which is the point: the protocol is the seam that
+lets a compiled agent hold fabric state.
+
+Suites: parent **764 / 4804 / 0 failures, 1 skip** with SPINEL set (the skip
+is the opt-in `RUNES_WASM=real` boundary test).
+
+---
+
+**Session close (2026-10-07).** Phase 40 + 41 above are committed-worthy
+one batch each; nothing committed yet at close. Suites: parent **764 /
+4804 / 0, 1 skip** with SPINEL set (a2bd89005 kernel 70/70, both gates
+green, 0 skip on the spinel tests); observatory **231 / 1148 / 0, 0
+skips**. Working tree adds, uncommitted: `wasm/transport_guest.rb`,
+`lib/runes/transport/wasi_guest.rb`, `test/wasi_guest_test.rb`,
+`docs/wasi-transport-guest.md` + the doc updates listed in each phase.
+
+Open threads for next time — the durable, scoped backlog now lives in
+**`ENHANCEMENT.md`** (§1 the real-wasm round-trip diagnosis with the
+reproduction and the ordered close-out, §2 fleet v0.2 + planner worlds,
+§3 observatory P1, §4 pipeline promotion, §5 gated optional); in short:
+(1) fleet — chat-driven world changes, spec v0.2 (mutable cells, nested
+fleets, rule priorities); (2) WASI — close the real-wasm round trip on a
+quiet machine, then the compiled fleet runtime over the same bridge; (3)
+upstream — nothing open: #7213/#6741 fixed and verified, pin at
+a2bd89005; (4) observatory suite green (the 22 parked errors were one
+missing `require "runes/backends/cruby"`). No hidden debt: docs, receipts,
+and golden files are current.
+
+## Phase 42 — The real-wasm round trip closes: the guest moves out of process (2026-10-24)
+
+The canary from `ENHANCEMENT.md` §1 was re-run on a quieter box (load ~2.6)
+and wedged identically: the guest booted and wrote its hello frame, but the
+host's `connect` never returned; the process had to be SIGKILLed after 15
+minutes. The preserved work dir showed `guest boot pid=42 work=/work`,
+`outbox/000000_hello.json`, and an empty inbox.
+
+Micro-probes (`tmp/wasm_probe.rb`) cleared every filesystem suspect: boot,
+`sleep`, `Dir.glob` empty/populated, `Dir.mkdir` + EEXIST, `File.delete`,
+and `File.rename` all completed. A threaded probe
+(`tmp/wasm_thread_probe.rb`) found the real shape: with the guest running
+an infinite loop, the host's main thread wrote zero heartbeats; a finite
+guest run let the host resume only after the guest exited. Even a 1 s guest
+sleep loop starved the host. Root cause: wasmtime-ruby's `invoke` holds the
+CRuby GVL while guest code executes, so the in-process adapter's pump
+thread and timers never run.
+
+Fix: `wasm/wasm_host.rb` runs the VM in a child OS process; `WasiGuest`'s
+default spawn returns a `Process`-backed handle (TERM, grace, KILL, reap).
+The adapter's pump, boot timer and ack timer are ordinary Ruby threads
+again. The canary passes in ~12 s (module compile), the whole WASI file is
+**12 runs / 30 assertions / 0 skips** under `RUNES_WASM=real`, and the
+parent suite is **764 / 4810 / 0, 1 skip** (the opt-in test, as before).
+Packaging now ships `wasm/*.rb` (the guest and its host); `ruby.wasm`
+stays out of the gem.
+
+Next: the compiled fleet runtime over the same bridge (`ENHANCEMENT.md` §1).

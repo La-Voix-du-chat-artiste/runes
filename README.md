@@ -73,7 +73,7 @@ markdown it describes, so the two cannot drift). The "why" (what we are
              │                                                     │
              └──────────────────────┬──────────────────────────────┘
                                     ▼
-              Runes::Transport  (inproc | mqtt311 | mqtt5)
+              Runes::Transport  (inproc | mqtt311 | mqtt5 | wasi_guest)
               MQTT 5 ── shared subscriptions + PUBLISH properties
                                     │
              ┌──────────────────────┼───────────────────────┐
@@ -173,6 +173,14 @@ step-by-step semantics and the L1/L2/L3 conformance levels:
   `tool_calls` (opt out via `RUNES_USE_TOOLS=0`).
 - **WASM sandbox (opt-in, validated)** — real `ruby.wasm` boot with WASI,
   code via stdin, 5B fuel budget; deterministic mock backend by default.
+- **The WASI transport guest (first real guest)** — until now guests were
+  one-shot scripts; `Runes::Transport::WasiGuest`
+  (`RUNES_TRANSPORT=wasi_guest`) keeps the fabric itself (subscriptions,
+  retained messages, shared-group round-robin) in a **long-lived guest**,
+  reached through the ordinary transport contract over a framed file
+  bridge on the guest's WASI preopen. The same guest program runs under
+  CRuby (suite-spawned, fully tested), ruby.wasm, and — the point — a
+  Spinel-compiled fleet later: [`docs/wasi-transport-guest.md`](docs/wasi-transport-guest.md).
 - **Durable journal** — every prompt lifecycle appended to
   `log/journal.jsonl` (rotated, `flock`-protected) and published on the bus;
   `bin/runes-replay` shows or replays it.
@@ -304,7 +312,7 @@ Non-TUI clients: `runes-client --mode goal|plan "…"`, `--agents`,
 | `RUNES_POLICY` | `config/policy.json` | System-wide capability policy |
 | `RUNES_WASM` | `mock` | `real` enables the ruby.wasm backend |
 | `RUNES_MQTT_HOST/PORT` | `127.0.0.1`/`1883` | Broker endpoint |
-| `RUNES_TRANSPORT` | `auto` | `auto`/`inproc`/`mqtt311`/`mqtt5` |
+| `RUNES_TRANSPORT` | `auto` | `auto`/`inproc`/`mqtt311`/`mqtt5`/`wasi_guest` (the fabric in a WASI guest) |
 | `RUNES_REQUIRE_SHARED_SUBSCRIPTIONS` | unset | `1` makes missing `$share` fatal |
 | `RUNES_REQUIRE_SIGNATURES` | unset (**off**) | `1` requires signed envelopes |
 | `RUNES_TRUST_DIR` | `<root>/config/trust` | Trusted peer public keys |
@@ -467,10 +475,16 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    all), `runes:sign` (private keys never enter guest memory),
    `runes:complete` (provider keys stay host-side) — and preopens exactly
    the workspace directory. WASI's capability model *is* Runes' security
-   model, at the OS level. Spikes: **S1** Spinel-C → wasi-sdk hello world;
-   **S2** guest with host imports publishing a signed heartbeat; **S3**
-   integration into the existing `Runes::VM` pool alongside `ruby.wasm`
-   (interpreted guest for untrusted *tools*, compiled guest for *agents*).
+   model, at the OS level. The first real guest landed instead of S1–S3's
+   host imports: the **transport guest** (above) — the same effect through
+   the preopen bridge the runtime already grants, proven on ruby.wasm
+   today and reusable by the compiled fleet runtime. Remaining spikes:
+   **S1** Spinel-C → wasi-sdk hello world; **S2** a *compiled* guest
+   publishing a signed heartbeat through the same bridge; **S3** pooled
+   alongside `ruby.wasm` (interpreted guest for untrusted *tools*,
+   compiled guest for *agents*). The gate before any of it — the
+   real-wasm round trip — is now green (`ENHANCEMENT.md` §1,
+   `docs/wasi-transport-guest.md`).
 3. **A plugin catalogue** (`/plugins`) generated from
    `Runes::Plugin.names` — "a rune is a plugin" as a page.
 4. **Alerts** — impersonation and refusals get a row an operator can
