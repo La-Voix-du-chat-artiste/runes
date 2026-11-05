@@ -234,6 +234,10 @@ how to run: [`bench/swarm/README.md`](bench/swarm/README.md).
 
 ## 🚀 Quick Start
 
+New here? [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) (also as
+[PDF](docs/GETTING_STARTED.pdf)) is the 5-minute tour: what Runes can do,
+setup, and the scripted-kanban demo to run first — no API key needed.
+
 ```bash
 git clone https://github.com/La-Voix-du-chat-artiste/runes
 cd runes
@@ -244,6 +248,10 @@ cp config/.env.example config/.env
 
 # 1) offline smoke test (embedded broker, stub planner — no API key)
 bundle exec ruby demo/smoke.rb
+
+# 1b) the scripted kanban demo — the full prospect pipeline, offline, no key:
+#     idea → goal.md → mission .mmd kanban → verified todos → CRM drafts → report
+RUNES_DEMO_SCRIPTED=1 bundle exec ruby -Ilib scripts/demo_pipeline_run.rb
 
 # 2) live end-to-end demos (real LLM)
 bundle exec ruby demo/hello_world_live.rb     # build mode, hello world + minitest
@@ -418,8 +426,12 @@ bundle exec rake test          # see STATE.md for the current run count
 The suite is **hermetic and offline**: provider HTTP is exercised through an
 injected **dup transport** (a real `Net::HTTPResponse` with a canned body),
 broker tests spawn their own in-process broker on a free port — **no API
-key, no network, no broker required**. Live demos (need a real key):
-`demo/hello_world_live.rb`, `demo/modes_live.rb`,
+key, no network, no broker required**. Offline demos (no key):
+`demo/smoke.rb` and the **scripted kanban pipeline**
+(`RUNES_DEMO_SCRIPTED=1 bundle exec ruby -Ilib scripts/demo_pipeline_run.rb`
+— runs `examples/prospect_pipeline.rb` end to end and prints the mission
+`.mmd`; see [Getting started](docs/GETTING_STARTED.md)). Live demos (need a
+real key): `demo/hello_world_live.rb`, `demo/modes_live.rb`,
 `demo/build_mission_live.rb`, `demo/tool_calls_live.rb`, `demo/broker.rb`.
 
 ## 🛠 The compiled kernel (Spinel)
@@ -593,6 +605,8 @@ tools/               tool manifests (card.json + capabilities.json [+ run.rb])
 examples/            runnable sample workflows (Roast-compatible)
 spin/                the Spinel kernel entry (compile to a native binary)
 scripts/spinel_build.rb  compile + native self-check (SPINEL=/path/to/spinel)
+scripts/demo_pipeline_run.rb  run the prospect pipeline demo (scripted: RUNES_DEMO_SCRIPTED=1)
+scripts/md_to_pdf.rb     render a docs/*.md to its PDF (ruby scripts/md_to_pdf.rb IN OUT)
 docs/spinel/         kernel PRD + tier specs (A pure · B FFI · C deferred)
 demo/                smoke + live end-to-end demos
 runes_observer/      Rails 8.1 MQTT observatory
@@ -606,6 +620,7 @@ docs/OBSERVATORY_ROADMAP.md  what to build next in the observatory
 docs/SMALL_MODEL_HARNESS_PRD.md   the LFM3 team PRD (Cycle 43) + pilot results
 docs/SMALL_MODEL_HARNESS_PLAN.md  the coding plan (phases 0–8)
 docs/LFM3_TEAM_DISCOVERY.md       the design source of truth
+docs/GETTING_STARTED.md|.pdf      the newcomer's guide (setup + scripted kanban demo)
 ```
 
 ## 📜 License

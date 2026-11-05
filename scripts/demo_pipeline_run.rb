@@ -19,6 +19,9 @@ $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require "runes"
 
 ROOT = ENV.fetch("PROSPECT_ROOT", File.expand_path("../tmp/prospect-demo", __dir__))
+# The workflow reads PROSPECT_ROOT itself (examples/prospect_pipeline.rb);
+# export it so the artifacts land where this script says they land.
+ENV["PROSPECT_ROOT"] = File.expand_path(ROOT)
 IDEA = ENV.fetch("PROSPECT_IDEA",
                  "Trouver 10 PME de 10 à 100 employés intéressées par un CRM qui " \
                  "transforme une idée en mission exécutée")
@@ -107,12 +110,23 @@ output = workflow.final_output
 elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
 
 puts "workflow: #{WORKFLOW}"
-puts "root:     #{ROOT}"
+puts "root:     #{ENV['PROSPECT_ROOT']}"
 puts "epic:     #{output[:epic_code]}  mission: #{File.basename(output[:mission_path].to_s)}"
 puts "todos:    #{output[:todos]} (#{Array(output[:advanced]).map { |t| t[:verdict] }.join(', ')})"
 puts "drafts:   #{Array(output[:drafts]).size}  references: #{Array(output[:references]).join(', ')}"
 puts "report:   #{output[:report_path]}"
 puts format("elapsed:  %.1fs", elapsed)
+
+# Show the kanban the run just wrote — the artifact a newcomer can open in
+# any Mermaid renderer (or $EDITOR).
+mission_path = output[:mission_path].to_s
+if File.file?(mission_path)
+  puts
+  puts "kanban:   #{mission_path}"
+  puts "---"
+  puts File.read(mission_path)
+  puts "---"
+end
 
 # Close the telemetry sinks before exiting: the last events (including
 # run_finished) are only flushed when the transport is disconnected.

@@ -154,6 +154,7 @@ end
 
 # Project constants for the cover, in one place: the repository this renders
 # for, and the one-line description under the title.
+require_relative "../lib/runes/version"
 REPO_URL = ENV.fetch("RUNES_REPO_URL", "github.com/La-Voix-du-chat-artiste/runes")
 REPO_BLURB = ENV.fetch("RUNES_REPO_BLURB",
                        "A Ruby agent harness with a fabric, an identity, a memory and a face")
@@ -187,7 +188,7 @@ def render(markdown, out_path)
     pdf.text(REPO_BLURB, size: 12.5, style: :bold)
     pdf.move_down 6
     pdf.fill_color MUTED
-    pdf.text("Runes 0.3.0  |  #{Time.now.strftime('%d %B %Y')}  |  #{REPO_URL}", size: 9)
+    pdf.text("Runes #{Runes::VERSION}  |  #{Time.now.strftime('%d %B %Y')}  |  #{REPO_URL}", size: 9)
     pdf.move_down 14
 
     # The document's H1 is the cover title, so it is not repeated in the flow.
