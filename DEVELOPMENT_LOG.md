@@ -81,12 +81,15 @@ bundle exec ruby -Ilib bench/swarm/runner.rb --arm team-full --seeds 0 \
 bundle exec ruby -Itest test/bench_swarm_test.rb
 ```
 
-All tests green: **24 runs, 100 assertions, 0 failures**.
+Suite green: `test/bench_swarm_test.rb` **21 runs, 278 assertions, 0
+failures**; full `bundle exec rake test` **1121 runs, 6650 assertions, 0
+failures, 3 skips**.
 
-## Session close (2026-11-04, resumed from the opencode session)
+## Session close (2026-11-04, resumed from the opencode session — commit cff3d14)
 
 The tree the previous session left had a red suite and a pilot that could
-not run; both are fixed and the pilot is running against real MLX packs.
+not run; both are fixed and the pilot **ran to completion** against the
+real MLX packs. Verdict: **NO-GO** (see the decision record below).
 
 - **Suite repair** (`test/bench_swarm_test.rb` was missing the `grade`,
   `metrics`, `report` and `runner` requires — 10 errors):
@@ -125,10 +128,31 @@ not run; both are fixed and the pilot is running against real MLX packs.
   `fixtures/SOURCES.md` + `fixtures/index.json` (12 synthetic CC0 files with
   SHA-256s), `calibration.json` (PRD §7.8 bands), `.gitignore` entries for
   `bench/swarm/{runs,cache,adapters}/`.
-- **Pilot**: full run matrix (12 arms × applicable cases × seed 0, cold
-  command mode against the official MLX packs) writing
-  `bench/swarm/results/2026-11-04-pilot-report.md` + `.json`; the decision
-  record with the verdict is `bench/swarm/results/2026-11-04-pilot.md`.
+- **Pilot** (ran 2026-11-04, cold command mode, mlx-vlm 0.7.12 / mlx 0.32.4,
+  Python 3.12.12, seed 0): full run matrix — 12 arms × applicable cases =
+  **136 rows, 122 graded, 14 infra** (all `adapter`: no LoRA manifest
+  exists, so the pilot ran `profile-only` and says so; `frontier-1x` not
+  run, no endpoint) — writing `bench/swarm/results/2026-11-04-pilot-report.md`
+  + `.json`, plus the `same-model-3x` control re-run after a harness fix
+  (`2026-11-04-same-model-3x.json`). Decision record:
+  `bench/swarm/results/2026-11-04-pilot.md`.
+- **Pilot result — NO-GO**: team-full 4/24 with 44 contract violations,
+  decline recall 0.80, false-answer 0.20, judge ECE 0.54 (in-sample);
+  text lift +1 case (gate +2); modality lift negative (0/10 vs solo-VL
+  3/4 on vision); the same-model-3x control passed 7/14 on the same cases.
+  Unvalidated hops 0 on every arm. Regressions: solo-VL passed V1–V3,
+  team-full failed all three. **Next thread**: stamp-mode envelopes for
+  text roles (the 1.7B cannot reliably echo the four-block envelope),
+  then the perception-sufficiency gate (rejects all audio perceptions,
+  d1 scores 0.03–0.07 vs the 0.30 threshold) and the d1 scope decline
+  (d1-only false-accepts O1/O2).
+- **Docs**: `README.md` (new "contracted LFM3 team" section + status +
+  layout), `docs/SMALL_MODEL_HARNESS_PRD.md` (report links + pilot results
+  table), `ENHANCEMENT.md` §6 (Cycle 43 entry with the verdict and the
+  next thread), this log.
+- **Commit**: `cff3d14` — `bench: run the contracted LFM3 team over the
+  24-case benchmark` (131 files; `bench/swarm/runs/` and `cache/` are
+  gitignored runtime state, the reports under `results/` are committed).
 ---
 
 ## Objective

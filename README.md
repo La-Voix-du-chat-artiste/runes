@@ -38,7 +38,15 @@ markdown it describes, so the two cannot drift). The "why" (what we are
 > today** — a 1.8 MB native binary passes a 70-check self-check (guard,
 > ledger, transport, libcrypto Ed25519/HMAC via FFI, `posix_spawn`
 > containment, the workflow engine), see [The compiled
-> kernel](#-the-compiled-kernel-spinel) below. See *Where this goes next*
+> kernel](#-the-compiled-kernel-spinel) below. (4) **The contracted LFM3
+> team (Cycle 43)** — a benchmark harness where every model call goes
+> through a manifest, an identity/capacity/decision envelope, a contract
+> guard and a ledger, run over a frozen 24-case suite against the real
+> LiquidAI MLX packs. The 2026-11-04 pilot verdict is **NO-GO** (the
+> same-model control beats the team; the echo envelope is the next fix):
+> [`bench/swarm/`](bench/swarm/README.md),
+> [`docs/SMALL_MODEL_HARNESS_PRD.md`](docs/SMALL_MODEL_HARNESS_PRD.md).
+> See *Where this goes next*
 > below. `STATE.md` for the suite count,
 > `DEVELOPMENT_LOG.md` for the history, `STRATEGY.md` for the positioning.
 
@@ -144,6 +152,40 @@ mosquitto ACL, fleet roles becoming first-class broker users. The
 step-by-step semantics and the L1/L2/L3 conformance levels:
 [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
 
+## 🤖 The contracted LFM3 team (Cycle 43)
+
+A small-model team where **no model call is anonymous**: every role is a
+manifest in `config/agents/` (`agent_id`, `base_model`, `capacities`,
+`forbidden_actions`), every call is wrapped in an **ICC envelope**
+(IDENTITY / CAPACITIES / DECISION / BODY), checked by a `ContractGuard`
+checkpoint, and receipted in a `WorkLedger`. A deterministic Ruby
+`Conductor` (`lib/runes/orchestration/`) routes by triage verdict — the
+model never chooses its own identity, shape or next hop — and declines
+with a typed reason when the task is out of scope.
+
+The proof rig is a frozen **24-case benchmark** (`bench/swarm/`, six
+families: text, vision, audio, audio-video, decision, out-of-scope) with
+synthetic CC0 fixtures, independent mechanical checks, and a Markdown+JSON
+report per run. Run it against the official MLX packs:
+
+```bash
+ruby bench/swarm/runner.rb --arm team-full --seeds 0 \
+  --model LiquidAI/LFM3-1.7B-MLX-4bit --python .venv/bin/python \
+  --out bench/swarm/results/pilot.md --json bench/swarm/results/pilot.json
+```
+
+**Pilot 2026-11-04 (24 cases × 1 seed, cold command mode, real checkpoints):
+NO-GO.** team-full passed 4/24 with 44 contract violations and decline
+recall 0.80; the same-model-3x control passed 7/14 on the same cases, so
+extra calls do not rescue the team. Unvalidated hops were 0 everywhere.
+The next thread is the echo-envelope contract (the 1.7B cannot reliably
+echo the four-block envelope — move text roles to stamp mode), then the
+perception-sufficiency gate and the d1 scope decline. Full decision
+record: [`bench/swarm/results/2026-11-04-pilot.md`](bench/swarm/results/2026-11-04-pilot.md);
+design: [`docs/SMALL_MODEL_HARNESS_PRD.md`](docs/SMALL_MODEL_HARNESS_PRD.md)
++ [`docs/SMALL_MODEL_HARNESS_PLAN.md`](docs/SMALL_MODEL_HARNESS_PLAN.md);
+how to run: [`bench/swarm/README.md`](bench/swarm/README.md).
+
 ## ✨ Features
 
 - **Transport-agnostic fabric** — the dispatcher talks only to
@@ -186,6 +228,9 @@ step-by-step semantics and the L1/L2/L3 conformance levels:
   `bin/runes-replay` shows or replays it.
 - **Roast-compatible workflows** — an unmodified Shopify Roast `.rb` file
   runs as-is; see [Runes](#-runes-roast-compatible-workflows).
+- **Contracted small-model teams** — manifests + ICC envelopes + a
+  deterministic conductor + a 24-case benchmark over the LFM3 suite;
+  pilot verdict NO-GO, next fix is stamp-mode envelopes (above).
 
 ## 🚀 Quick Start
 
@@ -500,6 +545,17 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    `examples/*.fleet.rb` whole-program under Spinel (skip-on-refusal
    while the compiler matures, wrong-builds still fail). Extending the
    gate's vocabulary is the ongoing work, non-blocking.
+8. **The LFM3 team's echo-envelope fix (Cycle 43 follow-up)** — the
+   2026-11-04 pilot was NO-GO: the 1.7B at temperature 0.1 cannot reliably
+   echo the four-block IDENTITY/CAPACITIES/DECISION/BODY envelope (44
+   contract violations on team-full). Move text roles to stamp mode
+   (adapter stamps identity/capacity; the model returns DECISION+BODY
+   only) or add constrained decoding, then re-run `text-lite`/`team-full`
+   on the 14 text-subset cases. In parallel: the perception-sufficiency
+   gate (0.30) rejects every audio perception (d1 scores 0.03–0.07), and
+   d1-only false-accepts the out-of-scope cases — wire the scope answer to
+   a decline. Decision record:
+   [`bench/swarm/results/2026-11-04-pilot.md`](bench/swarm/results/2026-11-04-pilot.md).
 
 ## 📦 Project Layout
 
@@ -522,7 +578,16 @@ lib/runes/core/      dispatcher, llm_client (router), plan_parser, settings
 lib/runes/mqtt/      embedded broker (dev convenience)
 lib/runes/wasm/      VM pool (real ruby.wasm + mock)
 lib/runes/capabilities/  guard + guard telemetry
+lib/runes/swarm/     contracted-team manifests: identity, capacity, envelope,
+                     contract guard, checkpoint, registry, model families
+lib/runes/orchestration/  conductor (shape router + loop), team plan, guards,
+                     legacy cumulative loop, work ledger receipts
+lib/runes/llm/       model seams: LFM3/d1/media adapters, role profiles,
+                     command + OpenAI-compatible transports
+bench/swarm/         the 24-case contracted-team benchmark (runner, cases,
+                     fixtures, report, results, README)
 config/              .env, .env.example, policy.json
+config/agents/       the swarm role manifests (agent_id, capacities, models)
 docs/epics|missions/ artifacts of /goal, /plan, /build
 tools/               tool manifests (card.json + capabilities.json [+ run.rb])
 examples/            runnable sample workflows (Roast-compatible)
@@ -538,6 +603,9 @@ docs/WHY_RUNES_V2.md  the longer pitch — why this is fun and why it matters
 docs/spinel-compatibility.md  what compiles under Spinel, and the verified proof
 docs/FLEET_DSL.md    the fleet layer spec (world + rules)
 docs/OBSERVATORY_ROADMAP.md  what to build next in the observatory
+docs/SMALL_MODEL_HARNESS_PRD.md   the LFM3 team PRD (Cycle 43) + pilot results
+docs/SMALL_MODEL_HARNESS_PLAN.md  the coding plan (phases 0–8)
+docs/LFM3_TEAM_DISCOVERY.md       the design source of truth
 ```
 
 ## 📜 License
