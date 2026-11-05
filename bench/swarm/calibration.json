@@ -1,0 +1,20 @@
+{
+  "format": "swarm-calibration-v1",
+  "source": "docs/SMALL_MODEL_HARNESS_PRD.md section 7.8 (calibration bands)",
+  "note": "Bands are configuration, not model output. The calibration set must stay separate from the 24-case pilot or the ECE is in-sample.",
+  "bands": {
+    "accept": { "support_gte": 0.80, "contradiction_lte": 0.10 },
+    "repair": { "support_gte": 0.30, "support_lt": 0.80, "contradiction_gt": 0.10, "contradiction_lt": 0.50 },
+    "decline_or_escalate": { "support_lt": 0.30, "contradiction_gte": 0.50 },
+    "abstain": "evidence readable but the requested value is absent"
+  },
+  "families": {
+    "text": { "accept": { "support_gte": 0.80, "contradiction_lte": 0.10 }, "repair": { "support_gte": 0.30, "support_lt": 0.80 }, "decline": { "support_lt": 0.30 } },
+    "vision": { "accept": { "support_gte": 0.80, "contradiction_lte": 0.10 }, "repair": { "support_gte": 0.30, "support_lt": 0.80 }, "decline": { "support_lt": 0.30 } },
+    "audio": { "accept": { "support_gte": 0.80, "contradiction_lte": 0.10 }, "repair": { "support_gte": 0.30, "support_lt": 0.80 }, "decline": { "support_lt": 0.30 } },
+    "audio-video": { "accept": { "support_gte": 0.80, "contradiction_lte": 0.10 }, "repair": { "support_gte": 0.30, "support_lt": 0.80 }, "decline": { "support_lt": 0.30 } },
+    "decision": { "accept": { "support_gte": 0.80, "contradiction_lte": 0.10 }, "repair": { "support_gte": 0.30, "support_lt": 0.80 }, "decline": { "support_lt": 0.30 } },
+    "out_of_scope": { "accept": { "support_gte": 0.80, "contradiction_lte": 0.10 }, "repair": { "support_gte": 0.30, "support_lt": 0.80 }, "decline": { "support_lt": 0.30 } }
+  },
+  "seeds": { "0": { "note": "pilot seed; bands identical across seeds until a separate calibration set is scored" } }
+}

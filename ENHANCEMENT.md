@@ -82,3 +82,25 @@ a `Runes::Kanban` CLI validating a whole `.mmd` tree the way their
 
 Durable `RequestLedger` — only if MQTT session expiry gets turned on
 (today clean sessions mean the broker does not replay either).
+
+## 6. Cycle 43 — the LFM3 team pilot (NO-GO, thread open)
+
+**Verdict: NO-GO** (2026-11-04, 24 cases × 1 seed, cold command mode, real
+MLX packs). Decision record: `bench/swarm/results/2026-11-04-pilot.md`;
+report: `bench/swarm/results/2026-11-04-pilot-report.md` + `.json`.
+team-full 4/24 with 44 contract violations, decline recall 0.80, ECE 0.54;
+the same-model-3x control passed 7/14 on the same cases, so extra calls do
+not rescue the team. Unvalidated hops 0 everywhere; the `adapter` arm is
+infra (no LoRA adapter exists — profile-only only); `frontier-1x` not run
+(no endpoint).
+
+**Next thread:** the echo-envelope contract, not team shape — the 1.7B at
+temperature 0.1 cannot reliably echo IDENTITY/CAPACITIES/DECISION/BODY
+(`output_schema_unknown`, `identity_missing`, `citation_missing` dominate).
+Move text roles to stamp mode (adapter stamps identity/capacity; model
+returns DECISION+BODY only) or add constrained decoding, then re-run
+`text-lite`/`team-full` on the 14 text-subset cases. In parallel: the
+perception-sufficiency gate (0.30) rejects every audio perception (d1 scores
+0.03–0.07), and d1-only false-accepts O1/O2 — wire the scope answer to a
+decline. Harness: `bench/swarm/` (runner, 24 cases, fixtures, README,
+calibration bands); suite green at 1121 runs / 0 failures.

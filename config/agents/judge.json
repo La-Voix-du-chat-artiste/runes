@@ -1,0 +1,17 @@
+{
+  "agent_id": "judge.d1",
+  "version": "1.0.0",
+  "role": "judge",
+  "base_model": "LiquidAI/d1-2B",
+  "adapter": "typed:judge-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["score_support", "score_coverage", "score_risk", "score_contradiction", "score_sufficiency", "choose_proposal", "decline"],
+    "cannot": ["answer", "write_prose", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route", "transcribe"],
+    "max_input_tokens": 131072,
+    "max_output_tokens": 0,
+    "output_schema": "verdict.v1"
+  },
+  "requires_evidence": true,
+  "forbidden_actions": ["answer", "write_prose", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route", "transcribe"]
+}

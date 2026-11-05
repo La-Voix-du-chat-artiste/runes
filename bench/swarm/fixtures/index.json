@@ -1,0 +1,111 @@
+{
+  "format": "swarm-fixtures-v1",
+  "generated_at": "2026-11-04",
+  "license": "Synthetic fixtures, CC0-1.0",
+  "files": [
+    {
+      "name": "asr-order.wav",
+      "sha256": "9bb4ffd454ad420f9e0632538deb425396d220b0e2978e44747c40d68c84b68f",
+      "bytes": 78840,
+      "modality": "audio",
+      "cases": [
+        "A1"
+      ]
+    },
+    {
+      "name": "av-contradiction.mp4",
+      "sha256": "30c8a7566a0a53625b4b9ad4a997258e93dda1d3f5d149297619e1fefb1a1441",
+      "bytes": 15387,
+      "modality": "audio-video",
+      "cases": [
+        "AV2"
+      ]
+    },
+    {
+      "name": "av-frame-1.png",
+      "sha256": "1c3650a6426d13ca223bc5689c113402e0f59548bf778d2ffc4f9451aaaf0603",
+      "bytes": 4056,
+      "modality": "image",
+      "cases": []
+    },
+    {
+      "name": "av-frame-2.png",
+      "sha256": "1aa65fed637ceb218b7db768e6ed2465101dfb398cb9bc8ca19ec38e54dd8db9",
+      "bytes": 5492,
+      "modality": "image",
+      "cases": []
+    },
+    {
+      "name": "av-speech-referent.mp4",
+      "sha256": "476e8c0c4dc80cb971a7c8ce7588aac27ea1d7ba2919297268af473d8f63fd91",
+      "bytes": 18831,
+      "modality": "audio-video",
+      "cases": [
+        "AV1"
+      ]
+    },
+    {
+      "name": "chart-quarterly.png",
+      "sha256": "d74ebd7417bf122a45bdb8cbc2351adaea83c984d5e78b2626ac4c07a28163c2",
+      "bytes": 13164,
+      "modality": "image",
+      "cases": [
+        "V1"
+      ]
+    },
+    {
+      "name": "fr-meeting.wav",
+      "sha256": "fa8e577dd0cfcc9a17b472a3f0107907e7158b9f005f00c7281f51cebe800024",
+      "bytes": 76024,
+      "modality": "audio",
+      "cases": [
+        "A2"
+      ]
+    },
+    {
+      "name": "invoice-07.png",
+      "sha256": "9d339b518188eb33db02efffdc553c49567bdb743ce9136fa4a2ad3b06bcef7c",
+      "bytes": 10622,
+      "modality": "image",
+      "cases": [
+        "V2"
+      ]
+    },
+    {
+      "name": "screen-settings.png",
+      "sha256": "d1af52592711ba7a2045fe20857b5cfd05071ba91a94f90889e46248dcfb7c2a",
+      "bytes": 25717,
+      "modality": "image",
+      "cases": [
+        "V3"
+      ]
+    },
+    {
+      "name": "shapes-count.png",
+      "sha256": "685a302ba3ec12004d685372ba78e15dc7bfda3a7070204c88474b40814ac1a9",
+      "bytes": 7959,
+      "modality": "image",
+      "cases": [
+        "V4"
+      ]
+    },
+    {
+      "name": "sound-alarm.wav",
+      "sha256": "bfc64c0fe20b6529a55a52f359aa2baa7fd73600c3caf7c4c72ea2febf566893",
+      "bytes": 33678,
+      "modality": "audio",
+      "cases": [
+        "A3"
+      ]
+    },
+    {
+      "name": "spoken-request.wav",
+      "sha256": "2289dd0294a36228de4ac04210711a12b02af4e392c5e0bc4cee012ae4ceb834",
+      "bytes": 57218,
+      "modality": "audio",
+      "cases": [
+        "A4"
+      ]
+    }
+  ]
+}

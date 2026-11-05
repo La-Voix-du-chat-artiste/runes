@@ -1,0 +1,17 @@
+{
+  "agent_id": "triage.d1",
+  "version": "1.0.0",
+  "role": "triage",
+  "base_model": "LiquidAI/d1-2B",
+  "adapter": "typed:triage-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["detect_modality", "classify_intent", "score_scope", "score_risk", "score_sufficiency", "recommend_shape", "decline"],
+    "cannot": ["answer", "write_prose", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route", "transcribe"],
+    "max_input_tokens": 131072,
+    "max_output_tokens": 0,
+    "output_schema": "verdict.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "write_prose", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route", "transcribe"]
+}

@@ -1,0 +1,17 @@
+{
+  "agent_id": "escalation.frontier",
+  "version": "1.0.0",
+  "role": "escalation",
+  "base_model": "external",
+  "adapter": "frontier:openai-compatible-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["answer", "answer_fr", "answer_en", "reason", "human_review", "decline"],
+    "cannot": ["execute_tools", "write_code", "retrieve", "critique", "rewrite", "verify_own_citations"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 1024,
+    "output_schema": "answer.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["execute_tools", "write_code", "verify_own_citations", "critique", "rewrite"]
+}

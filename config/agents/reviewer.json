@@ -1,0 +1,17 @@
+{
+  "agent_id": "reviewer.manager",
+  "version": "1.0.0",
+  "role": "reviewer",
+  "base_model": "ruby",
+  "adapter": "deterministic:manager-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["inspect_tests", "write_review", "issue_repair", "validate_counterexample", "decline"],
+    "cannot": ["answer", "edit_answer", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 0,
+    "output_schema": "review.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "edit_answer", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route"]
+}

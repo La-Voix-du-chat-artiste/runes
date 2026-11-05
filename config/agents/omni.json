@@ -1,0 +1,17 @@
+{
+  "agent_id": "perceiver.omni",
+  "version": "1.0.0",
+  "role": "omni",
+  "base_model": "LiquidAI/LFM3-Omni-2B",
+  "adapter": "media:omni-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["read_audio_video", "align_speech_to_frames", "describe_joint_scene", "detect_av_contradiction", "cite_anchors", "decline"],
+    "cannot": ["answer", "answer_fr", "answer_en", "judge", "decide", "transcribe", "execute_tools", "write_code", "critique", "rewrite"],
+    "max_input_tokens": 32768,
+    "max_output_tokens": 512,
+    "output_schema": "perception.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "answer_fr", "answer_en", "judge", "decide", "transcribe", "execute_tools", "write_code", "critique", "rewrite"]
+}

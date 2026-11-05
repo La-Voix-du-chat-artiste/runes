@@ -39,8 +39,23 @@ Runes::Core::Settings.store_class = Runes::Core::SettingsStore::SQLite
 require_relative 'runes/core/settings'
 require_relative 'runes/core/llm_client'
 require_relative 'runes/core/plan_parser'
+require_relative 'runes/core/section_parser'
 require_relative 'runes/core/tool_registry'
 require_relative 'runes/llm'
+require_relative 'runes/work_ledger'
+require_relative 'runes/orchestration'
+require_relative 'runes/swarm'
+require_relative 'runes/llm/adapter_support'
+require_relative 'runes/llm/lfm3_adapter'
+require_relative 'runes/llm/d1_adapter'
+require_relative 'runes/llm/media_adapter'
+require_relative 'runes/llm/vision_adapter'
+require_relative 'runes/llm/audio_adapter'
+require_relative 'runes/llm/omni_adapter'
+require_relative 'runes/llm/role_profile'
+require_relative 'runes/llm/command_model'
+require_relative 'runes/llm/openai_compat_model'
+require_relative 'runes/llm/bonsai_adapter'
 
 # wasmtime is optional. `dispatcher.rb` requires `wasm/vm_manager` (which
 # requires wasmtime) before it defines anything, so we have to guard the

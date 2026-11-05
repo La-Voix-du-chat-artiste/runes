@@ -58,6 +58,7 @@ Gem::Specification.new do |spec|
       tools/**/*
       examples/**/*
       config/policy.json
+      config/agents/*.json
       config/.env.example
       README.md
       LICENSE

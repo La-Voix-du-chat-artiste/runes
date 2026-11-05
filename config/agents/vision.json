@@ -1,0 +1,17 @@
+{
+  "agent_id": "perceiver.vision",
+  "version": "1.0.0",
+  "role": "vision",
+  "base_model": "LiquidAI/LFM3-VL-2B",
+  "adapter": "media:vision-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["read_image", "read_video", "read_document", "read_chart", "read_screen", "locate_objects", "describe_scene", "cite_anchors", "decline"],
+    "cannot": ["answer", "answer_fr", "answer_en", "judge", "decide", "transcribe", "execute_tools", "write_code", "critique", "rewrite"],
+    "max_input_tokens": 131072,
+    "max_output_tokens": 512,
+    "output_schema": "perception.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "answer_fr", "answer_en", "judge", "decide", "transcribe", "execute_tools", "write_code", "critique", "rewrite"]
+}

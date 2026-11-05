@@ -1,0 +1,863 @@
+{
+  "provenance": {
+    "source": "runes-lang/glyphes/tmp",
+    "reference_cases": "golden_graph_queries.json + pilot_cumulative.rb extra_cases",
+    "db": "seshat.dev.sqlite3",
+    "db_sha256": "805f414d89df8c12fe80e59700f727571213681b79f9b9b3d2023ff30baac58b",
+    "exported_at": "2026-10-27",
+    "note": "Evidence is precomputed; the benchmark does not read the reference checkout at runtime."
+  },
+  "cases": [
+    {
+      "id": "G1",
+      "question": "Que dit le corpus sur la climatisation de la junior suite ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "junior suite"
+          },
+          "result": {
+            "status": "resolved",
+            "candidates": [
+              {
+                "chapter_id": 2,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "score": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "climatisation",
+            "room_id": 2,
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Villa de Mer / Junior Suite / 032101"
+            ],
+            "results": [
+              {
+                "entry_id": 10,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "code": "032101",
+                "entry_type": "Chauffage / Climatisation / Traitement d’air",
+                "description": "Resort Balnéaire : climatisation\nResort Campagne et balnéaire tempéré : climatisation réversible",
+                "score": 0.75,
+                "matched": {
+                  "climatisation": 1.0
+                },
+                "citation": "Villa de Mer / Junior Suite / 032101"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "Villa de Mer",
+          "Junior Suite",
+          "032101"
+        ],
+        "must_match": [
+          "climatisation"
+        ],
+        "must_not_match": []
+      },
+      "tags": [
+        "graph",
+        "golden"
+      ]
+    },
+    {
+      "id": "G2",
+      "question": "Taille TV de la chambre supérieure ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "chambre supérieure"
+          },
+          "result": {
+            "status": "not_found",
+            "candidates": [
+              {
+                "chapter_id": 1,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "score": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "TV",
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Villa de Mer / Chambre Deluxe / 022901",
+              "Villa de Mer / Junior Suite / 032901"
+            ],
+            "results": [
+              {
+                "entry_id": 3,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "code": "022901",
+                "entry_type": "IT",
+                "description": "Besoin Prises Réseau :\n1 PC IPTV + 1 RJ45 derrière emplacement de chaque TV",
+                "score": 0.75,
+                "matched": {
+                  "tv": 1.0
+                },
+                "citation": "Villa de Mer / Chambre Deluxe / 022901"
+              },
+              {
+                "entry_id": 12,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "code": "032901",
+                "entry_type": "IT",
+                "description": "Besoin Prises Réseau :\n1 PC IPTV + 1 RJ45 derrière emplacement de chaque TV",
+                "score": 0.75,
+                "matched": {
+                  "tv": 1.0
+                },
+                "citation": "Villa de Mer / Junior Suite / 032901"
+              }
+            ]
+          }
+        },
+        {
+          "tool": "entry_neighbors",
+          "arguments": {
+            "entry_id": 3,
+            "min_weight": 0.3,
+            "k": 5
+          },
+          "result": {
+            "citation_hints": [
+              "Villa de Mer / Junior Suite / 032901"
+            ],
+            "results": [
+              {
+                "entry_id": 12,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "code": "032901",
+                "description": "Besoin Prises Réseau :\n1 PC IPTV + 1 RJ45 derrière emplacement de chaque TV",
+                "weight": 0.8667,
+                "evidence": [
+                  "exact:it",
+                  "exact:besoin",
+                  "exact:prise"
+                ],
+                "citation": "Villa de Mer / Junior Suite / 032901"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "Villa de Mer",
+          "022901",
+          "032901"
+        ],
+        "must_match": [
+          "non documenté|non documentée|pas documenté|pas documentée|not documented|introuvable|aucun|absent|non mentionné|pas mentionné|n'est pas explicitement|non présent|non présente"
+        ],
+        "must_not_match": [
+          "\\b\\d{2,3}\\s*(cm|pouces?|inch|″|\")",
+          "superficie"
+        ]
+      },
+      "tags": [
+        "graph",
+        "golden"
+      ]
+    },
+    {
+      "id": "G3",
+      "question": "Quelle est la superficie de la chambre deluxe ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "chambre deluxe"
+          },
+          "result": {
+            "status": "resolved",
+            "candidates": [
+              {
+                "chapter_id": 1,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "score": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "superficie",
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Villa de Mer / Junior Suite / 031201"
+            ],
+            "results": [
+              {
+                "entry_id": 6,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "code": "031201",
+                "entry_type": "Implantation",
+                "description": "Les Junior suites sont situées dans un lieu premium du resort (zone calme ou famille), et propose les plus belles vues sur la mer. Dans la chambre principale le lit est orienté vers la vue lorsque la superficie et la forme de chambre le permet. Le salon est aussi orienté vers la vue si la surface le permet.",
+                "score": 0.75,
+                "matched": {
+                  "superficie": 1.0
+                },
+                "citation": "Villa de Mer / Junior Suite / 031201"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "Chambre Deluxe",
+          "031201"
+        ],
+        "must_match": [
+          "non documenté|non documentée|pas documenté|pas documentée|not documented|introuvable|aucun|absent|non mentionné|pas mentionné|n'est pas explicitement|non présent|non présente"
+        ],
+        "must_not_match": [
+          "\\b\\d+(?:[.,]\\d+)?\\s*m[²2]\\b"
+        ]
+      },
+      "tags": [
+        "graph",
+        "golden"
+      ]
+    },
+    {
+      "id": "G4",
+      "question": "Quel est le débit du spa ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "spa"
+          },
+          "result": {
+            "status": "not_found",
+            "candidates": []
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "débit",
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [],
+            "results": []
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [],
+        "must_match": [
+          "non documenté|non documentée|pas documenté|pas documentée|not documented|introuvable|aucun|absent|non mentionné|pas mentionné|n'est pas explicitement|non présent|non présente"
+        ],
+        "must_not_match": [
+          "\\b\\d+(?:[.,]\\d+)?\\s*(m3|m³|litres?|l/s|m\\^3)"
+        ]
+      },
+      "tags": [
+        "graph",
+        "golden"
+      ]
+    },
+    {
+      "id": "C1",
+      "question": "Combien de personnes peut accueillir la junior suite ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "junior suite"
+          },
+          "result": {
+            "status": "resolved",
+            "candidates": [
+              {
+                "chapter_id": 2,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "score": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "personnes",
+            "room_id": 2,
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Villa de Mer / Junior Suite / 031101"
+            ],
+            "results": [
+              {
+                "entry_id": 5,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "code": "031101",
+                "entry_type": "Descriptif général, objectif du lieu, usage",
+                "description": "Hébergement des clients\nPouvant accueillir 2 personnes",
+                "score": 0.75,
+                "matched": {
+                  "personne": 1.0
+                },
+                "citation": "Villa de Mer / Junior Suite / 031101"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "Villa",
+          "Junior",
+          "031101"
+        ],
+        "must_match": [
+          "2 personnes"
+        ],
+        "must_not_match": [
+          "4 personnes"
+        ]
+      },
+      "tags": [
+        "corpus",
+        "extra"
+      ]
+    },
+    {
+      "id": "C2",
+      "question": "Combien de personnes peut accueillir le restaurant ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "restaurant"
+          },
+          "result": {
+            "status": "resolved",
+            "candidates": [
+              {
+                "chapter_id": 3,
+                "book": "Bars, Restaurant",
+                "chapter": "Restaurant",
+                "score": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "personnes",
+            "room_id": 3,
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Bars, Restaurant / Restaurant / 051101"
+            ],
+            "results": [
+              {
+                "entry_id": 14,
+                "book": "Bars, Restaurant",
+                "chapter": "Restaurant",
+                "code": "051101",
+                "entry_type": "Descriptif général, objectif du lieu, usage",
+                "description": "Restauration des clients\nPouvant accueillir 120 personnes",
+                "score": 0.75,
+                "matched": {
+                  "personne": 1.0
+                },
+                "citation": "Bars, Restaurant / Restaurant / 051101"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "Restaurant",
+          "051101"
+        ],
+        "must_match": [
+          "120 personnes"
+        ],
+        "must_not_match": [
+          "1200"
+        ]
+      },
+      "tags": [
+        "corpus",
+        "extra"
+      ]
+    },
+    {
+      "id": "C3",
+      "question": "Quelle est la température du bassin ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "piscine"
+          },
+          "result": {
+            "status": "not_found",
+            "candidates": []
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "bassin",
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Bars, Restaurant / Restaurant / 051501"
+            ],
+            "results": [
+              {
+                "entry_id": 15,
+                "book": "Bars, Restaurant",
+                "chapter": "Restaurant",
+                "code": "051501",
+                "entry_type": "Piscine",
+                "description": "1 bassin chauffé 28 degrés avec jets",
+                "score": 0.75,
+                "matched": {
+                  "bassin": 1.0
+                },
+                "citation": "Bars, Restaurant / Restaurant / 051501"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "051501"
+        ],
+        "must_match": [
+          "28"
+        ],
+        "must_not_match": [
+          "30\\s*degrés",
+          "32\\s*degrés"
+        ]
+      },
+      "tags": [
+        "corpus",
+        "extra"
+      ]
+    },
+    {
+      "id": "C4",
+      "question": "La chambre deluxe a-t-elle une baignoire ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "chambre deluxe"
+          },
+          "result": {
+            "status": "resolved",
+            "candidates": [
+              {
+                "chapter_id": 1,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "score": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "baignoire",
+            "room_id": 1,
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Villa de Mer / Chambre Deluxe / 021201"
+            ],
+            "results": [
+              {
+                "entry_id": 2,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "code": "021201",
+                "entry_type": "Implantation",
+                "description": "Chambre Deluxe - occupation 2 (A2) se compose de :\n1 entrée\n1 WC séparé de la Salle de bain\n1 salle de bain avec douche ou baignoire\n1 espace chambre\n1 coin salon",
+                "score": 0.75,
+                "matched": {
+                  "baignoire": 1.0
+                },
+                "citation": "Villa de Mer / Chambre Deluxe / 021201"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "Chambre",
+          "021201"
+        ],
+        "must_match": [
+          "douche ou baignoire|baignoire"
+        ],
+        "must_not_match": [
+          "baignoire uniquement"
+        ]
+      },
+      "tags": [
+        "corpus",
+        "extra"
+      ]
+    },
+    {
+      "id": "C5",
+      "question": "Quelle lumière naturelle a la junior suite ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "junior suite"
+          },
+          "result": {
+            "status": "resolved",
+            "candidates": [
+              {
+                "chapter_id": 2,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "score": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "lumière naturelle",
+            "room_id": 2,
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Villa de Mer / Junior Suite / 031801",
+              "Villa de Mer / Junior Suite / 031801",
+              "Villa de Mer / Junior Suite / 031601"
+            ],
+            "results": [
+              {
+                "entry_id": 8,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "code": "031801",
+                "entry_type": "Lumière Naturelle",
+                "description": "Par fenêtre et baies vitrées",
+                "score": 0.9571,
+                "matched": {
+                  "lumiere": 1.0,
+                  "naturelle": 1.0
+                },
+                "citation": "Villa de Mer / Junior Suite / 031801"
+              },
+              {
+                "entry_id": 9,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "code": "031801",
+                "entry_type": "Lumière Naturelle",
+                "description": "Par velux",
+                "score": 0.9571,
+                "matched": {
+                  "lumiere": 1.0,
+                  "naturelle": 1.0
+                },
+                "citation": "Villa de Mer / Junior Suite / 031801"
+              },
+              {
+                "entry_id": 7,
+                "book": "Villa de Mer",
+                "chapter": "Junior Suite",
+                "code": "031601",
+                "entry_type": "Normes et Hygiène",
+                "description": "Suivre les réglementations locales (si inexistantes ou moins contraignantes, suivre les réglementations Françaises)",
+                "score": 0.5679,
+                "matched": {
+                  "naturelle": 0.899
+                },
+                "citation": "Villa de Mer / Junior Suite / 031601"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "Junior",
+          "031801"
+        ],
+        "must_match": [
+          "fenêtre|baies",
+          "velux"
+        ],
+        "must_not_match": []
+      },
+      "tags": [
+        "corpus",
+        "extra"
+      ]
+    },
+    {
+      "id": "C6",
+      "question": "Quelle est la climatisation de la chambre deluxe ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "chambre deluxe"
+          },
+          "result": {
+            "status": "resolved",
+            "candidates": [
+              {
+                "chapter_id": 1,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "score": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "climatisation",
+            "room_id": 1,
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [],
+            "results": []
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [],
+        "must_match": [
+          "non documenté|non documentée|pas documenté|pas documentée|aucun|absent|introuvable"
+        ],
+        "must_not_match": [
+          "climatisation réversible|Resort Balnéaire"
+        ]
+      },
+      "tags": [
+        "corpus",
+        "extra"
+      ]
+    },
+    {
+      "id": "C7",
+      "question": "Quel est le revêtement de sol de la salle de bain ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "salle de bain"
+          },
+          "result": {
+            "status": "not_found",
+            "candidates": []
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "sol",
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Bars, Restaurant / Bar / 022301"
+            ],
+            "results": [
+              {
+                "entry_id": 20,
+                "book": "Bars, Restaurant",
+                "chapter": "Bar",
+                "code": "022301",
+                "entry_type": "Equipement",
+                "description": "Climatisation pour atteindre 20°\nSiphon de sol inox réglable avec reprise d'étanchéité - Sortie verticale\nRobinet ¼ de tour en filetage male ½\nLigne / Python : 2 fourreaux de 100mm\nEquipements frigorifiques\nDistributeur papier\nTable de travail inox mobile - Équipée d'une étagère basse\nChambre Froide\nChambre froide positive complète équipée d’un groupe frigorifique à distance - Température : +2/+5°C- Ambiance 32°C sans sol",
+                "score": 0.75,
+                "matched": {
+                  "sol": 1.0
+                },
+                "citation": "Bars, Restaurant / Bar / 022301"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [],
+        "must_match": [
+          "non documenté|non documentée|pas documenté|pas documentée|aucun|absent|introuvable"
+        ],
+        "must_not_match": [
+          "siphon|inox|carrelage|marbre"
+        ]
+      },
+      "tags": [
+        "corpus",
+        "extra"
+      ]
+    },
+    {
+      "id": "C8",
+      "question": "Combien de personnes peut accueillir la chambre deluxe ?",
+      "evidence": [
+        {
+          "tool": "resolve_room",
+          "arguments": {
+            "text": "chambre deluxe"
+          },
+          "result": {
+            "status": "resolved",
+            "candidates": [
+              {
+                "chapter_id": 1,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "score": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "personnes",
+            "room_id": 1,
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Villa de Mer / Chambre Deluxe / 021101"
+            ],
+            "results": [
+              {
+                "entry_id": 1,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "code": "021101",
+                "entry_type": "Descriptif général, objectif du lieu, usage",
+                "description": "Hébergement des clients\nPouvant accueillir 4 personnes",
+                "score": 0.75,
+                "matched": {
+                  "personne": 1.0
+                },
+                "citation": "Villa de Mer / Chambre Deluxe / 021101"
+              }
+            ]
+          }
+        },
+        {
+          "tool": "search_entries",
+          "arguments": {
+            "query": "occupation",
+            "room_id": 1,
+            "k": 5
+          },
+          "result": {
+            "strategy": "lexical",
+            "citation_hints": [
+              "Villa de Mer / Chambre Deluxe / 021201"
+            ],
+            "results": [
+              {
+                "entry_id": 2,
+                "book": "Villa de Mer",
+                "chapter": "Chambre Deluxe",
+                "code": "021201",
+                "entry_type": "Implantation",
+                "description": "Chambre Deluxe - occupation 2 (A2) se compose de :\n1 entrée\n1 WC séparé de la Salle de bain\n1 salle de bain avec douche ou baignoire\n1 espace chambre\n1 coin salon",
+                "score": 0.75,
+                "matched": {
+                  "occupation": 1.0
+                },
+                "citation": "Villa de Mer / Chambre Deluxe / 021201"
+              }
+            ]
+          }
+        }
+      ],
+      "checks": {
+        "must_cite": [
+          "021101",
+          "021201"
+        ],
+        "must_match": [
+          "4 personnes",
+          "2"
+        ],
+        "must_not_match": []
+      },
+      "tags": [
+        "corpus",
+        "extra"
+      ]
+    }
+  ]
+}

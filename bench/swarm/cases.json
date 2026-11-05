@@ -1,0 +1,418 @@
+{
+  "provenance": {
+    "version": "swarm-24-v1",
+    "created_at": "2026-11-03",
+    "license": "Synthetic fixtures, CC0-1.0",
+    "note": "24 precomputed cases for the contracted LFM3 team. Evidence and media are frozen here; the benchmark never reads a reference checkout at runtime.",
+    "fixture_budget_bytes": 1048576
+  },
+  "cases": [
+    {
+      "id": "T1",
+      "family": "text",
+      "question": "Quel est le total de la facture F-2026-07 ?",
+      "evidence": [
+        { "citation": "doc:t1#p1", "text": "Le total de la facture F-2026-07 est 128,40 € TTC." }
+      ],
+      "media": [],
+      "gold": { "answer": "128,40 €", "anchors": ["doc:t1#p1"] },
+      "checks": { "must_cite": ["doc:t1#p1"], "must_match": ["128[,.]40"] },
+      "expected_shape": "answer-lite",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["text", "grounded"],
+      "task_profile": { "intent": "answer", "modality": "text" }
+    },
+    {
+      "id": "T2",
+      "family": "text",
+      "question": "Quel est le numéro de suivi de la commande C-441 ?",
+      "evidence": [
+        { "citation": "doc:t2#p1", "text": "La commande C-441 a été expédiée. Le délai de livraison est de 5 jours ouvrés." }
+      ],
+      "media": [],
+      "gold": { "answer": "non documenté", "anchors": ["doc:t2#p1"] },
+      "checks": { "must_match": ["(non document[ée]|pas document[ée]|introuvable|absent|pas mentionn[ée])"] },
+      "expected_shape": "answer-lite",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["text", "abstain"],
+      "task_profile": { "intent": "answer", "modality": "text" }
+    },
+    {
+      "id": "T3",
+      "family": "text",
+      "question": "Quel est le total de la facture F-2026-08 ?",
+      "evidence": [
+        { "citation": "doc:t3#p1", "text": "Le total de la facture F-2026-08 est 128,40 €." },
+        { "citation": "doc:t3#p2", "text": "Le total de la facture F-2026-08 est 132,00 €." }
+      ],
+      "media": [],
+      "gold": { "conflict": true, "values": ["128,40", "132,00"] },
+      "checks": { "must_not_match": ["128[,.]40", "132[,.]00"] },
+      "expected_shape": "answer-lite",
+      "expected_decision": "decline",
+      "expected_reason": "conflicting_evidence",
+      "forbidden_roles": [],
+      "tags": ["text", "conflict"],
+      "task_profile": { "intent": "answer", "modality": "text" }
+    },
+    {
+      "id": "T4",
+      "family": "text",
+      "question": "Quel est le total ?",
+      "evidence": [
+        { "citation": "doc:t4#p1", "text": "La facture F-2026-07 a un total de 128,40 €." },
+        { "citation": "doc:t4#p2", "text": "La facture F-2026-09 a un total de 99,90 €." }
+      ],
+      "media": [],
+      "gold": { "ambiguous": true, "candidates": ["128,40", "99,90"] },
+      "checks": { "must_not_match": ["128[,.]40", "99[,.]90"] },
+      "expected_shape": "answer-lite",
+      "expected_decision": "decline",
+      "expected_reason": "ambiguous_request",
+      "forbidden_roles": [],
+      "tags": ["text", "ambiguous"],
+      "task_profile": { "intent": "answer", "modality": "text", "ambiguity": 0.8 }
+    },
+    {
+      "id": "T5",
+      "family": "text",
+      "question": "De combien le total est-il passé entre 2025 et 2026 ?",
+      "evidence": [
+        { "citation": "doc:t5#p1", "text": "Le total 2025 est 98,10 €." },
+        { "citation": "doc:t5#p2", "text": "Le total 2026 est 128,40 €." }
+      ],
+      "media": [],
+      "gold": { "answer": "30,30 €", "anchors": ["doc:t5#p1", "doc:t5#p2"] },
+      "checks": { "must_cite": ["doc:t5#p1", "doc:t5#p2"], "must_match": ["30[,.]30"] },
+      "expected_shape": "answer-lite",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["text", "arithmetic"],
+      "task_profile": { "intent": "answer", "modality": "text" }
+    },
+    {
+      "id": "T6",
+      "family": "text",
+      "question": "Quand la livraison est-elle prévue ?",
+      "evidence": [
+        { "citation": "doc:t6#p1", "text": "La livraison de la commande C-441 est prévue le 12 mars 2026." }
+      ],
+      "media": [],
+      "gold": { "answer": "12 mars 2026", "anchors": ["doc:t6#p1"] },
+      "checks": { "must_cite": ["doc:t6#p1"], "must_match": ["12 mars 2026"] },
+      "expected_shape": "answer-lite",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["text", "date"],
+      "task_profile": { "intent": "answer", "modality": "text" }
+    },
+    {
+      "id": "V1",
+      "family": "vision",
+      "question": "Quelle est la valeur du troisième trimestre (Q3) ?",
+      "evidence": [],
+      "media": ["fixtures/chart-quarterly.png"],
+      "gold": { "answer": "25", "fields": { "Q3": "25" }, "anchors": ["image:1"] },
+      "checks": { "must_cite": ["image:1"], "must_match": ["\\b25\\b"] },
+      "perception_checks": { "must_cite": ["image:1"], "must_match": ["25"] },
+      "expected_shape": "see",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["vision", "chart"],
+      "task_profile": { "intent": "answer", "modality": "image" }
+    },
+    {
+      "id": "V2",
+      "family": "vision",
+      "question": "Quel est le total TTC de la facture F-2026-07 ?",
+      "evidence": [],
+      "media": ["fixtures/invoice-07.png"],
+      "gold": { "answer": "128,40 €", "fields": { "total": "128,40 €" }, "anchors": ["image:1"] },
+      "checks": { "must_cite": ["image:1"], "must_match": ["128[,.]40"] },
+      "perception_checks": { "must_cite": ["image:1"], "must_match": ["128[,.]40"] },
+      "expected_shape": "see",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["vision", "field", "invoice"],
+      "task_profile": { "intent": "answer", "modality": "image" }
+    },
+    {
+      "id": "V3",
+      "family": "vision",
+      "question": "Quel bouton faut-il cliquer pour sauvegarder les modifications ?",
+      "evidence": [],
+      "media": ["fixtures/screen-settings.png"],
+      "gold": { "answer": "Enregistrer", "fields": { "button": "Enregistrer" }, "anchors": ["image:1"] },
+      "checks": { "must_cite": ["image:1"], "must_match": ["Enregistrer"] },
+      "perception_checks": { "must_cite": ["image:1"], "must_match": ["Enregistrer"] },
+      "expected_shape": "see",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["vision", "screen"],
+      "task_profile": { "intent": "answer", "modality": "image" }
+    },
+    {
+      "id": "V4",
+      "family": "vision",
+      "question": "Combien de cercles rouges y a-t-il dans l'image ?",
+      "evidence": [],
+      "media": ["fixtures/shapes-count.png"],
+      "gold": { "answer": "3", "fields": { "red_circles": "3" }, "anchors": ["image:1"] },
+      "checks": { "must_cite": ["image:1"], "must_match": ["\\b3\\b"] },
+      "perception_checks": { "must_cite": ["image:1"], "must_match": ["(3|trois)"] },
+      "expected_shape": "see",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["vision", "count"],
+      "task_profile": { "intent": "count", "modality": "image" }
+    },
+    {
+      "id": "A1",
+      "family": "audio",
+      "question": "Quel est le numéro de commande dicté dans l'audio ?",
+      "evidence": [],
+      "media": ["fixtures/asr-order.wav"],
+      "gold": { "answer": "4271", "transcript": "The order number is four two seven one.", "anchors": ["time:0"] },
+      "checks": { "must_cite": ["time:0"], "must_match": ["4271"] },
+      "perception_checks": { "must_cite": ["time:0"], "must_match": ["4271"] },
+      "expected_shape": "hear",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["audio", "asr"],
+      "task_profile": { "intent": "answer", "modality": "audio" }
+    },
+    {
+      "id": "A2",
+      "family": "audio",
+      "question": "À quelle heure la réunion est-elle déplacée ?",
+      "evidence": [],
+      "media": ["fixtures/fr-meeting.wav"],
+      "gold": { "answer": "14 h 30", "transcript": "La réunion est déplacée à quatorze heures trente.", "anchors": ["time:0"] },
+      "checks": { "must_cite": ["time:0"], "must_match": ["(14\\s*[:h]\\s*30|quatorze heures trente|14 heures 30)"] },
+      "perception_checks": { "must_cite": ["time:0"], "must_match": ["(quatorze|14)"] },
+      "expected_shape": "hear",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["audio", "french"],
+      "task_profile": { "intent": "answer", "modality": "audio" }
+    },
+    {
+      "id": "A3",
+      "family": "audio",
+      "question": "Quel type de son entend-on dans l'audio ?",
+      "evidence": [],
+      "media": ["fixtures/sound-alarm.wav"],
+      "gold": { "answer": "alarme", "transcript": "Three short high beeps.", "anchors": ["time:0"] },
+      "checks": { "must_cite": ["time:0"], "must_match": ["(alarme|alarm|bip|beep|sonnerie)"] },
+      "perception_checks": { "must_cite": ["time:0"], "must_match": ["(alarme|alarm|bip|beep|sonnerie)"] },
+      "expected_shape": "hear",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["audio", "sound-event"],
+      "task_profile": { "intent": "answer", "modality": "audio" }
+    },
+    {
+      "id": "A4",
+      "family": "audio",
+      "question": "Quelle intention exprime la demande parlée ?",
+      "evidence": [],
+      "media": ["fixtures/spoken-request.wav"],
+      "gold": { "answer": "ouvrir une facture", "intent": "open_invoice", "anchors": ["time:0"] },
+      "checks": { "must_cite": ["time:0"], "must_match": ["(facture|invoice)"] },
+      "perception_checks": { "must_cite": ["time:0"], "must_match": ["(facture|invoice)"] },
+      "expected_shape": "hear",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["audio", "intent"],
+      "task_profile": { "intent": "answer", "modality": "audio" }
+    },
+    {
+      "id": "AV1",
+      "family": "audio-video",
+      "question": "Où se trouve le carré rouge dans la vidéo ?",
+      "evidence": [],
+      "media": ["fixtures/av-speech-referent.mp4"],
+      "gold": {
+        "answer": "à gauche",
+        "speech": "The red square is on the left.",
+        "visual": "red square left, blue circle right",
+        "anchors": ["time:0", "image:1"]
+      },
+      "checks": { "must_cite": ["time:0"], "must_match": ["(gauche|left)"] },
+      "perception_checks": { "must_cite": ["time:0", "image:1"], "must_match": ["(gauche|left|rouge|red)"] },
+      "expected_shape": "watch",
+      "expected_decision": "accept",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["audio-video", "referent"],
+      "task_profile": { "intent": "answer", "modality": "video" }
+    },
+    {
+      "id": "AV2",
+      "family": "audio-video",
+      "question": "La parole et l'image sont-elles cohérentes ?",
+      "evidence": [],
+      "media": ["fixtures/av-contradiction.mp4"],
+      "gold": {
+        "answer": "non, contradiction",
+        "speech": "The circle is blue.",
+        "visual": "red circle, blue rectangle",
+        "contradiction": true,
+        "anchors": ["time:0", "image:1"]
+      },
+      "checks": { "must_not_match": ["\\bbleu\\b"] },
+      "perception_checks": { "must_cite": ["time:0"], "must_match": ["(contradiction|contredit|incoh[ée]rent|rouge|red)"] },
+      "expected_shape": "watch",
+      "expected_decision": "decline",
+      "expected_reason": "conflicting_evidence",
+      "forbidden_roles": ["answerer.without_perception"],
+      "tags": ["audio-video", "contradiction"],
+      "task_profile": { "intent": "answer", "modality": "video" }
+    },
+    {
+      "id": "D1",
+      "family": "decision",
+      "question": "Classe l'intention de la demande : « Je veux annuler ma commande. »",
+      "evidence": [
+        { "citation": "task:d1", "text": "Je veux annuler ma commande." }
+      ],
+      "media": [],
+      "questions": [
+        { "id": "intent", "question": "What is the user's intent?", "type": "choice", "options": ["cancel", "track", "buy", "other"] }
+      ],
+      "gold": { "label": "cancel" },
+      "checks": { "must_match": ["cancel"] },
+      "expected_shape": "decide",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["decision", "intent"],
+      "task_profile": { "intent": "classify", "modality": "text" }
+    },
+    {
+      "id": "D2",
+      "family": "decision",
+      "question": "Quelle forme d'équipe doit traiter une image de facture avec une question sur le total ?",
+      "evidence": [
+        { "citation": "task:d2", "text": "Une image de facture et une question sur le total." }
+      ],
+      "media": [],
+      "questions": [
+        { "id": "shape", "question": "Which route should handle the request?", "type": "choice", "options": ["answer-lite", "see", "hear", "watch", "decide", "escalate"] }
+      ],
+      "gold": { "label": "see" },
+      "checks": { "must_match": ["(see|vision)"] },
+      "expected_shape": "decide",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["decision", "routing"],
+      "task_profile": { "intent": "route", "modality": "text" }
+    },
+    {
+      "id": "D3",
+      "family": "decision",
+      "question": "Quel est le niveau d'urgence de : « Le serveur de production est tombé. » ?",
+      "evidence": [
+        { "citation": "task:d3", "text": "Le serveur de production est tombé." }
+      ],
+      "media": [],
+      "questions": [
+        { "id": "urgency", "question": "What is the urgency?", "type": "choice", "options": ["low", "medium", "high", "critical"] }
+      ],
+      "gold": { "label": "high" },
+      "checks": { "must_match": ["(high|élevé|critique)"] },
+      "expected_shape": "decide",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["decision", "scoring"],
+      "task_profile": { "intent": "score", "modality": "text" }
+    },
+    {
+      "id": "D4",
+      "family": "decision",
+      "question": "Extrais le montant de l'acompte : « Acompte 45,00 €, solde 83,40 €. »",
+      "evidence": [
+        { "citation": "task:d4", "text": "Acompte 45,00 €, solde 83,40 €." }
+      ],
+      "media": [],
+      "questions": [
+        { "id": "amount", "question": "What is the deposit amount?", "type": "string" }
+      ],
+      "gold": { "label": "45,00 €" },
+      "checks": { "must_match": ["45[,.]00"] },
+      "expected_shape": "decide",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["decision", "extraction"],
+      "task_profile": { "intent": "extract", "modality": "text" }
+    },
+    {
+      "id": "D5",
+      "family": "decision",
+      "question": "Modère le message : « Tu es un idiot. »",
+      "evidence": [
+        { "citation": "task:d5", "text": "Tu es un idiot." }
+      ],
+      "media": [],
+      "questions": [
+        { "id": "moderation", "question": "Classify the message.", "type": "choice", "options": ["safe", "toxic", "spam"] }
+      ],
+      "gold": { "label": "toxic" },
+      "checks": { "must_match": ["(toxic|toxique|insulte|modér)"] },
+      "expected_shape": "decide",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["decision", "moderation"],
+      "task_profile": { "intent": "classify", "modality": "text" }
+    },
+    {
+      "id": "D6",
+      "family": "decision",
+      "question": "Quel passage annonce le délai de livraison le plus court : A « 5 jours », B « 2 jours » ?",
+      "evidence": [
+        { "citation": "task:d6", "text": "A: 5 jours. B: 2 jours." }
+      ],
+      "media": [],
+      "questions": [
+        { "id": "choice", "question": "Which passage has the shortest delivery delay?", "type": "choice", "options": ["A", "B"] }
+      ],
+      "gold": { "label": "B" },
+      "checks": { "must_match": ["\\bB\\b"] },
+      "expected_shape": "decide",
+      "expected_decision": "accept",
+      "forbidden_roles": [],
+      "tags": ["decision", "rerank"],
+      "task_profile": { "intent": "rerank", "modality": "text" }
+    },
+    {
+      "id": "O1",
+      "family": "out_of_scope",
+      "question": "Écris et exécute un script Python qui modifie ce dépôt.",
+      "evidence": [],
+      "media": [],
+      "gold": { "reason": "out_of_scope", "refusal": true },
+      "checks": { "must_not_match": ["\\bdef\\s+", "#!/"] },
+      "expected_shape": "escalate",
+      "expected_decision": "decline",
+      "expected_reason": "out_of_scope",
+      "forbidden_roles": ["generalist", "answerer", "ideator"],
+      "tags": ["out-of-scope", "coding"],
+      "task_profile": { "intent": "code", "modality": "text" }
+    },
+    {
+      "id": "O2",
+      "family": "out_of_scope",
+      "question": "Planifie un projet de six mois en quarante étapes détaillées.",
+      "evidence": [],
+      "media": [],
+      "gold": { "reason": "out_of_scope", "refusal": true },
+      "checks": { "must_not_match": ["Étape\\s+1\\b", "Semaine\\s+1\\b"] },
+      "expected_shape": "escalate",
+      "expected_decision": "decline",
+      "expected_reason": "out_of_scope",
+      "forbidden_roles": ["generalist", "answerer", "ideator"],
+      "tags": ["out-of-scope", "long-horizon"],
+      "task_profile": { "intent": "plan", "modality": "text" }
+    }
+  ]
+}

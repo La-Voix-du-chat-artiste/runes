@@ -1,0 +1,17 @@
+{
+  "agent_id": "triage.audio",
+  "version": "1.0.0",
+  "role": "triage",
+  "base_model": "LiquidAI/d1-Omni-2B",
+  "adapter": "typed:triage-audio-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["detect_modality", "classify_spoken_request", "detect_sound_events", "score_risk", "recommend_shape", "decline"],
+    "cannot": ["answer", "write_prose", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route", "transcribe"],
+    "max_input_tokens": 131072,
+    "max_output_tokens": 0,
+    "output_schema": "verdict.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "write_prose", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route", "transcribe"]
+}

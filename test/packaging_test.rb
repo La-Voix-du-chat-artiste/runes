@@ -30,6 +30,31 @@ class PackagingTest < Minitest::Test
   ].freeze
   FORBIDDEN_BASENAMES = %w[runes.db ruby.wasm].freeze
 
+  # The production swarm manifests. They are data, not local state, so they
+  # must ship with the gem; the benchmark-only generalist manifest lives under
+  # bench/ and must not appear here.
+  SWARM_MANIFESTS = %w[
+    config/agents/answerer.json
+    config/agents/audio.json
+    config/agents/conductor.json
+    config/agents/critic.json
+    config/agents/escalation.json
+    config/agents/finalizer.json
+    config/agents/ideator_alternative.json
+    config/agents/ideator_direct.json
+    config/agents/judge.json
+    config/agents/judge_omni.json
+    config/agents/omni.json
+    config/agents/planner.json
+    config/agents/repairer.json
+    config/agents/reviewer.json
+    config/agents/scout.json
+    config/agents/triage.json
+    config/agents/triage_audio.json
+    config/agents/verifier.json
+    config/agents/vision.json
+  ].freeze
+
   FakeSettings = Struct.new(:env_values) do
     def env(key) = env_values[key]
     def get(_key, default = nil) = default
@@ -117,6 +142,16 @@ class PackagingTest < Minitest::Test
     assert_equal files.uniq, files
     assert(files.none? { |f| f.start_with?('/') })
     files.each { |f| assert File.file?(File.join(ROOT, f)), "gemspec lists a missing file: #{f}" }
+  end
+
+  def test_swarm_manifests_are_packaged
+    files = gemspec.files
+
+    assert_equal SWARM_MANIFESTS, Dir.glob(File.join(ROOT, 'config/agents/*.json')).map { |path| path.delete_prefix("#{ROOT}/") }.sort,
+                 'config/agents/ and the packaging expectation disagree'
+    SWARM_MANIFESTS.each do |path|
+      assert_includes files, path, "#{path} must ship with the gem"
+    end
   end
 
   # --- entry point ------------------------------------------------------

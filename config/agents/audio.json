@@ -1,0 +1,17 @@
+{
+  "agent_id": "perceiver.audio",
+  "version": "1.0.0",
+  "role": "audio",
+  "base_model": "LiquidAI/LFM3-Audio-2B",
+  "adapter": "media:audio-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["transcribe", "translate_speech", "detect_sound_events", "describe_audio", "cite_anchors", "decline"],
+    "cannot": ["answer", "answer_fr", "answer_en", "judge", "decide", "read_image", "read_video", "execute_tools", "write_code", "critique", "rewrite"],
+    "max_input_tokens": 32768,
+    "max_output_tokens": 512,
+    "output_schema": "perception.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "answer_fr", "answer_en", "judge", "decide", "read_image", "read_video", "execute_tools", "write_code", "critique", "rewrite"]
+}

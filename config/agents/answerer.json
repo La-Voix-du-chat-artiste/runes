@@ -1,0 +1,17 @@
+{
+  "agent_id": "answerer.grounded",
+  "version": "1.0.0",
+  "role": "answerer",
+  "base_model": "LiquidAI/LFM3-1.7B",
+  "adapter": "prompt:grounded-qa-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["read_evidence", "answer_fr", "answer_en", "cite", "abstain", "decline"],
+    "cannot": ["retrieve", "execute_tools", "write_code", "verify_own_citations", "answer_without_evidence", "critique", "rewrite"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 320,
+    "output_schema": "answer.v1"
+  },
+  "requires_evidence": true,
+  "forbidden_actions": ["retrieve", "execute_tools", "write_code", "verify_own_citations", "critique", "rewrite"]
+}

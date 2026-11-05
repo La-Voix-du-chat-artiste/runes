@@ -31,6 +31,11 @@ ruby.wasm
 docs/epics/
 docs/missions/
 
+# --- Swarm benchmark runtime state (ledgers, generation cache, adapters) --
+bench/swarm/runs/
+bench/swarm/cache/
+bench/swarm/adapters/
+
 # --- OS / editor ----------------------------------------------------------
 .DS_Store
 .idea/

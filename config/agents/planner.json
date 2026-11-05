@@ -1,0 +1,17 @@
+{
+  "agent_id": "planner.microstep",
+  "version": "1.0.0",
+  "role": "planner",
+  "base_model": "ruby",
+  "adapter": "deterministic:microstep-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["decompose", "select_shape", "define_acceptance", "set_anchors", "budget", "decline"],
+    "cannot": ["answer", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 0,
+    "output_schema": "plan.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "route"]
+}

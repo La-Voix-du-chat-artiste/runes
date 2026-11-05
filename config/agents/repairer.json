@@ -1,0 +1,17 @@
+{
+  "agent_id": "repairer.bounded",
+  "version": "1.0.0",
+  "role": "repairer",
+  "base_model": "LiquidAI/LFM3-1.7B",
+  "adapter": "prompt:bounded-repair-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["read_evidence", "read_violations", "remove_unsupported_claims", "replace_claims", "preserve_citations", "decline"],
+    "cannot": ["answer_without_evidence", "add_facts", "change_evidence", "retrieve", "execute_tools", "write_code", "verify_own_citations", "critique", "start_second_round"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 320,
+    "output_schema": "answer.v1"
+  },
+  "requires_evidence": true,
+  "forbidden_actions": ["add_facts", "change_evidence", "retrieve", "execute_tools", "write_code", "verify_own_citations", "critique", "start_second_round"]
+}

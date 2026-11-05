@@ -1,0 +1,17 @@
+{
+  "agent_id": "conductor.router",
+  "version": "1.0.0",
+  "role": "conductor",
+  "base_model": "ruby",
+  "adapter": "deterministic:router-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["route", "budget", "select_roles", "enforce_contract", "escalate", "decline"],
+    "cannot": ["answer", "retrieve", "execute_tools", "write_code", "critique", "rewrite"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 0,
+    "output_schema": "decision.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "retrieve", "execute_tools", "write_code", "critique", "rewrite"]
+}

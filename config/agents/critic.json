@@ -1,0 +1,17 @@
+{
+  "agent_id": "critic.claims",
+  "version": "1.0.0",
+  "role": "critic",
+  "base_model": "LiquidAI/LFM3-1.7B",
+  "adapter": "prompt:claim-audit-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["read_evidence", "audit_claims", "list_unsupported", "cite", "decline"],
+    "cannot": ["answer", "answer_fr", "answer_en", "rewrite", "retrieve", "execute_tools", "write_code", "verify_own_citations"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 320,
+    "output_schema": "critique.v1"
+  },
+  "requires_evidence": true,
+  "forbidden_actions": ["answer", "rewrite", "retrieve", "execute_tools", "write_code", "verify_own_citations"]
+}

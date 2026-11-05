@@ -1,0 +1,17 @@
+{
+  "agent_id": "ideator.alternative",
+  "version": "1.0.0",
+  "role": "ideator",
+  "base_model": "LiquidAI/LFM3-1.7B",
+  "adapter": "prompt:alternative-proposal-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["read_evidence", "propose_alternative", "compare_tradeoffs", "cite", "state_disconfirming_evidence", "decline"],
+    "cannot": ["answer", "critique", "rewrite", "retrieve", "execute_tools", "write_code", "verify_own_citations", "judge"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 512,
+    "output_schema": "proposal.v1"
+  },
+  "requires_evidence": true,
+  "forbidden_actions": ["answer", "critique", "rewrite", "retrieve", "execute_tools", "write_code", "verify_own_citations", "judge"]
+}

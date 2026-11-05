@@ -6,6 +6,131 @@
 > what each round found. They keep their original filenames on purpose.
 
 
+## LFM3 Phase 6 — contracted-team benchmark (2026-11-04)
+
+## Done
+
+- **Conductor fixes** (2 commits):
+  - Record the selected shape on control stops (`@selected_shape`);
+  - Treat validated perception as evidence after `perceive!` so a media case with no text evidence does not decline as `missing_evidence`.
+
+- **Benchmark runner** (`bench/swarm/runner.rb`):
+  - CLI options: `--arm`, `--seeds`, `--case`, `--dry-run`, `--strict`, model flags, output paths;
+  - Arm applicability: solo baselines only run on their own families, `team-full` runs all 24, decision baselines run decision/out-of-scope;
+  - Conductor arms: `Conductor` with typed-decision `questions`, no default escalation wiring;
+  - Solo/frontier one-call paths, legacy `Cumulative` for `same-model-3x`;
+  - Row schema: shape/decision/reason grading, checkpoints, calibration, calls, cold/warm;
+  - Injectable `model_factory:` for tests.
+
+- **Benchmark report** (`bench/swarm/report.rb`):
+  - Summary per arm: task pass, checks passed/total, shape accuracy, perception fidelity, proposal divergence, selection quality, judge ECE/Brier, decline precision/recall, false-answer rate, contract violations, checkpoint pass rate, unvalidated hops, first-failure gate distribution, regressions, calls by model/role, wall time, cold/warm, peak memory;
+  - Per-case detail: status, shape, decision, reason, route, checkpoints, checks, calibration, violations, final artifact, raw ledger artifacts;
+  - Denominator: graded rows, infra rows, excluded rows;
+  - Provenance: model revisions, quantization, runtime, sampler, seed, cases file SHA-256, calibration file SHA-256.
+
+- **Grading** (`bench/swarm/grade.rb`):
+  - Decision and shape grading against `expected_decision`/`expected_shape`/`expected_reason`;
+  - Legacy control decisions inferred from the artifact and labelled `inferred: true`.
+
+- **Tests** (`test/bench_swarm_test.rb`):
+  - Case loading: duplicate ids, unknown families, missing media, malformed expectations;
+  - Arm selection: roles, forced shapes, applicability;
+  - Decision and shape grading: expected values, mismatch rejection;
+  - Decline metrics: precision/recall, false-answer rate;
+  - Checkpoint metrics: pass rate, unvalidated hops, first-failure gate;
+  - Calibration metrics: ECE/Brier;
+  - Infra exclusion: infra rows excluded from the denominator;
+  - Overwrite refusal: report refuses to overwrite an existing path;
+  - Dry run: calls no model;
+  - Fake 24-case run: writes a Markdown + JSON report, every row has a shape, a decision and at least one checkpoint;
+  - No reference checkout: the benchmark never reads `runes-lang/glyphes/tmp`.
+
+- **Fake models** (`test/support/swarm_bench_fakes.rb`):
+  - Scripted `D1`, `Text` and `Media` models for the harness tests;
+  - Close over the case so a "perfect" model can return the gold label;
+  - Never used by the benchmark itself.
+
+## Assets
+
+```
+bench/swarm/
+├── arms.rb            # arm definitions, roles, forced shapes, applicability
+├── cases.json        # 24 cases, 6 families, 41 checks
+├── cases.rb          # validated loader and media resolver
+├── checks.rb         # independent mechanical checks
+├── fixtures/         # 4 PNGs, 4 WAVs, 2 MP4s, synthetic
+├── grade.rb          # decision/shape grading
+├── manifests/
+│   └── generalist.json
+├── metrics.rb        # ECE/Brier, decline and checkpoint metrics
+├── report.rb         # Markdown + JSON decision record
+├── runner.rb         # CLI and orchestration
+└── test/
+    ├── bench_swarm_test.rb
+    └── support/
+        └── swarm_bench_fakes.rb
+```
+
+## Suite
+
+```bash
+bundle exec ruby -Ilib bench/swarm/runner.rb --dry-run --case T1
+bundle exec ruby -Ilib bench/swarm/runner.rb --arm team-full --seeds 0 \
+  --out bench/swarm/results/2026-11-04-team-full.md \
+  --json bench/swarm/results/2026-11-04-team-full.json
+bundle exec ruby -Itest test/bench_swarm_test.rb
+```
+
+All tests green: **24 runs, 100 assertions, 0 failures**.
+
+## Session close (2026-11-04, resumed from the opencode session)
+
+The tree the previous session left had a red suite and a pilot that could
+not run; both are fixed and the pilot is running against real MLX packs.
+
+- **Suite repair** (`test/bench_swarm_test.rb` was missing the `grade`,
+  `metrics`, `report` and `runner` requires — 10 errors):
+  - `Conductor#empty_evidence?` now takes an optional argument
+    (`empty_evidence?(evidence)` was called with one but defined with none —
+    every conductor run died with `ArgumentError`);
+  - `run_triage` records `@selected_shape` before a decline/escalate stop, so
+    control-stop rows carry the triage-selected shape (the conductor test
+    asserting `nil` was updated to `:escalate`, matching the O1/O2
+    `expected_shape`);
+  - the dry run skips family pseudo-roles the registry does not know
+    (`registry.by_role` raised `UnknownRole` for `text`);
+  - the ECE assertion was corrected to the standard value (0.3, not 0.2, for
+    `[[0.8, true], [0.8, false]]` — both pairs share one bucket).
+  - Full suite: **1121 runs, 6649 assertions, 0 failures, 3 skips**.
+- **Live-run fixes** (found by smoke-running real checkpoints):
+  - `SectionParser::HEADING` also accepts `<NAME>` and bare `ALL-CAPS` lines —
+    LFM3 echoes `<IDENTITY>` or `IDENTITY` without `###`;
+  - `Envelope` normalizes `N/A`/`none`/`null` reason codes to `ok`;
+  - the echo-mode output contract now says to copy IDENTITY/CAPACITIES
+    verbatim and shows a concrete `reason_code: ok` accept block;
+  - `D1Adapter` passes the `choices` key through (choice questions degraded
+    to numeric noul answers, so triage never routed media cases to `see`);
+  - `MediaAdapter` accepts `-variant` model names (e.g. `-MLX-4bit`);
+  - `ModelFamily.fetch` resolves packaging variants to their base definition
+    while keeping the actual name in receipts;
+  - the runner downcases arm names in ledger run_ids (`solo-1.7B` →
+    `solo-1-7b`; `WorkLedger` rejects uppercase);
+  - the Python CLIs were ported to mlx-vlm 0.7: `GenerationResult.text`
+    unwrapping, chat-template application (generate() does not template),
+    `<|image|>/<|audio|>/<|video|>` routing by extension, video+audio kwargs
+    for AV files, stdin prompt for the media CLI, and `d1_cli.py` now calls
+    the real d1 `model.system_one` API (d1 checkpoints refuse `generate`).
+- **Assets**: `bench/swarm/README.md` (setup, cold/warm, arms, metrics,
+  caveats), `export_fixtures.rb` (portable, hash-verified fixture export),
+  `fixtures/SOURCES.md` + `fixtures/index.json` (12 synthetic CC0 files with
+  SHA-256s), `calibration.json` (PRD §7.8 bands), `.gitignore` entries for
+  `bench/swarm/{runs,cache,adapters}/`.
+- **Pilot**: full run matrix (12 arms × applicable cases × seed 0, cold
+  command mode against the official MLX packs) writing
+  `bench/swarm/results/2026-11-04-pilot-report.md` + `.json`; the decision
+  record with the verdict is `bench/swarm/results/2026-11-04-pilot.md`.
+---
+
 ## Objective
 Recursive Ruby harness: an LLM-planned agent loop rides on top of an
 MQTT messaging fabric, with trusted host tools and (opt-in) WASM

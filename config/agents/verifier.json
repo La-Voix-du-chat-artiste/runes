@@ -1,0 +1,17 @@
+{
+  "agent_id": "verifier.mechanical",
+  "version": "1.0.0",
+  "role": "verifier",
+  "base_model": "ruby",
+  "adapter": "deterministic:guards-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["check_citations", "check_room_status", "check_numbers", "check_artifact", "check_truncation", "check_contract", "check_no_progress", "decline"],
+    "cannot": ["answer", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "escalate"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 0,
+    "output_schema": "violations.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "retrieve", "execute_tools", "write_code", "critique", "rewrite", "escalate"]
+}

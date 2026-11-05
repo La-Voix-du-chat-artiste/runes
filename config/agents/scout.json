@@ -1,0 +1,17 @@
+{
+  "agent_id": "scout.retriever",
+  "version": "1.0.0",
+  "role": "scout",
+  "base_model": "LiquidAI/LFM3-1.7B",
+  "adapter": "prompt:retriever-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["retrieve", "execute_tools", "compact_evidence", "cite_sources", "decline"],
+    "cannot": ["answer", "answer_fr", "answer_en", "write_code", "verify_own_citations", "critique", "rewrite"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 512,
+    "output_schema": "evidence.v1"
+  },
+  "requires_evidence": false,
+  "forbidden_actions": ["answer", "write_code", "verify_own_citations", "critique", "rewrite"]
+}

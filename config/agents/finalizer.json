@@ -1,0 +1,17 @@
+{
+  "agent_id": "finalizer.concise",
+  "version": "1.0.0",
+  "role": "finalizer",
+  "base_model": "LiquidAI/LFM3-1.7B",
+  "adapter": "prompt:concise-rewrite-v1",
+  "adapter_sha256": null,
+  "capacities": {
+    "can": ["read_evidence", "read_critique", "rewrite", "preserve_citations", "decline"],
+    "cannot": ["answer_without_evidence", "retrieve", "execute_tools", "write_code", "verify_own_citations", "critique", "add_facts"],
+    "max_input_tokens": 262144,
+    "max_output_tokens": 320,
+    "output_schema": "answer.v1"
+  },
+  "requires_evidence": true,
+  "forbidden_actions": ["retrieve", "execute_tools", "write_code", "verify_own_citations", "critique", "add_facts"]
+}

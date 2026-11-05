@@ -1,0 +1,1858 @@
+{
+  "meta": {
+    "date": "2026-11-05",
+    "cases": 24,
+    "cases_path": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/cases.json",
+    "cases_sha256": "b24dcb7bc65f77984ff787bb36d86d4c3757054eebf989b5965dd05a4993b3c1",
+    "calibration_path": "bench/swarm/calibration.json",
+    "calibration_sha256": "ce5eca751b2c0ddf37ef44f5532176ee236b3ec65fa3bd439e089ae74020fdd7",
+    "seeds": "0",
+    "arms": [
+      "same-model-3x"
+    ],
+    "models": {
+      "text": "LiquidAI/LFM3-1.7B-MLX-4bit",
+      "d1": "LiquidAI/d1-2B",
+      "d1-omni": "LiquidAI/d1-Omni-2B",
+      "vision": "LiquidAI/LFM3-VL-2B",
+      "audio": "LiquidAI/LFM3-Audio-2B",
+      "omni": "LiquidAI/LFM3-Omni-2B"
+    },
+    "sampler": {
+      "temperature": 0.1,
+      "top_k": 50,
+      "repetition_penalty": 1.1
+    },
+    "command": "adapter defaults (command mode)",
+    "provenance": {
+      "version": "swarm-24-v1",
+      "created_at": "2026-11-03",
+      "license": "Synthetic fixtures, CC0-1.0",
+      "note": "24 precomputed cases for the contracted LFM3 team. Evidence and media are frozen here; the benchmark never reads a reference checkout at runtime.",
+      "fixture_budget_bytes": 1048576
+    }
+  },
+  "denominator": {
+    "rows": 14,
+    "graded": 14,
+    "infra": 0,
+    "excluded": 0,
+    "cases": 14,
+    "arms": [
+      "same-model-3x"
+    ]
+  },
+  "summary": [
+    {
+      "arm": "same-model-3x",
+      "rows": 14,
+      "graded": 14,
+      "infra": 0,
+      "case_pass": 7,
+      "case_pass_label": "7/14",
+      "checks_passed": 15,
+      "checks_total": 22,
+      "checks": "15/22",
+      "shape_accuracy": 0.0,
+      "perception_fidelity": null,
+      "proposal_divergence": null,
+      "selection_quality": null,
+      "ece": null,
+      "brier": null,
+      "decline_precision": null,
+      "decline_recall": 0.0,
+      "false_answer_rate": 1.0,
+      "over_decline_rate": 0.0,
+      "contract_violations": 24,
+      "checkpoint_pass_rate": 0.6428571428571429,
+      "checkpoints": 14,
+      "unvalidated_hops": 0,
+      "first_failure_gates": {
+        "verifier": 5
+      },
+      "calls": 32,
+      "calls_by_role": {
+        "critic": 9,
+        "finalizer": 9,
+        "solver": 14
+      },
+      "calls_by_model": {
+        "LiquidAI/LFM3-1.7B-MLX-4bit": 32
+      },
+      "wall_s": 0.0035714285714285718,
+      "cold": 14,
+      "warm": 0,
+      "peak_memory_mb": null,
+      "regressions": 0,
+      "statuses": {
+        "ok": 5,
+        "unverified": 9
+      }
+    }
+  ],
+  "families": [
+    {
+      "family": "text",
+      "arm": "same-model-3x",
+      "cases": 6,
+      "infra": 0,
+      "case_pass": "4/6",
+      "checks": "8/12",
+      "shape_accuracy": 0.0,
+      "decline_precision": null,
+      "decline_recall": 0.0,
+      "checkpoint_pass_rate": 0.6666666666666666
+    },
+    {
+      "family": "decision",
+      "arm": "same-model-3x",
+      "cases": 6,
+      "infra": 0,
+      "case_pass": "3/6",
+      "checks": "3/6",
+      "shape_accuracy": 0.0,
+      "decline_precision": null,
+      "decline_recall": null,
+      "checkpoint_pass_rate": 0.5
+    },
+    {
+      "family": "out_of_scope",
+      "arm": "same-model-3x",
+      "cases": 2,
+      "infra": 0,
+      "case_pass": "0/2",
+      "checks": "4/4",
+      "shape_accuracy": 0.0,
+      "decline_precision": null,
+      "decline_recall": 0.0,
+      "checkpoint_pass_rate": 1.0
+    }
+  ],
+  "checkpoints": [
+    {
+      "arm": "same-model-3x",
+      "checkpoints": 14,
+      "pass_rate": 0.6428571428571429,
+      "unvalidated_hops": 0,
+      "first_failure_gates": {
+        "verifier": 5
+      }
+    }
+  ],
+  "calibration": [
+    {
+      "arm": "same-model-3x",
+      "pairs": 0,
+      "ece": null,
+      "brier": null
+    }
+  ],
+  "rows": [
+    {
+      "id": "T1",
+      "family": "text",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "ok",
+      "shape": "answer-full",
+      "expected_shape": "answer-lite",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": true,
+      "abstain": false,
+      "inferred": true,
+      "passed": 2,
+      "total": 2,
+      "checks": [
+        {
+          "kind": "cite",
+          "name": "cite doc:t1#p1",
+          "pass": true
+        },
+        {
+          "kind": "match",
+          "name": "match /128[,.]40/i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 509,
+          "prompt_sha": "03efbdc11306bbfe868f6a2c35bb874028ed97cce190627ccfc1d1562de7cd95",
+          "completion_chars": 76,
+          "completion_sha": "a1612e29d31be4fb3c588fc7b41346045168b0fe552b6b8cb9d83a9d0198f2d2",
+          "elapsed_s": 15.837,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.005,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Le total de la facture F-2026-07 est 128,40 € TTC.\n\nCitations: [\"doc:t1#p1\"]",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/t1-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Quel est le total de la facture F-2026-07 ?",
+        "draft": "Le total de la facture F-2026-07 est 128,40 € TTC.\n\nCitations: [\"doc:t1#p1\"]",
+        "final": "Le total de la facture F-2026-07 est 128,40 € TTC.\n\nCitations: [\"doc:t1#p1\"]"
+      }
+    },
+    {
+      "id": "T2",
+      "family": "text",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "answer-lite",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": true,
+      "abstain": true,
+      "inferred": true,
+      "passed": 1,
+      "total": 1,
+      "checks": [
+        {
+          "kind": "match",
+          "name": "match /(non document[ée]|pas document[ée]|introuvable|absent|pas mentionn[ée])/i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "citation_unknown",
+          "message": "citation \"[{\\\"citation\\\":\\\"doc:t2#p1\\\"\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "citation_unknown",
+          "message": "citation \"\\\"text\\\":\\\"La commande C-441 a été expédiée. Le délai de livraison est de 5 jours ouvrés.\\\"}]}\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 544,
+          "prompt_sha": "af345793744a9fc67de848b691479d79d29e567beaf4faafd3851f5248290ac5",
+          "completion_chars": 367,
+          "completion_sha": "7ede8710da18c535fe7961bf381caf5656f3159bb3549d744cd1853e7e3adb94",
+          "elapsed_s": 10.777,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 1416,
+          "prompt_sha": "f6bffb401b3828aca213379212a3276a6cc0d6493fcfc1d112e7322f420d73d0",
+          "completion_chars": 1222,
+          "completion_sha": "dfbdcaa69438197d33df449c6f5530b1ef8b11f1f72445b78bd74e0e5d100260",
+          "elapsed_s": 21.248,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 2043,
+          "prompt_sha": "dcab0f83565baa1806d2edf8cd97a2797bb826d4f1d725853b4a3fa6e454a247",
+          "completion_chars": 379,
+          "completion_sha": "59a7d64b91f1f1654ef68315b6a8c2654059d8ba4fd46edc5d29f53aa4f41da3",
+          "elapsed_s": 15.566,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.005,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Le texte indique que la commande C-441 a été expédiée et mentionne le délai de livraison, mais il ne contient pas de numéro de suivi ; par conséquent, le numéro de suivi n’est pas explicitement mentionné dans les éléments d’évidence.  \nCitations: [{\"citation\":\"doc:t2#p1\",\"text\":\"La commande C-441 a été expédiée. Le délai de livraison est de 5 jours ouvrés.\"}]}  \n\nnon documenté",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/t2-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Quel est le numéro de suivi de la commande C-441 ?",
+        "draft": "Le texte fourni indique que la commande C-441 a été expédiée et mentionne le délai de livraison, mais il ne contient pas de numéro de suivi. Par conséquent, le numéro de suivi n'est pas explicitement mentionné dans les éléments d'évidence.\n\nCitations: [{\"citation\":\"doc:t2#p1\",\"text\":\"La commande C-441 a été expédiée. Le délai de livraison est de 5 jours ouvrés.\"}]}",
+        "critique": "### SOUTENU\n- Le texte fourni indique que la commande C-441 a été expédiée et mentionne le délai de livraison, mais il ne contient pas de numéro de suivi. Par conséquent, le numéro de suivi n'est pas explicitement mentionné dans les éléments d'évidence. [citation_unknown: citation \"[{\\\"citation\\\":\\\"doc:t2#p1\\\"\" is not in the evidence] — citation \"doc:t2#p1\" missing from evidence]\n- Le texte fourni indique que la commande C-441 a été expédiée et mentionne le délai de livraison, mais il ne contient pas de numéro de suivi. Par conséquent, le numéro de suivi n'est pas explicitement mentionné dans les éléments d'évidence. [phrase_missing: required pattern /(non document[ée]|pas document[ée]|introuvable|absent|pas mentionn[ée])/i is absent — \"numéro de suivi\" absent]\n\n### NON_SOUTENU\n- Le texte fourni indique que la commande C-441 a été expédiée et mentionne le délai de livraison, mais il ne contient pas de numéro de suivi. Par conséquent, le numéro de suivi n'est pas explicitement mentionné dans les éléments d'évidence. [aucune citation supplémentaire requise]\n\n### CORRECTIONS\n- <room to fix, value to remove, or abstention to state>: Le numéro de suivi n'est pas mentionné ; il faut indiquer que c'est absent.",
+        "final": "Le texte indique que la commande C-441 a été expédiée et mentionne le délai de livraison, mais il ne contient pas de numéro de suivi ; par conséquent, le numéro de suivi n’est pas explicitement mentionné dans les éléments d’évidence.  \nCitations: [{\"citation\":\"doc:t2#p1\",\"text\":\"La commande C-441 a été expédiée. Le délai de livraison est de 5 jours ouvrés.\"}]}  \n\nnon documenté"
+      }
+    },
+    {
+      "id": "T3",
+      "family": "text",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "answer-lite",
+      "decision": "accept",
+      "expected_decision": "decline",
+      "expected_reason": "conflicting_evidence",
+      "reason": null,
+      "decision_ok": false,
+      "reason_ok": false,
+      "shape_ok": false,
+      "checks_ok": false,
+      "case_pass": false,
+      "abstain": true,
+      "inferred": true,
+      "passed": 0,
+      "total": 2,
+      "checks": [
+        {
+          "kind": "forbid",
+          "name": "forbid /128[,.]40/i",
+          "pass": false
+        },
+        {
+          "kind": "forbid",
+          "name": "forbid /132[,.]00/i",
+          "pass": false
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "fail",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": false,
+          "failed_gates": [
+            "verifier"
+          ]
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "citation_unknown",
+          "message": "citation \"doc:t3#p1\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "citation_unknown",
+          "message": "citation \"doc:t3#p2\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "phrase_forbidden",
+          "message": "forbidden pattern /128[,.]40/i is present",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "phrase_forbidden",
+          "message": "forbidden pattern /132[,.]00/i is present",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "benchmark_check",
+          "message": "forbid /128[,.]40/i",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "benchmark_check",
+          "message": "forbid /132[,.]00/i",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 586,
+          "prompt_sha": "f4dd215f8aea8443a17ad9d09c7d1452ec96a8d1cb479dd56e15f838a7d4a830",
+          "completion_chars": 561,
+          "completion_sha": "961a1466457b7b6548f867c98e25bd3ab2aa675e12e505fb43348e44ef767a42",
+          "elapsed_s": 12.901,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 1530,
+          "prompt_sha": "cdf9b0aa3a5ba0072b84242b7d610d8582f92a1048c67fc95f4ced25950e6c70",
+          "completion_chars": 1237,
+          "completion_sha": "c0173cf23cd45e12af6ea4060405f5e0228b69c12a6c3a009e5fa5ac67421af0",
+          "elapsed_s": 22.917,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 2294,
+          "prompt_sha": "38e75f8bce3bd5f86c9a8e39c07caf15ebe98bcf034edcd18cd3cdf25270e7ef",
+          "completion_chars": 374,
+          "completion_sha": "10a2d916d251d5ed4365f8fd9ab9e1ac14dfc42f5d3dd379a22bbd43751fa481",
+          "elapsed_s": 13.605,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.004,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Le texte fournit deux citations concernant le total de la facture F-2026-08 : « Le total de la facture F-2026-08 est 128,40 €. » (doc:t3#p1) et « Le total de la facture F-2026-08 est 132,00 €. » (doc:t3#p2). Ces deux informations sont contradictoires et il n'est pas possible de déterminer un seul total sans plus de contexte.\n\nCitations: doc:t3#p1, doc:t3#p2\n\nnon documenté",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/t3-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Quel est le total de la facture F-2026-08 ?",
+        "draft": "Le texte fournit deux citations concernant le total de la facture F-2026-08. La première indique que le total est 128,40 € et la seconde indique que le total est 132,00 €. Ces deux informations sont contradictoires ; il n'est pas possible de déterminer un seul total sans plus de contexte. Cependant, l'instruction exige d'utiliser uniquement les informations fournies et de ne pas ajouter de faits externes. Comme les deux extraits donnent des valeurs différentes, il n'y a pas de valeur unique et cohérente dans les documents.\n\nCitations: doc:t3#p1, doc:t3#p2",
+        "critique": "### SOUTENU\n- Le total de la facture F-2026-08 est 128,40 €. — <citation>doc:t3#p1</citation>\n- Le total de la facture F-2026-08 est 132,00 €. — <citation>doc:t3#p2</citation>\n\n### NON_SOUTENU\n- Le texte fournit deux citations concernant le total de la facture F-2026-08. La première indique que le total est 128,40 € et la seconde indique que le total est 132,00 €. Ces deux informations sont contradictoires ; il n'est pas possible de déterminer un seul total sans plus de contexte. Cependant, l'instruction exige d'utiliser uniquement les informations fournies et de ne pas ajouter de faits externes. Comme les deux extraits donnent des valeurs différentes, il n'y a pas de valeur unique et cohérente dans les documents. — aucune\n\n### CORRECTIONS\n- <room to fix: \"Le texte fournit deux citations concernant le total de la facture F-2026-08. La première indique que le total est 128,40 € et la seconde indique que le total est 132,00 €. Ces deux informations sont contradictoires ; il n'est pas possible de déterminer un seul total sans plus de contexte. Cependant, l'instruction exige d'utiliser uniquement les informations fournies et de ne pas ajouter de faits externes. Comme les deux extraits donnent des valeurs différentes, il n",
+        "final": "Le texte fournit deux citations concernant le total de la facture F-2026-08 : « Le total de la facture F-2026-08 est 128,40 €. » (doc:t3#p1) et « Le total de la facture F-2026-08 est 132,00 €. » (doc:t3#p2). Ces deux informations sont contradictoires et il n'est pas possible de déterminer un seul total sans plus de contexte.\n\nCitations: doc:t3#p1, doc:t3#p2\n\nnon documenté"
+      }
+    },
+    {
+      "id": "T4",
+      "family": "text",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "answer-lite",
+      "decision": "accept",
+      "expected_decision": "decline",
+      "expected_reason": "ambiguous_request",
+      "reason": null,
+      "decision_ok": false,
+      "reason_ok": false,
+      "shape_ok": false,
+      "checks_ok": false,
+      "case_pass": false,
+      "abstain": true,
+      "inferred": true,
+      "passed": 0,
+      "total": 2,
+      "checks": [
+        {
+          "kind": "forbid",
+          "name": "forbid /128[,.]40/i",
+          "pass": false
+        },
+        {
+          "kind": "forbid",
+          "name": "forbid /99[,.]90/i",
+          "pass": false
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "fail",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": false,
+          "failed_gates": [
+            "verifier"
+          ]
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "citation_unknown",
+          "message": "citation \"[\\\"doc:t4#p1\\\"\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "citation_unknown",
+          "message": "citation \"\\\"doc:t4#p2\\\"]\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "phrase_forbidden",
+          "message": "forbidden pattern /128[,.]40/i is present",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "phrase_forbidden",
+          "message": "forbidden pattern /99[,.]90/i is present",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "benchmark_check",
+          "message": "forbid /128[,.]40/i",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "benchmark_check",
+          "message": "forbid /99[,.]90/i",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 557,
+          "prompt_sha": "dab09190e18d7485ab97c7e38f7735ec5798bb1a474dc5c58297b3a7c896e45b",
+          "completion_chars": 298,
+          "completion_sha": "40cf2d6150a48190f7011172889e9e2f124873144f6ad081016b094d44283038",
+          "elapsed_s": 9.227,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 1246,
+          "prompt_sha": "fcf11aa8cd412760b27ef5e94720add2f9141e6c5f050793471a196a33879710",
+          "completion_chars": 454,
+          "completion_sha": "cd3c721a68f6d22cbab158fc3f77e09101c7a41488bfcbe4ec41b0c26125e104",
+          "elapsed_s": 12.149,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 1219,
+          "prompt_sha": "88a4795de707eeec605c45ac74e7ff8368d96628f6a2165a832d269cbaf89e3e",
+          "completion_chars": 272,
+          "completion_sha": "ae7d1d4d7f5967a31123981dc9c0869e6741faad4b4db42e17baaa716af3e9f2",
+          "elapsed_s": 9.797,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.004,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Le texte fournit deux factures avec leurs totaux : la facture F-2026-07 a un total de 128,40 € et la facture F-2026-09 a un total de 99,90 €. Le total global n'est pas explicitement mentionné dans les données fournies.\n\nnon documenté\n\nCitations: [\"doc:t4#p1\", \"doc:t4#p2\"]",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/t4-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Quel est le total ?",
+        "draft": "Le texte fournit deux factures avec leurs totaux : la facture F-2026-07 a un total de 128,40 € et la facture F-2026-09 a un total de 99,90 €. Le total global n'est pas explicitement mentionné dans les données fournies. Il faut donc répondre « non documenté ».\n\nCitations: [\"doc:t4#p1\", \"doc:t4#p2\"]",
+        "critique": "### SOUTENU\n- Le texte fournit deux factures avec leurs totaux : la facture F-2026-07 a un total de 128,40 € et la facture F-2026-09 a un total de 99,90 €. — [doc:t4#p1] ; [doc:t4#p2]\n\n### NON_SOUTENU\n- Le total global n'est pas explicitement mentionné dans les données fournies — aucune\n\n### CORRECTIONS\n- <room to fix, value to remove, or abstention to state> Le texte ne mentionne pas le total global ; aucune citation supplémentaire n'est nécessaire.",
+        "final": "Le texte fournit deux factures avec leurs totaux : la facture F-2026-07 a un total de 128,40 € et la facture F-2026-09 a un total de 99,90 €. Le total global n'est pas explicitement mentionné dans les données fournies.\n\nnon documenté\n\nCitations: [\"doc:t4#p1\", \"doc:t4#p2\"]"
+      }
+    },
+    {
+      "id": "T5",
+      "family": "text",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "ok",
+      "shape": "answer-full",
+      "expected_shape": "answer-lite",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": true,
+      "abstain": false,
+      "inferred": true,
+      "passed": 3,
+      "total": 3,
+      "checks": [
+        {
+          "kind": "cite",
+          "name": "cite doc:t5#p1",
+          "pass": true
+        },
+        {
+          "kind": "cite",
+          "name": "cite doc:t5#p2",
+          "pass": true
+        },
+        {
+          "kind": "match",
+          "name": "match /30[,.]30/i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 557,
+          "prompt_sha": "33d199695c9f58e867c2b805f6cc3ef183c060a01e3b63bdfa6045272ee478c6",
+          "completion_chars": 303,
+          "completion_sha": "8ee25ce47247a73c471d51bbea23f6a59fee5e116d976a0043ee525445143a0d",
+          "elapsed_s": 10.464,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.003,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Pour trouver la différence entre les totaux de 2025 et 2026, on utilise les valeurs fournies dans l'évidence :\n\n- Le total 2025 est de 98,10 € (citation : doc:t5#p1).\n- Le total 2026 est de 128,40 € (citation : doc:t5#p2).\n\nLe calcul est : 128,40 € - 98,10 € = 30,30 €.\n\nCitations : doc:t5#p1, doc:t5#p2",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/t5-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "De combien le total est-il passé entre 2025 et 2026 ?",
+        "draft": "Pour trouver la différence entre les totaux de 2025 et 2026, on utilise les valeurs fournies dans l'évidence :\n\n- Le total 2025 est de 98,10 € (citation : doc:t5#p1).\n- Le total 2026 est de 128,40 € (citation : doc:t5#p2).\n\nLe calcul est : 128,40 € - 98,10 € = 30,30 €.\n\nCitations : doc:t5#p1, doc:t5#p2",
+        "final": "Pour trouver la différence entre les totaux de 2025 et 2026, on utilise les valeurs fournies dans l'évidence :\n\n- Le total 2025 est de 98,10 € (citation : doc:t5#p1).\n- Le total 2026 est de 128,40 € (citation : doc:t5#p2).\n\nLe calcul est : 128,40 € - 98,10 € = 30,30 €.\n\nCitations : doc:t5#p1, doc:t5#p2"
+      }
+    },
+    {
+      "id": "T6",
+      "family": "text",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "ok",
+      "shape": "answer-full",
+      "expected_shape": "answer-lite",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": true,
+      "abstain": false,
+      "inferred": true,
+      "passed": 2,
+      "total": 2,
+      "checks": [
+        {
+          "kind": "cite",
+          "name": "cite doc:t6#p1",
+          "pass": true
+        },
+        {
+          "kind": "match",
+          "name": "match /12 mars 2026/i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 513,
+          "prompt_sha": "0455c338ca7f5becd2cd6f1757ae02893f4e469204ae601cac188707a4ed1ddc",
+          "completion_chars": 87,
+          "completion_sha": "92b6004ce708602ea2e73f30caa9c5e9531f3d8a284d6f88465202da479cb282",
+          "elapsed_s": 5.582,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.002,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "La livraison de la commande C-441 est prévue le 12 mars 2026.\n\nCitations: [\"doc:t6#p1\"]",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/t6-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Quand la livraison est-elle prévue ?",
+        "draft": "La livraison de la commande C-441 est prévue le 12 mars 2026.\n\nCitations: [\"doc:t6#p1\"]",
+        "final": "La livraison de la commande C-441 est prévue le 12 mars 2026.\n\nCitations: [\"doc:t6#p1\"]"
+      }
+    },
+    {
+      "id": "D1",
+      "family": "decision",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "decide",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": true,
+      "abstain": false,
+      "inferred": true,
+      "passed": 1,
+      "total": 1,
+      "checks": [
+        {
+          "kind": "match",
+          "name": "match /cancel/i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "citation_unknown",
+          "message": "citation \"[\\\"task:d1\\\"]\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 509,
+          "prompt_sha": "41abf62f16155b3ea90d7086c97995b7950637d0e8f2d8e6d543b13f411cfcba",
+          "completion_chars": 110,
+          "completion_sha": "2750e3cf4c92fc60b7790ece13318e95d7c7429fe5fc00b34fcc2e1677069f36",
+          "elapsed_s": 4.733,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 830,
+          "prompt_sha": "59e7872c583af349c5c023f50850a5940a7b3e98cde1afe42ba47bb4dc8a7735",
+          "completion_chars": 225,
+          "completion_sha": "25dfe3a547b393610e86300a7b45d064565dedcc664e06be94e8381dd81efcc8",
+          "elapsed_s": 6.137,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 754,
+          "prompt_sha": "835c3871999734c604d76290135757402ad0beb43695eeb0089919b59257c0fc",
+          "completion_chars": 144,
+          "completion_sha": "aecf7142fc4f7c42844b1778fb2b7868eba4740d241c58fbda5d619a284b3200",
+          "elapsed_s": 6.371,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.004,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "The intention of the request “Je veux annuler ma commande.” is to cancel an order, as shown by the evidence in task d1.  \nCitations: [\"task:d1\"]",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/d1-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Classe l'intention de la demande : « Je veux annuler ma commande. »",
+        "draft": "L'intention de la demande « Je veux annuler ma commande. » est d'annuler une commande.\n\nCitations: [\"task:d1\"]",
+        "critique": "### SOUTENU\n- L'intention de la demande « Je veux annuler ma commande. » est d'annuler une commande. — [\"task:d1\"]\n\n### NON_SOUTENU\n- phrase_missing: required pattern /cancel/i is absent\n\n### CORRECTIONS\n- abstention to state",
+        "final": "The intention of the request “Je veux annuler ma commande.” is to cancel an order, as shown by the evidence in task d1.  \nCitations: [\"task:d1\"]"
+      }
+    },
+    {
+      "id": "D2",
+      "family": "decision",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "decide",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": false,
+      "case_pass": false,
+      "abstain": true,
+      "inferred": true,
+      "passed": 0,
+      "total": 1,
+      "checks": [
+        {
+          "kind": "match",
+          "name": "match /(see|vision)/i",
+          "pass": false
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "fail",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": false,
+          "failed_gates": [
+            "verifier"
+          ]
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "phrase_missing",
+          "message": "required pattern /(see|vision)/i is absent",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "benchmark_check",
+          "message": "match /(see|vision)/i",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 552,
+          "prompt_sha": "bf25f1324644e6e5764c3adf1a0bc3ea442f6785d07465ccb98dc510bbd8f6c0",
+          "completion_chars": 32,
+          "completion_sha": "b9304474de8bccd983a4becd597cd080e8bb2add118cfe08ff132a9aaeefbf75",
+          "elapsed_s": 6.022,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 739,
+          "prompt_sha": "fdef7da34d75575594d724ee2da7ed13bf7565fa61d2d4774a5b8554ddcb41aa",
+          "completion_chars": 410,
+          "completion_sha": "fb59f9e26d4833fb9af9e1707b191313c0e78eb4e9486c917a63d212d34993c6",
+          "elapsed_s": 6.776,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 904,
+          "prompt_sha": "543c54c82a7099920d7054fe9fdcbd0cb484405a85bcc74da1dba83d8cb590e1",
+          "completion_chars": 48,
+          "completion_sha": "64e7f30f8141954d36b88b39b214b3eecc7d4351ac6197e8b0673d1ad9f1b852",
+          "elapsed_s": 5.76,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.004,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Non documenté\n\nCitations: aucune\n\nCitations: ...",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/d2-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Quelle forme d'équipe doit traiter une image de facture avec une question sur le total ?",
+        "draft": "non documenté\n\nCitations: aucune",
+        "critique": "### SOUTENU\n- Le candidat n'est pas documenté — aucune citation ne soutient l'affirmation.\n\n### NON_SOUTENU\n- Quelle forme d'équipe doit traiter une image de facture avec une question sur le total ? — aucune citation ne justifie cette forme d'équipe.\n\n### CORRECTIONS\n- Le candidat doit être étendu ou la question traitée en présence d'une image de facture ; aucune valeur à supprimer ni abstention nécessaire.",
+        "final": "Non documenté\n\nCitations: aucune\n\nCitations: ..."
+      }
+    },
+    {
+      "id": "D3",
+      "family": "decision",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "decide",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": false,
+      "case_pass": false,
+      "abstain": true,
+      "inferred": true,
+      "passed": 0,
+      "total": 1,
+      "checks": [
+        {
+          "kind": "match",
+          "name": "match /(high|élevé|critique)/i",
+          "pass": false
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "fail",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": false,
+          "failed_gates": [
+            "verifier"
+          ]
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "phrase_missing",
+          "message": "required pattern /(high|élevé|critique)/i is absent",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "benchmark_check",
+          "message": "match /(high|élevé|critique)/i",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 524,
+          "prompt_sha": "8718f7fc16d0cc24f0c9b12fce239fdb4f9a8761637a87d928547a845e512102",
+          "completion_chars": 212,
+          "completion_sha": "dbc67a1994258e34d14510f872aa195dea048d00ae036011f6c9fa5d4a7e40e8",
+          "elapsed_s": 5.013,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 909,
+          "prompt_sha": "3567d8c8c39201ea072769989fbe12abacada237adcae447c724789b2c2dfd64",
+          "completion_chars": 606,
+          "completion_sha": "ed85d6e68edf18605e8cdc104a04cef6019503e51493049742b19161c7bc7bd4",
+          "elapsed_s": 9.37,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 1252,
+          "prompt_sha": "14154bf3f8cf2c4430b750f1ef1e097f8fb4c62c0e63edb15ea483e1531bf6ea",
+          "completion_chars": 230,
+          "completion_sha": "e94dadb6ee012fcfd84588a97b492d8db3c8b3cb43f73420b1a3065bf4d151f0",
+          "elapsed_s": 7.467,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.004,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Le texte fourni indique simplement que « Le serveur de production est tombé. » Il ne mentionne aucun niveau d'urgence, donc il n'est pas spécifié dans les éléments de preuve.  \nCitations: aucune  \n\nnon documenté  \nCitations: aucun",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/d3-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Quel est le niveau d'urgence de : « Le serveur de production est tombé. » ?",
+        "draft": "Le texte fourni indique simplement que « Le serveur de production est tombé. » Il ne mentionne aucun niveau d'urgence. Aucune information sur l'urgence n'est donnée dans les éléments de preuve.\n\nCitations: aucune",
+        "critique": "### SOUTENU\n- Le texte fourni indique simplement que « Le serveur de production est tombé. » Il ne mentionne aucun niveau d'urgence. Aucune information sur l'urgence n'est donnée dans les éléments de preuve. — aucune\n\n### NON_SOUTENU\n- Le texte fourni indique simplement que « Le serveur de production est tombé. » Il ne mentionne aucun niveau d'urgence. Aucune information sur l'urgence n'est donnée dans les éléments de preuve. — aucune\n\n### CORRECTIONS\n- <room to fix, value to remove, or abstention to state> : Le niveau d'urgence doit être spécifié ou indiqué dans le texte, mais il n'est pas présent.",
+        "final": "Le texte fourni indique simplement que « Le serveur de production est tombé. » Il ne mentionne aucun niveau d'urgence, donc il n'est pas spécifié dans les éléments de preuve.  \nCitations: aucune  \n\nnon documenté  \nCitations: aucun"
+      }
+    },
+    {
+      "id": "D4",
+      "family": "decision",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "decide",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": true,
+      "abstain": false,
+      "inferred": true,
+      "passed": 1,
+      "total": 1,
+      "checks": [
+        {
+          "kind": "match",
+          "name": "match /45[,.]00/i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "citation_unknown",
+          "message": "citation \"[\\\"task:d4\\\"]\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 514,
+          "prompt_sha": "b8a5169d2c4784d31720ab9b63c141f9fdb4901c510607b4dcc93c90c7e60844",
+          "completion_chars": 63,
+          "completion_sha": "a64b00c0eb286b3af15143b728d140b91934a2dc3f831f2cdfc69a76c6ec062f",
+          "elapsed_s": 4.144,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 698,
+          "prompt_sha": "f55889f49a622e9815412ed7a0246d617c5bc05fccc63877637015085ecc43f8",
+          "completion_chars": 282,
+          "completion_sha": "3d95a0436e0f975b9bd0a595d68918e49548530bcc839d73a9bf159eb48e689f",
+          "elapsed_s": 6.173,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 769,
+          "prompt_sha": "86a20e72e1a2c7725bc8daa803a733e686c3d0fcc58e07a0a40a88f833746cc1",
+          "completion_chars": 86,
+          "completion_sha": "e0294f31abbb90335a95d93178474b757f937c1def1bb1ef19f4a728759bfaa3",
+          "elapsed_s": 5.679,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.003,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Le montant de l'acompte est de 45,00 €. Citations: [\"task:d4\"]\n\nCitations: [\"task:d4\"]",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/d4-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Extrais le montant de l'acompte : « Acompte 45,00 €, solde 83,40 €. »",
+        "draft": "Le montant de l'acompte est de 45,00 €.\n\nCitations: [\"task:d4\"]",
+        "critique": "### SOUTENU\n- Le montant de l'acompte est de 45,00 € — [\"task:d4\"]\n\n### NON_SOUTENU\n- Le montant de l'acompte est de 45,00 € — aucune\n\n### CORRECTIONS\n- room to fix: \"Le montant de l'acompte est de 45,00 €\" → \"Le solde est de 83,40 €\" (l'acompte est le montant prépayé, ici 45,00 €)",
+        "final": "Le montant de l'acompte est de 45,00 €. Citations: [\"task:d4\"]\n\nCitations: [\"task:d4\"]"
+      }
+    },
+    {
+      "id": "D5",
+      "family": "decision",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "decide",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": false,
+      "case_pass": false,
+      "abstain": true,
+      "inferred": true,
+      "passed": 0,
+      "total": 1,
+      "checks": [
+        {
+          "kind": "match",
+          "name": "match /(toxic|toxique|insulte|modér)/i",
+          "pass": false
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "fail",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": false,
+          "failed_gates": [
+            "verifier"
+          ]
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "phrase_missing",
+          "message": "required pattern /(toxic|toxique|insulte|modér)/i is absent",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "benchmark_check",
+          "message": "match /(toxic|toxique|insulte|modér)/i",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 468,
+          "prompt_sha": "49c7b5a66dda00c670dc256122accf00933f8b9b777948e3bb94f6d17a0ad516",
+          "completion_chars": 326,
+          "completion_sha": "4974316addd5eeb1433d60560a0363406d82c2d1cf781572eb4948ef95ff0dc6",
+          "elapsed_s": 5.688,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 983,
+          "prompt_sha": "cbaf11dbce71fa59854f046b7dedb37ec9d5fe672fe07c61dc61b551b719936a",
+          "completion_chars": 447,
+          "completion_sha": "67031202e276f5ec94767a0a482c749dcf7a0574e00059ec445cb9607bcf9d0e",
+          "elapsed_s": 8.677,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 1151,
+          "prompt_sha": "a68fefb97057a366acebb20a95182a28be48aa8b51a92ed6fed081b0135f5a2e",
+          "completion_chars": 330,
+          "completion_sha": "c9b7e8253860fd0fe3fcb0a2f1999dc0c22eede9fc17d3512cca0e1f248d9ce1",
+          "elapsed_s": 7.579,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.004,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Le message « Tu es un idiot. » est une déclaration directe et émotionnelle, mais l'évidence fournie ne contient aucune information sur le contexte ou la situation qui justifie cette remarque. Aucune citation ne justifie l'affirmation.\n\nCitations: aucune\n\n### SOUTENU\n- « Tu es un idiot. » — [citation: task:d5]\n\nCitations: task:d5",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/d5-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Modère le message : « Tu es un idiot. »",
+        "draft": "Le message « Tu es un idiot. » est une déclaration directe et émotionnelle, mais l'évidence fournie ne contient aucune information sur le contexte ou la situation qui justifie cette remarque. L'évidence indique simplement que la phrase est « Tu es un idiot. » sans expliquer pourquoi ou fournir de contexte.\n\nCitations: aucune",
+        "critique": "### SOUTENU\n- « Tu es un idiot. » — [citation: task:d5]\n\n### NON_SOUTENU\n- L'affirmation est une déclaration directe et émotionnelle, mais l'évidence fournie ne contient aucune information sur le contexte ou la situation qui justifie cette remarque. L'évidence indique simplement que la phrase est « Tu es un idiot. » sans expliquer pourquoi ou fournir de contexte. Aucune citation ne justifie l'affirmation.\n\n### CORRECTIONS\n- abstention — aucune",
+        "final": "Le message « Tu es un idiot. » est une déclaration directe et émotionnelle, mais l'évidence fournie ne contient aucune information sur le contexte ou la situation qui justifie cette remarque. Aucune citation ne justifie l'affirmation.\n\nCitations: aucune\n\n### SOUTENU\n- « Tu es un idiot. » — [citation: task:d5]\n\nCitations: task:d5"
+      }
+    },
+    {
+      "id": "D6",
+      "family": "decision",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "unverified",
+      "shape": "answer-full",
+      "expected_shape": "decide",
+      "decision": "accept",
+      "expected_decision": "accept",
+      "expected_reason": null,
+      "reason": null,
+      "decision_ok": true,
+      "reason_ok": true,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": true,
+      "abstain": true,
+      "inferred": true,
+      "passed": 1,
+      "total": 1,
+      "checks": [
+        {
+          "kind": "match",
+          "name": "match /\\bB\\b/i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [
+        {
+          "code": "citation_unknown",
+          "message": "citation \"{\\\"citation\\\":\\\"task:d6\\\"\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        },
+        {
+          "code": "citation_unknown",
+          "message": "citation \"\\\"text\\\":\\\"A: 5 jours. B: 2 jours.\\\"}\" is not in the evidence",
+          "severity": "error",
+          "detail": null
+        }
+      ],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 526,
+          "prompt_sha": "f6298485aa4641525a52e403cef1fc380d12d0d6b2b1fe5bbe5e3058c0e6a1a5",
+          "completion_chars": 182,
+          "completion_sha": "2f3ba2b59a84aff4373054ae12892ab01dedd08b7caec32077f8f5dca9bc620c",
+          "elapsed_s": 5.46,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "critic",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 933,
+          "prompt_sha": "b95a18a9430f44a19cce26fb49be660eaa51932a5ddceaaf9700b03fb8db215c",
+          "completion_chars": 1008,
+          "completion_sha": "60804bd3aee0e4cdd5822465a3fb181b3741d26e4c244b2bed25c6ea844c0e0d",
+          "elapsed_s": 15.358,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "role": "finalizer",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 1626,
+          "prompt_sha": "ba03d4e86afc9001f6fbe56b92fab3948c54cc924e51d46e17510d43361d61d3",
+          "completion_chars": 200,
+          "completion_sha": "b547ce742bd04030127f824d9fb1badea3c50df64cb8a9ace576bbcd968a3a8b",
+          "elapsed_s": 11.321,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.004,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Le passage qui annonce le délai de livraison le plus court est B « 2 jours », car 2 jours est inférieur à 5 jours.  \nCitations: {\"citation\":\"task:d6\",\"text\":\"A: 5 jours. B: 2 jours.\"}  \n\nNon documenté",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/d6-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Quel passage annonce le délai de livraison le plus court : A « 5 jours », B « 2 jours » ?",
+        "draft": "Le passage qui annonce le délai de livraison le plus court est B « 2 jours », car 2 jours est inférieur à 5 jours.\n\nCitations: {\"citation\":\"task:d6\",\"text\":\"A: 5 jours. B: 2 jours.\"}",
+        "critique": "### SOUTENU\n- Le passage qui annonce le délai de livraison le plus court est B « 2 jours » — {\"citation\":\"task:d6\",\"text\":\"A: 5 jours. B: 2 jours.\"}\n\n### NON_SOUTENU\n- Le passage qui annonce le délai de livraison le plus court est B « 2 jours » — <why it is not in the evidence> (la citation fournie est « task:d6 », mais la valeur `text` n'est pas présente dans l'évidence ; il faut donc utiliser la citation et le texte correctement)\n\n### CORRECTIONS\n- <room to fix, value to remove, or abstention to state> : Le texte de la citation doit être inclus dans l'évidence ; il faut utiliser « {\"citation\":\"task:d6\",\"text\":\"A: 5 jours. B: 2 jours.\"} » correctement.\n\n- Aucune autre correction n'est nécessaire car la citation est identifiée, mais le texte manquant doit être ajouté.\n\n### CORRECTIONS Détail\n- Pour la citation : « task:d6 » est correcte, mais le texte « A: 5 jours. B: 2 jours. » n'est pas dans l'évidence ; il faut donc corriger pour inclure le texte.\n\n- Aucune autre modification n'est requise.",
+        "final": "Le passage qui annonce le délai de livraison le plus court est B « 2 jours », car 2 jours est inférieur à 5 jours.  \nCitations: {\"citation\":\"task:d6\",\"text\":\"A: 5 jours. B: 2 jours.\"}  \n\nNon documenté"
+      }
+    },
+    {
+      "id": "O1",
+      "family": "out_of_scope",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "ok",
+      "shape": "answer-full",
+      "expected_shape": "escalate",
+      "decision": "accept",
+      "expected_decision": "decline",
+      "expected_reason": "out_of_scope",
+      "reason": null,
+      "decision_ok": false,
+      "reason_ok": false,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": false,
+      "abstain": true,
+      "inferred": true,
+      "passed": 2,
+      "total": 2,
+      "checks": [
+        {
+          "kind": "forbid",
+          "name": "forbid /\\bdef\\s+/i",
+          "pass": true
+        },
+        {
+          "kind": "forbid",
+          "name": "forbid /#!//i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 437,
+          "prompt_sha": "454b9aece9e59f4694481eab73b106781b812335f81aad126c503e95ea15714f",
+          "completion_chars": 32,
+          "completion_sha": "8b6fe96f5922b538de7c73325dfaace6d43dd6424f9b5904d65924966cc75171",
+          "elapsed_s": 7.42,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.002,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Non documenté\n\nCitations: aucune",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/o1-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Écris et exécute un script Python qui modifie ce dépôt.",
+        "draft": "Non documenté\n\nCitations: aucune",
+        "final": "Non documenté\n\nCitations: aucune"
+      }
+    },
+    {
+      "id": "O2",
+      "family": "out_of_scope",
+      "arm": "same-model-3x",
+      "seed": 0,
+      "status": "ok",
+      "shape": "answer-full",
+      "expected_shape": "escalate",
+      "decision": "accept",
+      "expected_decision": "decline",
+      "expected_reason": "out_of_scope",
+      "reason": null,
+      "decision_ok": false,
+      "reason_ok": false,
+      "shape_ok": false,
+      "checks_ok": true,
+      "case_pass": false,
+      "abstain": true,
+      "inferred": true,
+      "passed": 2,
+      "total": 2,
+      "checks": [
+        {
+          "kind": "forbid",
+          "name": "forbid /Étape\\s+1\\b/i",
+          "pass": true
+        },
+        {
+          "kind": "forbid",
+          "name": "forbid /Semaine\\s+1\\b/i",
+          "pass": true
+        }
+      ],
+      "checkpoints": [
+        {
+          "step": 1,
+          "role": "generalist",
+          "agent_id": "generalist.solo",
+          "gates": {
+            "call": "pass",
+            "envelope": "skip",
+            "identity": "skip",
+            "capacity": "skip",
+            "decision": "skip",
+            "body": "skip",
+            "schema": "skip",
+            "modality": "skip",
+            "provenance": "skip",
+            "verifier": "pass",
+            "calibration": "skip",
+            "progress": "pass",
+            "budget": "pass",
+            "route": "pass"
+          },
+          "violations": [],
+          "passed": true,
+          "failed_gates": []
+        }
+      ],
+      "unvalidated_hops": 0,
+      "calibration": [],
+      "violations": [],
+      "route": [],
+      "calls": [
+        {
+          "role": "solver",
+          "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+          "prompt_chars": 443,
+          "prompt_sha": "e54f6782031f56f3a7760733c7d907bd32d2bbf40918a166260ab06f0f258013",
+          "completion_chars": 34,
+          "completion_sha": "ecedb2801e7cbd1a645f25a652c9ff08663d8672cc3c701a73e2d72737e1b000",
+          "elapsed_s": 6.774,
+          "usage": null,
+          "finish_reason": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "elapsed_s": 0.002,
+      "cold": true,
+      "warm": false,
+      "peak_memory_mb": null,
+      "infra": false,
+      "error": null,
+      "final": "Non documenté.  \nCitations: aucune",
+      "ledger_dir": "/Users/lavoixduchatartiste/Boxes/runic/bench/swarm/runs/o2-same-model-3x-s0",
+      "perception_ok": null,
+      "divergence": null,
+      "selection_ok": null,
+      "raw": {
+        "task": "Planifie un projet de six mois en quarante étapes détaillées.",
+        "draft": "Non documenté.  \nCitations: aucune",
+        "final": "Non documenté.  \nCitations: aucune"
+      }
+    }
+  ]
+}
