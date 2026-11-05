@@ -153,6 +153,20 @@ real MLX packs. Verdict: **NO-GO** (see the decision record below).
 - **Commit**: `cff3d14` — `bench: run the contracted LFM3 team over the
   24-case benchmark` (131 files; `bench/swarm/runs/` and `cache/` are
   gitignored runtime state, the reports under `results/` are committed).
+
+## Newcomer guide + scripted kanban demo (2026-11-05, commit 7dbd5f6)
+
+- `docs/GETTING_STARTED.md` + `.pdf` (via `scripts/md_to_pdf.rb`): what
+  Runes can do, 5-minute setup, and the scripted-kanban demo detailed with
+  expected output, a sample `.mmd` and the artifact table.
+- `scripts/demo_pipeline_run.rb` fixed: it never exported `PROSPECT_ROOT`,
+  so the workflow silently wrote to the fallback `tmp/prospect-pipeline`
+  while the script printed `tmp/prospect-demo`; it now exports the env var
+  and prints the mission kanban at the end. Verified: artifacts land under
+  the printed root, kanban shows Done/Blocked with verdict reasons.
+- `scripts/md_to_pdf.rb`: the cover version now reads `Runes::VERSION`
+  (was hardcoded `0.3.0`).
+- README quick start links the guide and the scripted demo.
 ---
 
 ## Objective
