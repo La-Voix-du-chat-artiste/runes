@@ -1,5 +1,10 @@
 # LFM3 Phase 6 — remaining work (2026-11-04)
 
+> **Closed 2026-11-05** — all items landed in `cff3d14` (assets, pilot,
+  docs, commit, acceptance verified). Verdict: NO-GO; the open follow-ups
+> live in `ENHANCEMENT.md` §6 (echo-envelope fix, perception gate, d1
+> scope decline).
+
 ## 1. Assets
 
 - `bench/swarm/README.md`: setup, cold/warm, arms, metrics, caveats;
