@@ -179,6 +179,32 @@ only on accept (a decline with `N/A` is now flagged, not silently ok'd);
 `DSL_POWER.pdf` / `WHY_RUNES_V2.pdf` so their covers read `Runes::VERSION`.
 Suite: **1123 runs, 6658 assertions, 0 failures, 3 skips**; scripted kanban
 demo re-verified end to end.
+
+## Cycle 43 follow-ups — pilot re-run (2026-11-11, commits f4fae03 + 732023e)
+
+The NO-GO pilot's next thread, done and measured in a full re-run
+(`bench/swarm/results/2026-11-11-rerun2-decision.md`, 8 arms / 80 rows /
+24 cases / seed 0 / cold command; verdict still NO-GO):
+
+- **Stamp-mode envelopes** (`Envelope.stamp_text`, shared by conductor and
+  solo path): the manifest supplies identity/capacity, the model returns
+  DECISION+BODY or plain prose. solo-1.7B 2/14 → 7/14; envelope-structure
+  violations nearly eliminated on team-full.
+- **Safety verdicts gate forced shapes** (`select_shape` checks
+  terminal/unsafe/out-of-scope first) + **declared capacities and model
+  known_limits in the triage state**: O1/O2 now decline on every conductor
+  arm; d1-only decline recall 0.00 → 1.00, false-answer 1.00 → 0.00.
+- Think-tag stripping in `clean_output` (closed blocks only), readable
+  perception text for the judge, `SectionParser` bare-caps headings
+  restricted to known sections, `Envelope` delegates `heading_name`.
+- `bin/runes-kanban` validates `.mmd` files/trees (ENHANCEMENT §4 CLI half).
+
+Remaining gap is model capability, not harness: text lift −14.3 pp vs the
+stronger solo baseline, modality lift negative (audio still below the 0.30
+sufficiency gate at 0.10–0.25), dominant failure `repair_exhausted` at the
+320-token cap. Next: per-role token caps / check tightening + a real
+out-of-sample calibration set. Suite: **1125 runs, 6677 assertions, 0
+failures, 3 skips**.
 ---
 
 ## Objective
