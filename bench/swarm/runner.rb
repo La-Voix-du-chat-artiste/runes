@@ -366,7 +366,9 @@ module Runes
           envelope = if result[:envelope].is_a?(Runes::Swarm::Envelope)
                        result[:envelope]
                      elsif manifest.family.echo?
-                       Runes::Swarm::Envelope.parse(result[:content])
+                       # Stamp mode: the manifest supplies identity/capacity;
+                       # the model's reply only needs DECISION + BODY.
+                       Runes::Swarm::Envelope.stamp_text(result[:content], manifest: manifest)
                      end
           final = envelope ? envelope.body.to_s : result[:content].to_s
           if manifest.family.stamp? && envelope.nil? && result[:artifact].is_a?(Hash)
@@ -379,8 +381,6 @@ module Runes
                               checks: checks)
           violations = if envelope
                          Runes::Swarm::ContractGuard.new(manifest: manifest).check_envelope(envelope)
-                       elsif manifest.family.echo?
-                         Runes::Swarm::ContractGuard.new(manifest: manifest).check(result[:content])
                        else
                          []
                        end

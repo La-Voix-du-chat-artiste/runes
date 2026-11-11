@@ -15,6 +15,9 @@ module Runes
       ANSI = /\e\[[0-9;?]*[ -\/]*[@-~]/
       CONTROL = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/
       FENCE = /\A```[A-Za-z0-9_+\-]*\s*\n(.*?)\n```\z/m
+      # Only *closed* think blocks are stripped — an unclosed <think> must not
+      # eat the whole answer (that turned into empty_stop rows).
+      THINK = /<think(?:ing)?>.*?<\/think(?:ing)?>/mi
 
       module_function
 
@@ -56,6 +59,7 @@ module Runes
       # print its own prompt or a progress preamble; neither is an answer.
       def clean_output(text, prompt: nil)
         clean = text.to_s.dup
+        clean = clean.gsub(THINK, '')
         clean = clean.gsub(ANSI, '')
         clean = clean.gsub("\r\n", "\n").gsub("\r", "\n")
         clean = clean.gsub(CONTROL, '')

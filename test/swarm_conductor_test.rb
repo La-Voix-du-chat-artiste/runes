@@ -806,8 +806,11 @@ class SwarmConductorTest < Minitest::Test
 
   def test_a_failed_envelope_never_calls_the_next_role
     wire_triage
+    # A malformed DECISION (unknown status) still fails the contract; plain
+    # prose is a valid stamped accept under stamp mode and is covered by
+    # test_plain_prose_is_stamped_as_an_accept.
     answerer = wire_text("answerer.grounded", raw: true,
-                         body: "This is prose with no contract envelope at all.")
+                         body: "### DECISION\nstatus: maybe\nreason_code: ok\n\n### BODY\nx")
     judge = wire_judge
 
     result = clean_run
@@ -817,6 +820,19 @@ class SwarmConductorTest < Minitest::Test
     assert_empty judge.calls
     assert_equal %w[triage plan solve],
                  result.route.map { |entry| entry["phase"] }
+  end
+
+  def test_plain_prose_is_stamped_as_an_accept
+    wire_triage
+    answerer = wire_text("answerer.grounded", raw: true,
+                         body: "128,40 EUR, cite doc:t1#p1.")
+    wire_judge
+
+    result = clean_run
+
+    assert_equal :ok, result.status
+    assert_equal :accept, result.decision.status
+    assert_includes result.final.to_s, "128,40"
   end
 
   def test_require_evidence_declines_before_any_model_call

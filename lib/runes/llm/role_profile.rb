@@ -147,17 +147,8 @@ module Runes
         if echo?
           <<~CONTRACT.strip
             ### OUTPUT CONTRACT
-            Return exactly four blocks, in this order. Copy the assigned
-            IDENTITY and CAPACITIES blocks above exactly, value for value —
-            do not add, drop or reword a capability. If the task is outside
-            these capacities, return `status: decline` with a reason code and
-            an empty body.
-
-            ### IDENTITY
-            <the assigned identity block, copied exactly>
-
-            ### CAPACITIES
-            <the assigned capacity block, copied exactly>
+            Your identity and capacities are assigned by the adapter — do not
+            echo them. Return exactly two blocks, in this order:
 
             ### DECISION
             status: accept | decline | escalate
@@ -171,8 +162,10 @@ module Runes
             ### BODY
             <the task result, or an empty body for decline/escalate>
 
-            Do not use tools unless they are listed below. Do not plan more
-            than this one micro-task. No other text, no fences.
+            If the task is outside the assigned capacities, return
+            `status: decline` with a reason code and an empty body. Do not use
+            tools unless they are listed below. Do not plan more than this one
+            micro-task. No other text, no fences.
           CONTRACT
         else
           <<~CONTRACT.strip

@@ -345,11 +345,32 @@ module Runes
           'evidence' => @evidence,
           'media' => media_summary,
           'profile' => @task_profile,
+          'declared_capacities' => declared_capacities,
           'instruction' => 'Classify one request. Return typed probabilities, ' \
                            'the recommended shape and a scope decision.'
         }
         state['calibration'] = @calibration unless @calibration.nil?
         state
+      end
+
+      # The team's declared capacities, so the scope question is judged
+      # against what the registry actually grants — not against a generic
+      # notion of "in scope".
+      def declared_capacities
+        can = []
+        cannot = []
+        limits = []
+        Array(@registry&.manifests).each do |manifest|
+          can.concat(Array(manifest.capacity.can).map(&:to_s))
+          cannot.concat(Array(manifest.capacity.cannot).map(&:to_s))
+          limits.concat(Array(manifest.family&.known_limits).map(&:to_s))
+        end
+        {
+          'roles' => Array(@registry&.roles).map(&:to_s).sort,
+          'can' => can.uniq.sort,
+          'cannot' => (cannot.uniq - can.uniq).sort,
+          'known_limits' => limits.uniq.sort
+        }
       end
 
       def triage_questions
@@ -362,7 +383,8 @@ module Runes
           { 'id' => 'intent', 'question' => 'What kind of task is this?',
             'type' => 'choice',
             'choices' => %w[answer classify extract route box count date score decide] },
-          { 'id' => 'scope', 'question' => 'Is this task inside the declared capacities?',
+          { 'id' => 'scope', 'question' => 'Is this task inside the declared capacities ' \
+                                            'and known limits in the state?',
             'type' => 'probability' },
           { 'id' => 'risk', 'question' => 'How high is the risk or stakes of a wrong answer?',
             'type' => 'probability' },
@@ -392,6 +414,13 @@ module Runes
       end
 
       def select_shape(triage)
+        verdict = Shape.normalize_verdict(triage_verdict(triage))
+        # Safety verdicts gate even a forced shape: an out-of-scope or unsafe
+        # request must escalate/decline, never run the forced shape.
+        return :escalate if Shape.terminal_verdict?(verdict)
+        return :escalate if Shape.unsafe?(verdict, @task_profile)
+        return :escalate if Shape.out_of_scope?(verdict, @task_profile)
+
         return @forced_shape unless @forced_shape.nil?
 
         Shape.select(triage_verdict(triage), @task_profile, @registry)
@@ -511,7 +540,7 @@ module Runes
 
         state = {
           'task' => @task_text,
-          'perception' => @perception,
+          'perception' => @perception.map { |entry| perception_text(entry) },
           'instruction' => 'Score whether the perception is sufficient for the task.'
         }
         questions = [
@@ -1707,10 +1736,10 @@ module Runes
         return envelope if envelope.is_a?(Runes::Swarm::Envelope)
 
         content = result[:content].to_s
-        unless content.strip.empty?
-          parsed = Runes::Swarm::Envelope.parse(content)
-          return parsed if parsed.present?
-        end
+        # Stamp mode: identity and capacity come from the manifest, never from
+        # the model. Envelope.stamp_text keeps a complete echo (so the guard
+        # can still flag a mismatch) and stamps everything else.
+        return Runes::Swarm::Envelope.stamp_text(content, manifest: manifest) if manifest
 
         artifact = result[:artifact]
         return nil if artifact.nil? || manifest.nil?
@@ -1731,6 +1760,9 @@ module Runes
 
         envelope_for(result, manifest)&.decision
       end
+
+      # (stamp logic lives in Envelope.stamp_text, shared with the runner's
+      # solo path)
 
       def decision_body(result)
         decision = result[:decision]
@@ -1886,9 +1918,24 @@ module Runes
           anchors = Array(artifact['anchors']).reject { |anchor| anchor.to_s.strip.empty? }
           {
             'citation' => anchors.first.to_s,
-            'text' => Runes::Json.generate(artifact)
+            'text' => perception_text(entry)
           }
         end
+      end
+
+      # The perception as plain readable text for judges and text roles —
+      # not the raw artifact JSON.
+      def perception_text(entry)
+        artifact = entry.is_a?(Hash) ? (entry['artifact'] || entry[:artifact] || {}) : {}
+        role = entry.is_a?(Hash) ? (entry['role'] || entry[:role]).to_s : ''
+        content = artifact['content'] || artifact[:content] || ''
+        anchors = Array(artifact['anchors'] || artifact[:anchors]).map(&:to_s).reject(&:empty?)
+        source = artifact['source'] || artifact[:source]
+        lines = []
+        lines << "[#{role}] perception#{source ? " of #{File.basename(source.to_s)}" : ''}"
+        lines << content.to_s.strip
+        lines << "anchors: #{anchors.join(', ')}" unless anchors.empty?
+        lines.join("\n")
       end
 
       def elapsed

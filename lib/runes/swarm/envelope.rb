@@ -44,6 +44,42 @@ module Runes
         new(text)
       end
 
+      # Stamp mode for text roles: parse the model's reply and stamp the
+      # manifest's identity/capacity around its DECISION and BODY. A complete
+      # echo is returned as-is (so the guard can still flag a mismatch); a
+      # reply with no recognizable blocks is an accept whose body is the whole
+      # text; a present-but-invalid DECISION is returned un-stamped so the
+      # guard flags decision_invalid.
+      def self.stamp_text(content, manifest:)
+        raise ArgumentError, 'envelope: manifest is required' if manifest.nil?
+
+        text = content.to_s
+        return nil if text.strip.empty?
+
+        parsed = new(text)
+        return parsed if parsed.present? && complete_echo?(parsed)
+
+        if parsed.present?
+          decision = parsed.decision
+          body = parsed.body.to_s
+          if decision.nil?
+            return parsed if parsed.decision_present? || body.strip.empty?
+
+            decision = Decision.new(status: :accept, reason_code: :ok, body: body)
+          end
+          return stamp(manifest: manifest, decision: decision, body: body)
+        end
+
+        decision = Decision.new(status: :accept, reason_code: :ok, body: text.strip)
+        stamp(manifest: manifest, decision: decision, body: text.strip)
+      end
+
+      def self.complete_echo?(parsed)
+        !parsed.identity_fields.empty? &&
+          !parsed.capacity_fields.empty? &&
+          !parsed.capacity_fields['output_schema'].to_s.strip.empty?
+      end
+
       # Build the envelope for a structured role. `d1` is not a chat model and
       # cannot echo a text contract; the adapter stamps the assigned identity
       # and capacity around the typed artifact. The model never chooses its
@@ -189,14 +225,7 @@ module Runes
       end
 
       def heading_name(line)
-        match = line.match(Runes::Core::SectionParser::HEADING)
-        return nil if match.nil?
-
-        raw = match[1] || match[2] || match[3]
-        return nil if raw.nil?
-
-        normalized = raw.to_s.upcase.gsub(/[^A-Z0-9_]+/, '_').sub(/\A_+/, '').sub(/_+\z/, '')
-        normalized.empty? ? nil : normalized
+        Runes::Core::SectionParser.heading_name(line)
       end
 
       def parse_kv(text)

@@ -24,6 +24,12 @@ module Runes
       THINK = /<think(?:ing)?>.*?<\/think(?:ing)?>/mi
       CITATIONS = /Citations?\s*:\s*(.+?)\s*$/i
 
+      # Public so Envelope's body splitter uses the exact same heading rules
+      # (including the bare ALL-CAPS protocol words) as the parser.
+      def self.heading_name(line)
+        new.send(:heading_name, line)
+      end
+
       def parse(raw)
         text = raw.to_s
         if text.bytesize > MAX_INPUT_BYTES

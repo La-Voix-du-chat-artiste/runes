@@ -830,6 +830,14 @@ solo-VL passed V1–V3, team-full failed all three. Next thread: stamp-mode
 envelopes for text roles (the 1.7B cannot reliably echo the four-block
 envelope), then the perception-sufficiency gate and the d1 scope decline.
 
+**Re-run 2026-11-11** (`bench/swarm/results/2026-11-11-rerun2-decision.md`,
+still NO-GO): stamp-mode envelopes + scope gate + declared capacities landed.
+d1-only decline recall 1.00 / false-answer 0.00 (O1/O2 decline everywhere);
+solo-1.7B 7/14; team-full 6/24, ECE 0.36; envelope-structure violations
+nearly gone. Text lift vs the stronger solo baseline −14.3 pp; modality lift
+still negative. Next: answer quality at the 320-token cap + a real
+calibration set.
+
 ### Product gate (24 cases, 3 seeds — follow-on only if pilot is GO)
 
 - Gap closure >= **25%** on multimodal/decision; text gap closure reported

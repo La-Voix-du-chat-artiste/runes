@@ -106,3 +106,17 @@ perception-sufficiency gate (0.30) rejects every audio perception (d1 scores
 0.03–0.07), and d1-only false-accepts O1/O2 — wire the scope answer to a
 decline. Harness: `bench/swarm/` (runner, 24 cases, fixtures, README,
 calibration bands); suite green at 1121 runs / 0 failures.
+
+**Update 2026-11-11 (re-run `2026-11-11-rerun2-decision.md`, still NO-GO):**
+the three harness fixes landed and are measured — stamp-mode envelopes
+(`Envelope.stamp_text`, shared conductor + solo path), safety verdicts
+gating even a forced shape, and declared capacities + known limits in the
+triage state. d1-only decline recall 0.00 → **1.00**, false-answer 1.00 →
+**0.00** (O1/O2 decline on every conductor arm); solo-1.7B 2/14 → **7/14**;
+team-full 4/24 → 6/24, ECE 0.537 → 0.359; envelope-structure violations
+nearly gone (remaining: `citation_missing`, `truncated_suspect`). Text lift
+vs the stronger solo baseline is now **−14.3 pp** (team-full 0.36 vs solo
+0.50); modality lift still negative (0.10 vs solo-VL 0.75; audio still below
+the 0.30 sufficiency gate at 0.10–0.25). **Next thread now:** answer quality
+at the 320-token cap (raise per-role max tokens or tighten checks), plus a
+real out-of-sample calibration set for the sufficiency threshold.
