@@ -514,9 +514,9 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 
 | | |
 | --- | --- |
-| `lib/` | **29 625 lines** across 131 files |
-| `test/` | **19 639 lines** across 82 files |
-| Suite | **1 125 runs, 6 677 assertions, 0 failures, 3 skips** — no keys, no network |
+| `lib/` | **30 029 lines** across 132 files |
+| `test/` | **20 056 lines** across 83 files |
+| Suite | **1 135 runs, 6 755 assertions, 0 failures, 3 skips** — no keys, no network (observer: 240 / 0) |
 | Executables | **8**: TUI, daemon, client, MCP, replay, ACL, workflow, kanban |
 | The seven runes | `agent` 728, `chat` 503, `repeat` 203, `cmd` 207, `map` 183, `ruby` 78, `call` 68 |
 | MQTT 5 adapter | **1 148 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects* |
@@ -558,10 +558,12 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    so N runners split events instead of double-firing, presence *transitions*
    (retained replays no longer re-notify), and the fleet runtime's own
    broker identity (`fleet-<name>`, rendered by `bin/runes-acl --fleet` with
-   exactly what the loaded rules publish). Still open: observatory
-   `/topology` consuming fleet extracts, chat-driven world changes through
-   the planner (the loader stays the only path in), and the spec's v0.2
-   items (mutable cells, nested fleets, rule priorities): [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
+   exactly what the loaded rules publish). **v0.2 landed 2026-11-11:** rule
+   priorities (`priority:`), mutable cells with a write-ahead journal
+   (`cell` + `set`), and planner-driven worlds (`/done` emits a validated
+   `.fleet.rb` into `worlds/`). Still open: **nested fleets** (lexical,
+   analyzable import) and observatory `/topology` consuming fleet extracts:
+   [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
 2. **WASI guests (spikes)** — Spinel emits C for a Ruby agent; compile that
    C to `wasm32-wasi` instead of a native `.exe`: **one signed artifact,
    sandboxed everywhere.** The host daemon embeds wasmtime and grants
@@ -579,13 +581,14 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    compiled guest for *agents*). The gate before any of it — the
    real-wasm round trip — is now green (`ENHANCEMENT.md` §1,
    `docs/wasi-transport-guest.md`).
-3. **A plugin catalogue** (`/plugins`) generated from
-   `Runes::Plugin.names` — "a rune is a plugin" as a page.
-4. **Alerts** — impersonation and refusals get a row an operator can
-   acknowledge, not just a panel.
-5. **The plan chain on one page** — prompt → plan → tool calls → evidence →
-   verifier verdict; then **runs diffed and replayed** ("re-run just the
-   step that failed").
+3. ~~**A plugin catalogue** (`/plugins`)~~ ✅ done 2026-11-11 — renders the
+   seven runes straight from the registry.
+4. ~~**Alerts**~~ ✅ done 2026-11-11 — `/alerts`: deduped, counted, ackable
+   rows from the impersonation and signature-failure detectors, with a nav
+   badge.
+5. **The plan chain on one page** (O1.7) — prompt → plan → tool calls →
+   evidence → verifier verdict; then **runs diffed and replayed**
+   ("re-run just the step that failed").
 6. **An observatory that is an agent** — its own A2A card and MCP server, so
    any agent can ask *"what happened on the bus?"* mid-task.
 7. **The Spinel conformance gate** — both halves run today: kernel files
@@ -650,6 +653,7 @@ bench/swarm/         the 24-case contracted-team benchmark (runner, cases,
 config/              .env, .env.example, policy.json
 config/agents/       the swarm role manifests (agent_id, capacities, models)
 docs/epics|missions/ artifacts of /goal, /plan, /build
+worlds/              .fleet.rb worlds emitted by /done (loader-validated)
 tools/               tool manifests (card.json + capabilities.json [+ run.rb])
 examples/            runnable sample workflows (Roast-compatible):
                      prospect_pipeline.rb (CRM kanban), discover_codebase.rb

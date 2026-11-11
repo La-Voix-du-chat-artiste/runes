@@ -295,6 +295,11 @@ README now surfaces the discovery phase: quick-start step 6 (the
   ENHANCEMENT §1); kernel-side subset work can proceed without it.
 
 Harness suite: **1135 runs, 6755 assertions, 0 failures, 3 skips**.
+
+README updated for the fleet v0.2 + observatory P1 landing: next-steps
+item 1 (fleet) and items 3–4 (plugin catalog, alerts) marked done, receipts
+table refreshed (1135 runs harness / 240 observer, lib 30 029 lines / 132
+files, test 20 056 / 83), `worlds/` added to the layout. Commit follows.
 ---
 
 ## Objective
