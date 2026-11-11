@@ -1029,7 +1029,10 @@ module Runes
           data = JSON.parse(File.read(@calibration_path))
           raise Error, 'calibration file must contain an object' unless data.is_a?(Hash)
 
-          data
+          # Only config reaches the models: a calibration *set* file carries
+          # its scored items/pairs for provenance, and those must never be
+          # dumped into a d1 prompt.
+          data.reject { |key, _| %w[items pairs items_sha256 note].include?(key.to_s) }
         rescue JSON::ParserError => e
           raise Error, "calibration file is not valid JSON: #{e.message}"
         end

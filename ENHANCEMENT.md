@@ -74,18 +74,22 @@ per-agent rendering are the measured limits). Auth gates `O1.2`
 
 ## 4. Pipeline promotion
 
-An MCP query surface so any harness can ask the CRM kanban mid-task — still
-open. **Done 2026-11-11:** `bin/runes-kanban` validates one `.mmd` file or a
+**Done 2026-11-11:** `bin/runes-kanban` validates one `.mmd` file or a
 whole `--tree`, with the same rules as their `validate_mermaid.rb`
 (`Runes::Kanban.validate`), exit 1 on any failure; covered by
-`test/kanban_test.rb` and shipped in the gemspec executables.
+`test/kanban_test.rb` and shipped in the gemspec executables. **Also done:**
+the `kanban_query` MCP builtin on `bin/runes-mcp` — any harness can ask the
+CRM kanban mid-task over `tools/call` (workspace-confined, guarded as
+`fs_read`, returns validated tasks by column as JSON); covered by a
+subprocess test in `test/mcp_test.rb`. (Also fixed: the binstub now wires
+the JSON backend, so the guard no longer fails closed on `read_file`.)
 
 ## 5. Optional / gated
 
 Durable `RequestLedger` — only if MQTT session expiry gets turned on
 (today clean sessions mean the broker does not replay either).
 
-## 6. Cycle 43 — the LFM3 team pilot (NO-GO, thread open)
+## 6. Cycle 43 — the LFM3 team pilot (NO-GO ×3, thread CLOSED 2026-11-11)
 
 **Verdict: NO-GO** (2026-11-04, 24 cases × 1 seed, cold command mode, real
 MLX packs). Decision record: `bench/swarm/results/2026-11-04-pilot.md`;
@@ -117,6 +121,17 @@ team-full 4/24 → 6/24, ECE 0.537 → 0.359; envelope-structure violations
 nearly gone (remaining: `citation_missing`, `truncated_suspect`). Text lift
 vs the stronger solo baseline is now **−14.3 pp** (team-full 0.36 vs solo
 0.50); modality lift still negative (0.10 vs solo-VL 0.75; audio still below
-the 0.30 sufficiency gate at 0.10–0.25). **Next thread now:** answer quality
-at the 320-token cap (raise per-role max tokens or tighten checks), plus a
-real out-of-sample calibration set for the sufficiency threshold.
+the 0.30 sufficiency gate at 0.10–0.25).
+
+**Closed 2026-11-11 (third run `2026-11-11-rerun3-decision.md`): NO-GO a
+third time — thread closed as a published negative result** (PRD stop
+condition). The 512-token-cap hypothesis was tested and refuted (team-full
+6/24 → 3/24; the model echoes prompt scaffolding at higher caps; cap reverted
+to 320). What the third run did land: the out-of-sample calibration set
+(`bench/swarm/calibration-set.json`, 20 items disjoint from the 24 cases,
+ECE 0.165 — validates the 0.30 sufficiency threshold; builder
+`bench/swarm/build_calibration_set.rb`; the conductor reads the threshold
+from `--calibration`). Remaining gap is model capability, not harness:
+citation-grounded answers at 320 tokens, audio perception sufficiency
+(0.07–0.25 vs 0.30; the calibration set is text/image-weighted). Reopen only
+on a different model or suite.

@@ -306,4 +306,65 @@ class MCPTest < Minitest::Test
       timeout_s: timeout_s
     )
   end
+
+  # The real binstub, driven over stdio: the kanban_query builtin must
+  # validate + list tasks from a workspace .mmd, and read_file must work
+  # (the binstub wires the JSON backend, or the guard fails closed).
+  def test_binstub_kanban_query_and_read_file
+    require 'tmpdir'
+    require 'fileutils'
+    Dir.mktmpdir('runes-mcp-bin') do |ws|
+      FileUtils.mkdir_p(File.join(ws, 'epics', 'm'))
+      File.write(File.join(ws, 'epics', 'm', 'mission.mmd'), <<~MMD)
+        %% Code: M-001
+        kanban
+          Todo:
+            - [ ] Appeler Jean (Assigné: Jean)
+          Done:
+            - [x] Identifier les cibles
+      MMD
+      File.write(File.join(ws, 'note.txt'), "hello\n")
+
+      bin = File.expand_path('../bin/runes-mcp', __dir__)
+      lib = File.expand_path('../lib', __dir__)
+      requests = [
+        { 'jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize',
+          'params' => { 'protocolVersion' => '2024-11-05', 'clientInfo' => { 'name' => 't', 'version' => '1' } } },
+        { 'jsonrpc' => '2.0', 'method' => 'notifications/initialized', 'params' => {} },
+        { 'jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/call',
+          'params' => { 'name' => 'read_file', 'arguments' => { 'path' => 'note.txt' } } },
+        { 'jsonrpc' => '2.0', 'id' => 3, 'method' => 'tools/call',
+          'params' => { 'name' => 'kanban_query', 'arguments' => { 'path' => 'epics', 'column' => 'done' } } },
+        { 'jsonrpc' => '2.0', 'id' => 4, 'method' => 'tools/call',
+          'params' => { 'name' => 'kanban_query', 'arguments' => { 'path' => '../outside.mmd' } } }
+      ].map { |r| JSON.generate(r) }.join("\n") + "\n"
+
+      rd, wr = IO.pipe
+      out_r, out_w = IO.pipe
+      pid = Process.spawn({ 'RUNES_WORKSPACE' => ws }, RbConfig.ruby, '-I', lib, bin,
+                          in: rd, out: out_w, err: '/dev/null')
+      rd.close
+      wr.write(requests)
+      wr.close
+      out = out_r.read
+      out_w.close
+      Process.wait(pid)
+
+      responses = parse_lines(out).select { |m| m['id'] }
+      by_id = responses.each_with_object({}) { |m, h| h[m['id']] = m }
+
+      read_text = by_id[2]['result']['content'].find { |c| c['type'] == 'text' }['text']
+      assert_equal "hello\n", read_text
+
+      kb = JSON.parse(by_id[3]['result']['content'].find { |c| c['type'] == 'text' }['text'])
+      file = kb['files'].first
+      assert file['valid']
+      assert_equal 1, file['tasks'].size
+      assert_equal 'Identifier les cibles', file['tasks'].first['title']
+      assert_equal 'done', file['tasks'].first['column']
+
+      escape = by_id[4]['result']['content'].find { |c| c['type'] == 'text' }['text']
+      assert_includes escape, 'Error'
+    end
+  end
 end

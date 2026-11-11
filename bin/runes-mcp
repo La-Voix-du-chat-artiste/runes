@@ -17,12 +17,18 @@ require 'rbconfig'
 require_relative '../lib/runes/mcp/protocol'
 require_relative '../lib/runes/mcp/tool_provider'
 require_relative '../lib/runes/mcp/server'
+# The guard parses the policy through Runes::Json, which needs a backend
+# wired (stdlib-only here, so the zero-gem-dependencies claim still holds).
+# Without this the policy parse fails closed and even read_file is denied.
+require_relative '../lib/runes/backends/cruby'
 # Stdlib-only on purpose (the guard touches no gems and ToolRegistry only
 # needs json/digest). Deliberately NOT Settings/Dispatcher/LLMClient.
 require_relative '../lib/runes/capabilities/guard'
 require_relative '../lib/runes/core/tool_registry'
 # One shared command-policy checker with the dispatcher (S5-2/E5-11).
 require_relative '../lib/runes/security/command_policy'
+# The kanban_query builtin reads .mmd files through Runes::Kanban.
+require_relative '../lib/runes/kanban'
 
 # stdout is the protocol channel: stderr is the only place diagnostics may
 # go, and it must not be block-buffered (a panicking server's last words
@@ -38,7 +44,7 @@ module Runes
       # its expanded dirname (bin/) and step up one level: the binstub must
       # work from any cwd.
       ROOT = File.expand_path('..', File.dirname(File.expand_path(__FILE__)))
-      BUILTIN_NAMES = %w[write_file read_file run_command].freeze
+      BUILTIN_NAMES = %w[write_file read_file run_command kanban_query].freeze
 
       DEFAULT_OUTPUT_CAP = 64 * 1024
       DEFAULT_CMD_TIMEOUT_S = 10
@@ -84,6 +90,18 @@ module Runes
             'properties' => { 'cmd' => { 'type' => 'string' } },
             'required' => %w[cmd]
           }
+        },
+        {
+          'name' => 'kanban_query',
+          'description' => 'Read-only query over Mermaid kanban (.mmd) files: validate and list tasks by column, so any harness can ask the CRM kanban mid-task.',
+          'inputSchema' => {
+            'type' => 'object',
+            'properties' => {
+              'path' => { 'type' => 'string', 'description' => 'Workspace-relative .mmd file, or a directory scanned for **/*.mmd.' },
+              'column' => { 'type' => 'string', 'description' => 'Optional column key (todo, in_progress, done, blocked) to filter tasks.' }
+            },
+            'required' => %w[path]
+          }
         }
       ].freeze
 
@@ -116,9 +134,10 @@ module Runes
       def call_tool(name, args)
         args = {} unless args.is_a?(Hash)
         case name.to_s
-        when 'write_file'  then write_file(args)
-        when 'read_file'   then read_file(args)
-        when 'run_command' then run_command(args)
+        when 'write_file'    then write_file(args)
+        when 'read_file'     then read_file(args)
+        when 'run_command'   then run_command(args)
+        when 'kanban_query'  then kanban_query(args)
         else
           return "Error: unknown tool #{name}" unless @registry.cards.key?(name.to_s)
 
@@ -185,6 +204,45 @@ module Runes
         return "Error: file exceeds read cap (#{read_cap}B)" if File.size(path) > read_cap
 
         File.read(path)
+      rescue StandardError => e
+        "Error: #{e.class}: #{e.message}"
+      end
+
+      # Read-only kanban query: validate .mmd file(s) and list their tasks by
+      # column. Confined to the workspace like read_file, guarded as fs_read.
+      def kanban_query(args)
+        path = safe_path(args['path'])
+        return 'Error: invalid args' if path.nil?
+
+        resource = relative_to_workspace(path)
+        return 'Error: capability denied (fs_read)' unless @guard.allowed?('kanban_query', :fs_read, resource)
+
+        files =
+          if File.directory?(path)
+            Dir.glob(File.join(path, '**', '*.mmd')).sort
+          elsif File.file?(path)
+            [path]
+          else
+            return 'Error: not found'
+          end
+        return 'Error: no .mmd files found' if files.empty?
+
+        column = args['column'].to_s
+        out = files.map do |file|
+          text = File.read(file)
+          errors = Runes::Kanban.validate(text)
+          tasks = Runes::Kanban.tasks(text)
+          tasks = tasks.select { |t| t.column == column } unless column.empty?
+          {
+            'path' => relative_to_workspace(file),
+            'valid' => errors.empty?,
+            'errors' => errors,
+            'tasks' => tasks.map do |t|
+              { 'title' => t.title, 'assignee' => t.assignee, 'done' => t.done, 'column' => t.column }
+            end
+          }
+        end
+        JSON.generate('files' => out)
       rescue StandardError => e
         "Error: #{e.class}: #{e.message}"
       end

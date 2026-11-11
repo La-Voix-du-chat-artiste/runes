@@ -1,0 +1,234 @@
+{
+  "format": "swarm-calibration-set-v1",
+  "built_at": "2026-11-11",
+  "note": "Out-of-sample calibration set for the perception-sufficiency gate; disjoint from cases.json. The runner passes this file via --calibration; the conductor reads sufficiency_threshold.",
+  "model": "LiquidAI/d1-2B-MLX-8bit",
+  "items": [
+    {
+      "id": "cal-01",
+      "task": "What is the invoice total?",
+      "perception": "Invoice total line reads 128,40 EUR (image:1).",
+      "gold_sufficient": true,
+      "judge_confidence": 0.9279544899744421
+    },
+    {
+      "id": "cal-02",
+      "task": "Which quarter had the highest revenue?",
+      "perception": "Bar chart: Q1 12, Q2 18, Q3 25, Q4 21 (image:1).",
+      "gold_sufficient": true,
+      "judge_confidence": 0.45485118448206935
+    },
+    {
+      "id": "cal-03",
+      "task": "What does the primary button say?",
+      "perception": "Settings screen; primary button reads \"Enregistrer\" (image:1).",
+      "gold_sufficient": true,
+      "judge_confidence": 0.8195002536288208
+    },
+    {
+      "id": "cal-04",
+      "task": "How many red circles are there?",
+      "perception": "Three red circles in a row, two blue squares below (image:1).",
+      "gold_sufficient": true,
+      "judge_confidence": 0.934853645405357
+    },
+    {
+      "id": "cal-05",
+      "task": "What is the order number?",
+      "perception": "Speech: \"The order number is four two seven one.\" (time:0)",
+      "gold_sufficient": true,
+      "judge_confidence": 0.30128519222155964
+    },
+    {
+      "id": "cal-06",
+      "task": "When is the meeting moved to?",
+      "perception": "Speech: \"La réunion est déplacée à quatorze heures trente.\" (time:0)",
+      "gold_sufficient": true,
+      "judge_confidence": 0.6824913985607385
+    },
+    {
+      "id": "cal-07",
+      "task": "What sound is playing?",
+      "perception": "Three short high beeps, no speech (time:0)",
+      "gold_sufficient": true,
+      "judge_confidence": 0.6050218784012278
+    },
+    {
+      "id": "cal-08",
+      "task": "What is the spoken request?",
+      "perception": "Speech: \"ouvrir une facture\" (time:0)",
+      "gold_sufficient": true,
+      "judge_confidence": 0.7521099738180741
+    },
+    {
+      "id": "cal-09",
+      "task": "Where is the red square?",
+      "perception": "Speech: \"The red square is on the left.\"; frame shows red square left, blue circle right (time:0, image:1)",
+      "gold_sufficient": true,
+      "judge_confidence": 0.7596548746262952
+    },
+    {
+      "id": "cal-10",
+      "task": "Is the circle blue?",
+      "perception": "Speech: \"The circle is blue.\"; frame shows a red circle and a blue rectangle (time:0, image:1)",
+      "gold_sufficient": true,
+      "judge_confidence": 0.35932041919253693
+    },
+    {
+      "id": "cal-11",
+      "task": "What is the invoice total?",
+      "perception": "The image shows a bar chart of quarterly revenue (image:1).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.038145160023793374
+    },
+    {
+      "id": "cal-12",
+      "task": "Which quarter had the highest revenue?",
+      "perception": "The document has a title and a footer (image:1).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.0508530243076335
+    },
+    {
+      "id": "cal-13",
+      "task": "What does the primary button say?",
+      "perception": "The screen has a sidebar with five entries (image:1).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.018115430296857277
+    },
+    {
+      "id": "cal-14",
+      "task": "How many red circles are there?",
+      "perception": "The image contains geometric shapes (image:1).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.1302773616999539
+    },
+    {
+      "id": "cal-15",
+      "task": "What is the order number?",
+      "perception": "Some speech is present but not transcribed (time:0).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.06749736182681956
+    },
+    {
+      "id": "cal-16",
+      "task": "When is the meeting moved to?",
+      "perception": "Audio contains ambient noise only (time:0).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.020314864353456943
+    },
+    {
+      "id": "cal-17",
+      "task": "What sound is playing?",
+      "perception": "The clip is silent (time:0).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.6271242154801719
+    },
+    {
+      "id": "cal-18",
+      "task": "What is the spoken request?",
+      "perception": "Speech is in an unidentified language (time:0).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.06338996367783077
+    },
+    {
+      "id": "cal-19",
+      "task": "Where is the red square?",
+      "perception": "Speech mentions a square but no position; frame not described (time:0).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.021510629242926377
+    },
+    {
+      "id": "cal-20",
+      "task": "Is the circle blue?",
+      "perception": "Speech and frame are unrelated to the question (time:0, image:1).",
+      "gold_sufficient": false,
+      "judge_confidence": 0.10966172714031619
+    }
+  ],
+  "pairs": [
+    {
+      "confidence": 0.9279544899744421,
+      "correct": true
+    },
+    {
+      "confidence": 0.45485118448206935,
+      "correct": true
+    },
+    {
+      "confidence": 0.8195002536288208,
+      "correct": true
+    },
+    {
+      "confidence": 0.934853645405357,
+      "correct": true
+    },
+    {
+      "confidence": 0.30128519222155964,
+      "correct": true
+    },
+    {
+      "confidence": 0.6824913985607385,
+      "correct": true
+    },
+    {
+      "confidence": 0.6050218784012278,
+      "correct": true
+    },
+    {
+      "confidence": 0.7521099738180741,
+      "correct": true
+    },
+    {
+      "confidence": 0.7596548746262952,
+      "correct": true
+    },
+    {
+      "confidence": 0.35932041919253693,
+      "correct": true
+    },
+    {
+      "confidence": 0.038145160023793374,
+      "correct": false
+    },
+    {
+      "confidence": 0.0508530243076335,
+      "correct": false
+    },
+    {
+      "confidence": 0.018115430296857277,
+      "correct": false
+    },
+    {
+      "confidence": 0.1302773616999539,
+      "correct": false
+    },
+    {
+      "confidence": 0.06749736182681956,
+      "correct": false
+    },
+    {
+      "confidence": 0.020314864353456943,
+      "correct": false
+    },
+    {
+      "confidence": 0.6271242154801719,
+      "correct": false
+    },
+    {
+      "confidence": 0.06338996367783077,
+      "correct": false
+    },
+    {
+      "confidence": 0.021510629242926377,
+      "correct": false
+    },
+    {
+      "confidence": 0.10966172714031619,
+      "correct": false
+    }
+  ],
+  "ece": 0.16477989983891472,
+  "brier": 0.1025005437340285,
+  "sufficiency_threshold": 0.3,
+  "items_sha256": "0c25481b6604c6d3cee2ae109cb317911279dae02e316fe84849e9fdffa13d70"
+}

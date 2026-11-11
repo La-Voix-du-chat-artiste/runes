@@ -29,9 +29,10 @@ module Runes
       # A policy file that defines the same tool/action overrides these;
       # tool-manifest fragments may only add new actions (additive-only).
       BUILTIN_BASELINE = {
-        'write_file'  => { 'fs_write' => ['#'], 'fs_read' => ['#'] },
-        'read_file'   => { 'fs_read' => ['#'] },
-        'run_command' => { 'exec' => ['#'] }
+        'write_file'   => { 'fs_write' => ['#'], 'fs_read' => ['#'] },
+        'read_file'    => { 'fs_read' => ['#'] },
+        'run_command'  => { 'exec' => ['#'] },
+        'kanban_query' => { 'fs_read' => ['#'] }
       }.freeze
 
       MAX_DENY_LOG = 512

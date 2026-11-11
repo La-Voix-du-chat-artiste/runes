@@ -217,6 +217,24 @@ suite 1125 runs / 6 677 assertions / 0 failures, 8 executables incl.
 `runes-kanban`), "where this goes next" item 8 repointed at the token-cap
 thread, and the honesty list names the published NO-GO. All README links
 verified to resolve.
+
+## Cycle 43 thread closed + calibration set + kanban MCP (2026-11-11)
+
+Third pilot run (`bench/swarm/results/2026-11-11-rerun3-decision.md`):
+**NO-GO ×3 — thread closed as a published negative result** (PRD stop
+condition). The 512-token-cap hypothesis was tested and refuted (team-full
+6/24 → 3/24; the 1.7B echoes prompt scaffolding at higher caps; cap reverted
+to 320). Landed instead: `bench/swarm/calibration-set.json` — an
+out-of-sample calibration set (20 synthetic items disjoint from the 24
+cases, scored by the real d1 checkpoint; ECE 0.165, Brier 0.103; threshold
+0.30 validated) built by `bench/swarm/build_calibration_set.rb`; the
+conductor reads `sufficiency_threshold` from `--calibration` and the runner
+strips the set's items/pairs from model prompts. Also: `kanban_query` MCP
+builtin on `bin/runes-mcp` (workspace-confined, guarded `fs_read`, returns
+validated tasks by column; subprocess-tested), `bin/runes-kanban` CLI, and
+a real bug fix: the binstub now wires `runes/backends/cruby`, so the guard
+no longer fails closed on `read_file`. Suite: **1125 runs, 6677 assertions,
+0 failures, 3 skips**.
 ---
 
 ## Objective

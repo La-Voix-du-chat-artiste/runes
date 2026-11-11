@@ -835,8 +835,15 @@ still NO-GO): stamp-mode envelopes + scope gate + declared capacities landed.
 d1-only decline recall 1.00 / false-answer 0.00 (O1/O2 decline everywhere);
 solo-1.7B 7/14; team-full 6/24, ECE 0.36; envelope-structure violations
 nearly gone. Text lift vs the stronger solo baseline −14.3 pp; modality lift
-still negative. Next: answer quality at the 320-token cap + a real
-calibration set.
+still negative.
+
+**Third run 2026-11-11** (`bench/swarm/results/2026-11-11-rerun3-decision.md`):
+NO-GO again — **thread closed as a published negative result** (PRD stop
+condition). The 512-token-cap hypothesis was tested and refuted (team-full
+6/24 → 3/24; cap reverted to 320). Landed instead: the out-of-sample
+calibration set (`bench/swarm/calibration-set.json`, ECE 0.165, validates
+the 0.30 sufficiency threshold; conductor reads it from `--calibration`).
+Reopen only on a different model or suite.
 
 ### Product gate (24 cases, 3 seeds — follow-on only if pilot is GO)
 

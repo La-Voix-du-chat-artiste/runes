@@ -554,9 +554,19 @@ module Runes
         artifact = d1_artifact(result)
         sufficiency = numeric(verdict_value(artifact, 'sufficiency')) || 1.0
         record_calibration('perception', artifact, checkpoint)
-        return if sufficiency >= 0.30
+        threshold = perception_sufficiency_threshold
+        return if sufficiency >= threshold
 
-        decline!(:missing_evidence, "perception sufficiency #{sufficiency} is below 0.30")
+        decline!(:missing_evidence, "perception sufficiency #{sufficiency} is below #{threshold}")
+      end
+
+      # The sufficiency gate threshold: from the calibration file when it
+      # carries one (out-of-sample, see bench/swarm/calibration-set.json),
+      # else the PRD §7.8 default 0.30.
+      def perception_sufficiency_threshold
+        value = @calibration.is_a?(Hash) ? (@calibration['sufficiency_threshold'] || @calibration[:sufficiency_threshold]) : nil
+        value = value.to_f if value.respond_to?(:to_f)
+        value.nil? || value <= 0 ? 0.30 : value
       end
 
       def media_for(role)

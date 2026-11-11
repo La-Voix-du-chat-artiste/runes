@@ -128,6 +128,24 @@ binaries are never cached. `--reuse` reads only — a cache miss becomes an
 infra row instead of a live call. `--no-cache` disables both. Media and d1
 calls are not cached.
 
+## Calibration set
+
+`calibration-set.json` is the out-of-sample calibration set for the
+perception-sufficiency gate (PRD §7.8: separate from the 24 cases, or the
+ECE is in-sample). Rebuild it with the real d1 checkpoint:
+
+```bash
+ruby bench/swarm/build_calibration_set.rb \
+  --d1-model LiquidAI/d1-2B-MLX-8bit --python tmp/venv-swarm/bin/python \
+  --out bench/swarm/calibration-set.json
+```
+
+It records the scored (confidence, correct) pairs, ECE/Brier, and the
+misclassification-minimizing `sufficiency_threshold` (currently 0.30,
+ECE 0.165 on 20 items). Pass it to the runner with `--calibration`; the
+conductor reads the threshold from it, and the runner strips the set's
+items/pairs so they never reach a model prompt.
+
 ## Fixtures
 
 `fixtures/` holds 12 synthetic media files (CC0-1.0); `fixtures/SOURCES.md`
