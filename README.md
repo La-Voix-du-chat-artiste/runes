@@ -20,7 +20,7 @@ markdown it describes, so the two cannot drift). The "why" (what we are
 [`STRATEGY.md`](STRATEGY.md); the longer pitch is
 [`docs/WHY_RUNES_V2.md`](docs/WHY_RUNES_V2.md).
 
-> **Status (2026-10-01): 0.4.0 shipped — the fleet layer is real.**
+> **Status (2026-11-11): 0.4.0 shipped — the fleet layer is real.**
 > (1) **The transport-agnostic series** — the MQTT fabric is one adapter
 > behind `Runes::Transport` (`inproc | mqtt311 | mqtt5`); the claim/lease
 > protocol was *deleted* in favour of MQTT 5 shared subscriptions; agents
@@ -42,8 +42,10 @@ markdown it describes, so the two cannot drift). The "why" (what we are
 > team (Cycle 43)** — a benchmark harness where every model call goes
 > through a manifest, an identity/capacity/decision envelope, a contract
 > guard and a ledger, run over a frozen 24-case suite against the real
-> LiquidAI MLX packs. The 2026-11-04 pilot verdict is **NO-GO** (the
-> same-model control beats the team; the echo envelope is the next fix):
+> LiquidAI MLX packs. Two pilots, both **NO-GO** (2026-11-04, and the
+> 2026-11-11 re-run after the stamp-mode fix): the same-model control
+> beats the team and the modality lift is negative — a published negative
+> result, numbers in the decision records:
 > [`bench/swarm/`](bench/swarm/README.md),
 > [`docs/SMALL_MODEL_HARNESS_PRD.md`](docs/SMALL_MODEL_HARNESS_PRD.md).
 > See *Where this goes next*
@@ -157,11 +159,13 @@ step-by-step semantics and the L1/L2/L3 conformance levels:
 A small-model team where **no model call is anonymous**: every role is a
 manifest in `config/agents/` (`agent_id`, `base_model`, `capacities`,
 `forbidden_actions`), every call is wrapped in an **ICC envelope**
-(IDENTITY / CAPACITIES / DECISION / BODY), checked by a `ContractGuard`
-checkpoint, and receipted in a `WorkLedger`. A deterministic Ruby
-`Conductor` (`lib/runes/orchestration/`) routes by triage verdict — the
-model never chooses its own identity, shape or next hop — and declines
-with a typed reason when the task is out of scope.
+(IDENTITY / CAPACITIES / DECISION / BODY — for text roles the adapter
+*stamps* identity/capacity from the manifest and the model returns only
+DECISION + BODY), checked by a `ContractGuard` checkpoint, and receipted
+in a `WorkLedger`. A deterministic Ruby `Conductor`
+(`lib/runes/orchestration/`) routes by triage verdict — the model never
+chooses its own identity, shape or next hop — and declines with a typed
+reason when the task is out of scope.
 
 The proof rig is a frozen **24-case benchmark** (`bench/swarm/`, six
 families: text, vision, audio, audio-video, decision, out-of-scope) with
@@ -170,18 +174,22 @@ report per run. Run it against the official MLX packs:
 
 ```bash
 ruby bench/swarm/runner.rb --arm team-full --seeds 0 \
-  --model LiquidAI/LFM3-1.7B-MLX-4bit --python .venv/bin/python \
+  --model LiquidAI/LFM3-1.7B-MLX-4bit --python tmp/venv-swarm/bin/python \
   --out bench/swarm/results/pilot.md --json bench/swarm/results/pilot.json
 ```
 
-**Pilot 2026-11-04 (24 cases × 1 seed, cold command mode, real checkpoints):
-NO-GO.** team-full passed 4/24 with 44 contract violations and decline
-recall 0.80; the same-model-3x control passed 7/14 on the same cases, so
-extra calls do not rescue the team. Unvalidated hops were 0 everywhere.
-The next thread is the echo-envelope contract (the 1.7B cannot reliably
-echo the four-block envelope — move text roles to stamp mode), then the
-perception-sufficiency gate and the d1 scope decline. Full decision
-record: [`bench/swarm/results/2026-11-04-pilot.md`](bench/swarm/results/2026-11-04-pilot.md);
+**Pilots 2026-11-04 and 2026-11-11 (24 cases × 1 seed, cold command mode,
+real checkpoints): both NO-GO.** The first pilot (team-full 4/24, 44
+contract violations, decline recall 0.80; the same-model-3x control passed
+7/14) exposed two harness defects, both fixed and re-measured: stamp-mode
+envelopes and the scope gate with declared capacities in triage. The re-run
+(team-full 6/24, ECE 0.54 → 0.36, d1-only decline recall 0.00 → 1.00,
+false-answer 1.00 → 0.00) still fails the gates — text lift is −14.3 pp
+against the stronger solo baseline and the modality lift is negative. The
+remaining gap is model capability (citations at the 320-token cap, audio
+perception sufficiency), not harness. Decision records:
+[`2026-11-04-pilot.md`](bench/swarm/results/2026-11-04-pilot.md) and
+[`2026-11-11-rerun2-decision.md`](bench/swarm/results/2026-11-11-rerun2-decision.md);
 design: [`docs/SMALL_MODEL_HARNESS_PRD.md`](docs/SMALL_MODEL_HARNESS_PRD.md)
 + [`docs/SMALL_MODEL_HARNESS_PLAN.md`](docs/SMALL_MODEL_HARNESS_PLAN.md);
 how to run: [`bench/swarm/README.md`](bench/swarm/README.md).
@@ -228,9 +236,9 @@ how to run: [`bench/swarm/README.md`](bench/swarm/README.md).
   `bin/runes-replay` shows or replays it.
 - **Roast-compatible workflows** — an unmodified Shopify Roast `.rb` file
   runs as-is; see [Runes](#-runes-roast-compatible-workflows).
-- **Contracted small-model teams** — manifests + ICC envelopes + a
-  deterministic conductor + a 24-case benchmark over the LFM3 suite;
-  pilot verdict NO-GO, next fix is stamp-mode envelopes (above).
+- **Contracted small-model teams** — manifests + ICC envelopes (stamp mode
+  for text roles) + a deterministic conductor + a 24-case benchmark over
+  the LFM3 suite; two pilots, both NO-GO, published with numbers (above).
 
 ## 🚀 Quick Start
 
@@ -480,10 +488,10 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 
 | | |
 | --- | --- |
-| `lib/` | **20 605 lines** across 98 files |
-| `test/` | **13 737 lines** across 56 files |
-| Suite | **747 runs, 4 750 assertions, 0 failures** (0 skips with `SPINEL` set) — no keys, no network |
-| Executables | **7**: TUI, daemon, client, MCP, replay, ACL, workflow |
+| `lib/` | **29 625 lines** across 131 files |
+| `test/` | **19 639 lines** across 82 files |
+| Suite | **1 125 runs, 6 677 assertions, 0 failures, 3 skips** — no keys, no network |
+| Executables | **8**: TUI, daemon, client, MCP, replay, ACL, workflow, kanban |
 | The seven runes | `agent` 728, `chat` 503, `repeat` 203, `cmd` 207, `map` 183, `ruby` 78, `call` 68 |
 | MQTT 5 adapter | **1 148 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects* |
 | Security surfaces | **1 770 lines** — guard, envelopes, identities, trust store, telemetry, RPC auth |
@@ -511,6 +519,9 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
   plan→execute→feed-back; missions compensate with verify-and-resume.
 - Symlink TOCTOU in `safe_path`; TUI renders broker-supplied text (control
   chars stripped, but a hostile publisher can spoof panel text).
+- The LFM3 team benchmark is a **published negative result**: two pilots,
+  both NO-GO, with the decision records committed under
+  `bench/swarm/results/` — we do not shop for a GO.
 
 ## 🧭 Where this goes next
 
@@ -557,17 +568,20 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    `examples/*.fleet.rb` whole-program under Spinel (skip-on-refusal
    while the compiler matures, wrong-builds still fail). Extending the
    gate's vocabulary is the ongoing work, non-blocking.
-8. **The LFM3 team's echo-envelope fix (Cycle 43 follow-up)** — the
-   2026-11-04 pilot was NO-GO: the 1.7B at temperature 0.1 cannot reliably
-   echo the four-block IDENTITY/CAPACITIES/DECISION/BODY envelope (44
-   contract violations on team-full). Move text roles to stamp mode
-   (adapter stamps identity/capacity; the model returns DECISION+BODY
-   only) or add constrained decoding, then re-run `text-lite`/`team-full`
-   on the 14 text-subset cases. In parallel: the perception-sufficiency
-   gate (0.30) rejects every audio perception (d1 scores 0.03–0.07), and
-   d1-only false-accepts the out-of-scope cases — wire the scope answer to
-   a decline. Decision record:
-   [`bench/swarm/results/2026-11-04-pilot.md`](bench/swarm/results/2026-11-04-pilot.md).
+8. **The LFM3 team's answer quality at the token cap (Cycle 43 follow-up)**
+   — the 2026-11-04 pilot was NO-GO and the 2026-11-11 re-run (after the
+   stamp-mode envelope fix, the scope gate and declared capacities in
+   triage — all landed) is still NO-GO: team-full 6/24, text lift −14.3 pp
+   vs the solo baseline, modality lift negative. The dominant remaining
+   failure is `repair_exhausted`: the 1.7B's answers at the 320-token cap
+   miss citations/patterns and one repair round does not clear the
+   verifier. Next: raise per-role `max_output_tokens` for
+   answerer/finalizer or tighten the checks to what a 1.7B reliably emits,
+   plus a real out-of-sample calibration set for the 0.30
+   perception-sufficiency threshold (audio scores 0.10–0.25). Decision
+   records:
+   [`2026-11-04-pilot.md`](bench/swarm/results/2026-11-04-pilot.md),
+   [`2026-11-11-rerun2-decision.md`](bench/swarm/results/2026-11-11-rerun2-decision.md).
 
 ## 📦 Project Layout
 

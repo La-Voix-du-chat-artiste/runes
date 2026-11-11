@@ -205,6 +205,18 @@ sufficiency gate at 0.10–0.25), dominant failure `repair_exhausted` at the
 320-token cap. Next: per-role token caps / check tightening + a real
 out-of-sample calibration set. Suite: **1125 runs, 6677 assertions, 0
 failures, 3 skips**.
+
+## README review pass (2026-11-11)
+
+Full read of `README.md` after the Cycle 43 work: status block date and
+item (4) updated (two NO-GO pilots, negative result published), the
+Cycle 43 section now describes stamp-mode envelopes and links both
+decision records, the run command uses `tmp/venv-swarm/bin/python`, the
+receipts table refreshed (lib 29 625 lines / 131 files, test 19 639 / 82,
+suite 1125 runs / 6 677 assertions / 0 failures, 8 executables incl.
+`runes-kanban`), "where this goes next" item 8 repointed at the token-cap
+thread, and the honesty list names the published NO-GO. All README links
+verified to resolve.
 ---
 
 ## Objective
