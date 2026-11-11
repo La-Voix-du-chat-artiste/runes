@@ -235,6 +235,35 @@ validated tasks by column; subprocess-tested), `bin/runes-kanban` CLI, and
 a real bug fix: the binstub now wires `runes/backends/cruby`, so the guard
 no longer fails closed on `read_file`. Suite: **1125 runs, 6677 assertions,
 0 failures, 3 skips**.
+
+## Pre-swarm discovery phase — workflow prototype (2026-11-11)
+
+Implemented `docs/runes-pre-swarm-discovery-phase-for-lfm3-1-7b.md` at the
+workflow layer, per the design's "prototype first, graduate second":
+
+- `lib/runes/discovery.rb` — `Runes::Discovery`: five deterministic
+  renderings of one `state_id` (tree/imports/tests/churn/docs via git),
+  the §6 loop detector (repeated ≥16-token window ×3), mechanical anchor
+  resolution (`file:line-range` / `file:symbol`, path-confined), the
+  `finding.v1`/`discovery.v1` schema checks, and Ruby-side card assembly
+  (`discovery.json` + `discovery_card.md`).
+- `examples/discover_codebase.rb` — the DSL prototype: brief-split (one
+  fresh chat context, typed JSON) → map over subproblems with Ruby-picked
+  candidate files → one typed finding per fresh context → Ruby verifies
+  every anchor (unresolved anchors are dropped, never reworded) → loop
+  events counted in the receipt → card assembled by Ruby.
+- Swarm-layer contract diff landed: `Capacity::SCHEMAS` +=
+  `discovery.v1`/`finding.v1`; `Decision::REASONS` += `discovery_insufficient`,
+  `anchor_unresolved`, `loop_detected`; `Decision::HOPS` += `discoverer`.
+- `test/discovery_test.rb`: unit tests (detector, anchors, renderings,
+  schemas, contract diff) + the example run end to end offline with the
+  provider seam scripted — valid anchored card, loop events counted.
+  Live-smoked against this repo (anchor_pass_rate 1.0).
+- Still open from the design: the three-arm benchmark (full discovery vs
+  repo-map-only vs one external call) with mission acceptance downstream,
+  and the d1 sufficiency judge + ideate A‖B fan-out in the contracted layer.
+
+Suite: **1132 runs, 6743 assertions, 0 failures, 3 skips**.
 ---
 
 ## Objective

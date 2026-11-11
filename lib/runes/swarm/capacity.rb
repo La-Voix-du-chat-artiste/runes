@@ -14,6 +14,7 @@ module Runes
       SCHEMAS = %w[
         answer.v1 critique.v1 evidence.v1 decision.v1 violations.v1
         plan.v1 proposal.v1 perception.v1 verdict.v1 review.v1
+        discovery.v1 finding.v1
       ].freeze
 
       FIELDS = %w[

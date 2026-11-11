@@ -293,6 +293,14 @@ line" argument, in code.
 Then read [`docs/DSL_POWER.md`](docs/DSL_POWER.md): the whole DSL on one
 page, the pipeline scope by scope, and the sharp edges.
 
+And `examples/discover_codebase.rb` — the pre-swarm **discovery phase**
+([design](docs/runes-pre-swarm-discovery-phase-for-lfm3-1-7b.md)): brief +
+repo → Ruby-built renderings (tree/imports/tests/churn/docs of one
+`state_id`) → one typed `finding.v1` per fresh-context call → Ruby resolves
+every `file:line` anchor mechanically → a verified `discovery.v1` card that
+`/plan` consumes. Loop detector included. Runs offline in the suite:
+`test/discovery_test.rb`.
+
 ## 🧩 Runes (Roast-compatible workflows)
 
 Byte-for-byte Roast's README example:

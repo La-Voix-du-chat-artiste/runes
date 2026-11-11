@@ -84,6 +84,28 @@ CRM kanban mid-task over `tools/call` (workspace-confined, guarded as
 subprocess test in `test/mcp_test.rb`. (Also fixed: the binstub now wires
 the JSON backend, so the guard no longer fails closed on `read_file`.)
 
+**Also done 2026-11-11 — the pre-swarm discovery phase** (design:
+`docs/runes-pre-swarm-discovery-phase-for-lfm3-1-7b.md`): workflow-layer
+prototype `examples/discover_codebase.rb` + `Runes::Discovery`
+(renderings, loop detector, anchor resolution, card assembly) + the
+swarm-layer contract diff (`discovery.v1`/`finding.v1` in
+`Capacity::SCHEMAS`, `discovery_insufficient`/`anchor_unresolved`/
+`loop_detected` in `Decision::REASONS`, `discoverer` hop). Offline-tested
+end to end in `test/discovery_test.rb`. **Still open from the design:** the
+three-arm benchmark (full discovery vs repo-map-only vs one external call)
+with mission-acceptance as the downstream metric, and the d1
+sufficiency-judge + ideate A‖B fan-out in the contracted layer.
+
+**Done 2026-11-11:** `bin/runes-kanban` validates one `.mmd` file or a
+whole `--tree`, with the same rules as their `validate_mermaid.rb`
+(`Runes::Kanban.validate`), exit 1 on any failure; covered by
+`test/kanban_test.rb` and shipped in the gemspec executables. **Also done:**
+the `kanban_query` MCP builtin on `bin/runes-mcp` — any harness can ask the
+CRM kanban mid-task over `tools/call` (workspace-confined, guarded as
+`fs_read`, returns validated tasks by column as JSON); covered by a
+subprocess test in `test/mcp_test.rb`. (Also fixed: the binstub now wires
+the JSON backend, so the guard no longer fails closed on `read_file`.)
+
 ## 5. Optional / gated
 
 Durable `RequestLedger` — only if MQTT session expiry gets turned on

@@ -19,11 +19,12 @@ module Runes
         out_of_modality needs_perception needs_vision needs_audio needs_omni
         perception_insufficient low_support proposal_collapse repair_exhausted
         unsafe_request out_of_scope ambiguous_request
+        discovery_insufficient anchor_unresolved loop_detected
       ].freeze
 
       HOPS = %i[
         scout planner reviewer triage judge vision audio omni ideator answerer
-        critic repairer finalizer frontier human
+        critic repairer finalizer frontier human discoverer
       ].freeze
 
       FIELDS = %w[status reason_code next_hop message body].freeze
