@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_10_090005) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_090001) do
   create_table "agents", force: :cascade do |t|
     t.string "agent_id", null: false
     t.text "card"
@@ -29,6 +29,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_090005) do
     t.index ["agent_id"], name: "index_agents_on_agent_id", unique: true
     t.index ["last_seen_at"], name: "index_agents_on_last_seen_at"
     t.index ["state"], name: "index_agents_on_state"
+  end
+
+  create_table "alerts", force: :cascade do |t|
+    t.boolean "acknowledged", default: false, null: false
+    t.integer "count", default: 1, null: false
+    t.datetime "created_at", null: false
+    t.json "details"
+    t.datetime "first_seen_at", null: false
+    t.string "kind", null: false
+    t.datetime "last_seen_at", null: false
+    t.string "severity", default: "warn", null: false
+    t.string "subject", null: false
+    t.datetime "updated_at", null: false
+    t.index ["acknowledged"], name: "index_alerts_on_acknowledged"
+    t.index ["kind", "subject"], name: "index_alerts_on_kind_and_subject", unique: true
   end
 
   create_table "ingest_statuses", force: :cascade do |t|

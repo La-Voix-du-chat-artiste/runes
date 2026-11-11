@@ -9,7 +9,6 @@ module Runes
     # it must be intercepted as a real method, not left to method_missing).
     RESERVED = {
       "spawn" => "process orchestration stays outside the DSL (spec §5.4)",
-      "cell" => "mutable cells are v0.2 (spec §4.5/§14.3)",
       "interval" => "dynamic schedules stay in host code — use cron: (spec §4.6)"
     }.freeze
 

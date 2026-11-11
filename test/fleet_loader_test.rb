@@ -241,11 +241,11 @@ class FleetLoaderTest < Minitest::Test
   end
 
   def test_reserved_keywords_fail_with_precise_errors
-    assert_load_error(/reserved.*v0.2/) do
+    assert_load_error(/reserved.*outside the DSL/) do
       Runes::Fleet.load(header + <<~RUBY)
         fleet "x" do
           transport :inproc
-          cell :budget, 100
+          spawn "ls"
         end
       RUBY
     end
@@ -257,6 +257,20 @@ class FleetLoaderTest < Minitest::Test
         end
       RUBY
     end
+  end
+
+  # v0.2 §14.3: `cell` is a real declaration now (mutable cells), not reserved.
+  def test_cell_declares_a_mutable_fact
+    world = Runes::Fleet.load(header + <<~RUBY)
+      fleet "x" do
+        transport :inproc
+        cell :budget, initial: 100
+        fact :tone, "pro"
+      end
+    RUBY
+    assert world.facts[:budget].mutable
+    assert_equal 100, world.facts[:budget].value
+    refute world.facts[:tone].mutable
   end
 
   # `spawn` collides with Kernel#spawn: implicit self reaches Ruby's own
@@ -359,7 +373,7 @@ class FleetLoaderTest < Minitest::Test
   # returns no world at all, so there is no half-built state to leak
   # subscriptions or grants from (§10 atomicity).
   def test_failed_load_exposes_no_partial_world
-    result = Runes::Fleet.load(header + "fleet \"x\" do\n  transport :inproc\n  cell :c, 1\nend\n")
+    result = Runes::Fleet.load(header + "fleet \"x\" do\n  transport :inproc\n  spawn \"ls\"\nend\n")
     flunk "reserved keyword must not load"
   rescue Runes::Fleet::LoadError
     pass

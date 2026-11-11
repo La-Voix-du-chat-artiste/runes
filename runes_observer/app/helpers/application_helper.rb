@@ -27,6 +27,15 @@ module ApplicationHelper
     link_to label, path, class: "nav__link#{' nav__link--active' if active}"
   end
 
+  # O1.5: the unacked-alert count as a nav badge — nothing rendered when zero,
+  # so the nav stays clean on a healthy fabric.
+  def alert_badge
+    count = Alert.unacknowledged.count
+    return nil if count.zero?
+
+    tag.span(count.to_s, class: "nav__badge", title: "#{count} unacknowledged alert(s)")
+  end
+
   # "3s" / "4m" / "2h" / "5d"
   def ago_in_words_short(time)
     return "—" if time.blank?

@@ -230,8 +230,13 @@ module Runes
 
       # ---- §5.3 evaluation ----
 
+      # §5.3.1 with v0.2 priorities: higher `priority:` fires first; ties
+      # (and rules without one) keep declaration order — stable sort on
+      # [-priority, index].
       def matching_rules(kind, source)
-        world.rules.select { |rule| rule.source_kind == kind && rule.source == source }
+        world.rules
+             .select { |rule| rule.source_kind == kind && rule.source == source }
+             .sort_by { |rule| [-rule.priority, rule.index] }
       end
 
       def rules_for(kind)
@@ -266,6 +271,7 @@ module Runes
           when :task then execute_task(action, request_id, event)
           when :publish then execute_publish(action, request_id, event)
           when :notify then execute_notify(rule, event, action)
+          when :set_fact then execute_set_fact(action, rule, event, entries)
           end
         @ledger.complete(request_id, outcome.to_s[0, Runes::RequestLedger::MAX_OUTCOME_BYTES])
         record(entries, rule, event, "action", request_id: request_id, action: action, outcome: outcome)
@@ -289,6 +295,9 @@ module Runes
           world.channel?(action[:channel])
         when :notify
           RuleContext::NOTIFY_LEVELS.include?(action[:level])
+        when :set_fact
+          cell = world.facts[action[:cell]]
+          !cell.nil? && cell.mutable
         else
           false
         end
@@ -323,6 +332,19 @@ module Runes
       # notifier hook (the TUI/observatory bridge in the daemon phase).
       # A broken sink must never break the fleet — same contract as
       # Telemetry::Context#emit.
+      # v0.2 §14.3: set a mutable cell. The WAL entry is recorded BEFORE the
+      # value is applied, so the dispatch's journal entries are the
+      # write-ahead log and its determinism certificate: same event → same
+      # entries, and the set is visible to every later rule in the dispatch.
+      def execute_set_fact(action, rule, event, entries)
+        cell = world.facts.fetch(action[:cell])
+        old = cell.value
+        record(entries, rule, event, "fact_set",
+               cell: cell.id, old: old, new: action[:value])
+        cell.value = action[:value]
+        "set #{cell.id}=#{action[:value].inspect}"
+      end
+
       def execute_notify(rule, event, action)
         notice = {
           "kind" => "fleet_notify", "fleet" => world.name, "rule" => rule.id,

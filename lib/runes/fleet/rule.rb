@@ -15,15 +15,17 @@ module Runes
         guard_denied: %i[guard_denied]
       }.freeze
 
-      attr_reader :id, :source_kind, :source, :guard, :block, :line
+      attr_reader :id, :source_kind, :source, :guard, :block, :line, :priority, :index
 
-      def initialize(id:, source_kind:, source:, guard:, block:, line:)
+      def initialize(id:, source_kind:, source:, guard:, block:, line:, priority: 0, index: 0)
         @id = id
         @source_kind = source_kind
         @source = source
         @guard = guard
         @block = block
         @line = line
+        @priority = priority
+        @index = index
       end
 
       # Classify a raw `on :name` source against the declared world.
@@ -43,7 +45,8 @@ module Runes
       end
 
       def to_h
-        { "id" => id, "source" => "#{source_kind}:#{source}", "line" => line }
+        { "id" => id, "source" => "#{source_kind}:#{source}", "line" => line,
+          "priority" => priority, "index" => index }
       end
     end
 
@@ -110,12 +113,19 @@ module Runes
         throw(:rule_next)
       end
 
-      # §6: fleet facts are read-only inside rules.
+      # §6: fleet facts are read-only inside rules; cells (v0.2) are read
+      # here and written via `set`.
       def fact(name)
         fact = @world.facts[name.to_sym]
         raise KeyError, "unknown fleet fact #{name.inspect}" unless fact
 
         fact.value
+      end
+
+      # v0.2 §14.3: set a mutable cell. Recorded as a :set_fact action; the
+      # engine journals it (WAL) before applying.
+      def set(name, value)
+        @actions << { kind: :set_fact, cell: name.to_sym, value: value }
       end
 
       # §5.4 actions — recorded, validated, then executed by the engine.

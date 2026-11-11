@@ -124,6 +124,69 @@ class TestModeCommands < Minitest::Test
            '/done without a session id should finalize the sole open session'
   end
 
+  # Fleet v0.2 planner-driven worlds: /done also emits a .fleet.rb world,
+  # validated fail-closed by the real loader before it is written.
+  FLEET_WORLD = <<~'RUBY'.freeze
+    fleet "emitted" do
+      transport :inproc
+      channel :events, "runes/events/e"
+      agent :worker do
+        model "m"
+        tools fs_read: :allow
+      end
+      on :events do |e|
+        notify "got event", level: :info
+      end
+    end
+  RUBY
+
+  def fleet_emitting_llm(fleet_src: FLEET_WORLD)
+    chat = Object.new
+    chat.define_singleton_method(:chat) do |msgs, **|
+      last = msgs.last['content'].to_s
+      content =
+        if last.include?('render the fleet world')
+          "```ruby\n#{fleet_src}\n```"
+        else
+          "# Epic: x\n## Problem\np\n## Target users\nt\n## Goals\ng\n## Non-goals\nn\n## Success criteria\ns\n## Constraints & assumptions\nc\n## Open questions\no"
+        end
+      { ok: true, mode: :content, content: content, raw: {} }
+    end
+    chat
+  end
+
+  def test_done_emits_a_validated_fleet_world
+    d = make_dispatcher('mode-fleet')
+    d.instance_variable_set(:@llm, fleet_emitting_llm)
+    d.handle_payload(
+                    JSON.generate('mode' => 'goal', 'session_id' => 's-fleet', 'prompt' => 'build a thing', 'request_id' => 'f1'))
+    replied = []
+    d.define_singleton_method(:publish_result) { |_c, _t, s| replied << s }
+    d.handle_payload(
+                    JSON.generate('mode' => 'goal', 'control' => 'done', 'prompt' => '', 'request_id' => 'f2'))
+    assert replied.any? { |s| s.include?('Epic written') }
+    assert replied.any? { |s| s.include?('Fleet world written') },
+           "a valid emitted world must be written: #{replied.inspect}"
+    worlds = Dir.glob(File.join(@settings.root, 'worlds', '*.fleet.rb'))
+    assert_equal 1, worlds.size
+    world = Runes::Fleet.load_file(worlds.first)
+    assert_equal 'emitted', world.name
+  end
+
+  def test_done_rejects_an_invalid_emitted_world_but_keeps_the_epic
+    d = make_dispatcher('mode-fleet-bad')
+    d.instance_variable_set(:@llm, fleet_emitting_llm(fleet_src: "fleet \"bad\" do\n  spawn \"ls\"\nend\n"))
+    d.handle_payload(
+                    JSON.generate('mode' => 'goal', 'session_id' => 's-bad', 'prompt' => 'build a thing', 'request_id' => 'f3'))
+    replied = []
+    d.define_singleton_method(:publish_result) { |_c, _t, s| replied << s }
+    d.handle_payload(
+                    JSON.generate('mode' => 'goal', 'control' => 'done', 'prompt' => '', 'request_id' => 'f4'))
+    assert replied.any? { |s| s.include?('Epic written') }, 'the epic still lands'
+    refute replied.any? { |s| s.include?('Fleet world written') }, 'an invalid world must not be written'
+    assert_empty Dir.glob(File.join(@settings.root, 'worlds', '*.fleet.rb'))
+  end
+
   # --- plan mode --------------------------------------------------------
 
   def test_plan_mode_requires_an_epic_or_text

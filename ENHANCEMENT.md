@@ -42,6 +42,12 @@ and it is now green. The Spinel kernel itself compiles and self-checks
 70/70 on pin a2bd89005 (verified 2026-10-24), so the compiler side is
 ready; what remains is extending the kernel-subset discipline to the
 loaded-world/fleet code and reusing the guest bridge.
+**Blocked 2026-11-11 on toolchain:** the S1 spike (Spinel-C → wasi-sdk
+hello world) needs `wasi-sdk`, which is not installed in this
+environment (`/spinel` checkout also absent — clone
+matz/spinel at pin a2bd89005 and `scripts/spinel_build.rb` first). The
+kernel-side work (fleet code into the kernel subset) can proceed without
+it; the wasm target cannot.
 
 **How to pick it up.** Start from `docs/FLEET_DSL.md` §11 and the gate
 stub (`test/fixtures/fleet/spinel_gate_stub.rb`): the stub proves a fleet
@@ -53,20 +59,24 @@ runtime check.
 
 ## 2. Fleet — planner-driven worlds and spec v0.2
 
-Chat-driven world changes through the planner (`/goal → /done` emitting
-Fleet DSL as its canonical output — spec §1.1); then the deferred v0.2
-items from `docs/FLEET_DSL.md` §14: **mutable cells** (needs a write-ahead
-journal before it can ship — §5.3.5 determinism), **nested fleets**
-(lexical, analyzable import), **rule priorities** (explicit `priority:`
-over declaration order). The Phase-40 review fixes (whole-rule refusal on
+**Landed 2026-11-11:** planner-driven worlds (`/done` emits a `.fleet.rb`
+world from the session, validated fail-closed by the real loader before it
+is written to `worlds/`; `RUNES_FLEET_EMIT=0` opts out), **rule
+priorities** (`on :x, priority: N` — higher first, ties in declaration
+order), and **mutable cells** (`cell :name, initial: v` + `set` in rules,
+every set journaled as a `fact_set` WAL entry before it is applied).
+Still open from `docs/FLEET_DSL.md` §14: **nested fleets** (lexical,
+analyzable import). The Phase-40 review fixes (whole-rule refusal on
 raise, boot-first journaling, reserved-word interception incl. the
 `Kernel#spawn` bypass) are the ground these build on.
 
 ## 3. Observatory — the remaining P1 views
 
-`O1.5` alerts (the `Alert` row; impersonation and guard-denial detectors
-already run — they need a row and an ack), `O1.6` the plugin catalog
-(nearly free, renders the registry), `O1.7` the plan chain
+**Landed 2026-11-11:** `O1.5` alerts (the `Alert` model — dedupe by
+kind+subject, count, ack — plus detectors for impersonation and signature
+failure running in ingest, `/alerts` page with ack and a nav badge) and
+`O1.6` the plugin catalog (`/plugins` renders the seven runes straight
+from the registry). Still open: `O1.7` the plan chain
 (prompt → plan → tool calls → evidence → verdict), then `O0.4`
 retention/rollups at real volume (`/feed` payload bytes and unbounded
 per-agent rendering are the measured limits). Auth gates `O1.2`

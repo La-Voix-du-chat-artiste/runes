@@ -1,0 +1,27 @@
+<%# O1.6 — the rune catalog, rendered straight from Runes::Plugin so the page
+    cannot drift from the registry. %>
+<div class="page-head">
+  <h1>Plugins</h1>
+  <span class="sub">every rune is a plugin — name, kind, description, class, source — generated from the registry</span>
+</div>
+
+<% if @harness_available %>
+  <table class="table">
+    <thead>
+      <tr><th>Rune</th><th>Kind</th><th>Description</th><th>Class</th><th>Source</th></tr>
+    </thead>
+    <tbody>
+      <% @plugins.each do |plugin| %>
+        <tr>
+          <td class="mono"><%= plugin[:name] %></td>
+          <td><%= plugin[:kind] %></td>
+          <td><%= plugin[:description] %></td>
+          <td class="mono"><%= plugin[:klass] %></td>
+          <td class="mono sub"><%= plugin[:source] %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% else %>
+  <p class="sub">The harness registry is unavailable in this process — the page renders empty rather than stale.</p>
+<% end %>

@@ -1,7 +1,7 @@
 {
   "_comment": "L2 conformance extract for examples/prospection.fleet.rb — regenerate with: ruby scripts/fleet_golden.rb examples/prospection.fleet.rb test/fixtures/fleet/prospection.golden.json",
   "fleet": "prospection",
-  "fingerprint": "d453e233f89234857fcf71e943bc8a41356d94760a20794554576a752f8c601f",
+  "fingerprint": "a01af8790a69a07591bc4112439fcd604fb8aa0e723b1d142e41429e1f99947d",
   "policy_extract": {
     "default_allow": false,
     "roles": {
@@ -107,27 +107,37 @@
       {
         "id": "contact_found-0",
         "source": "channel:contact_found",
-        "line": 51
+        "line": 51,
+        "priority": 0,
+        "index": 0
       },
       {
         "id": "contact_qualified-1",
         "source": "channel:contact_qualified",
-        "line": 56
+        "line": 56,
+        "priority": 0,
+        "index": 1
       },
       {
         "id": "draft_ready-2",
         "source": "channel:draft_ready",
-        "line": 62
+        "line": 62,
+        "priority": 0,
+        "index": 2
       },
       {
         "id": "guard_denied-3",
         "source": "guard_denied:guard_denied",
-        "line": 66
+        "line": 66,
+        "priority": 0,
+        "index": 3
       },
       {
         "id": "weekly_report-4",
         "source": "schedule:weekly_report",
-        "line": 70
+        "line": 70,
+        "priority": 0,
+        "index": 4
       }
     ]
   }

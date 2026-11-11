@@ -154,6 +154,14 @@ mosquitto ACL, fleet roles becoming first-class broker users. The
 step-by-step semantics and the L1/L2/L3 conformance levels:
 [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
 
+v0.2 landed: **rule priorities** (`on :x, priority: 10 do … end` — higher
+fires first, ties keep declaration order), **mutable cells**
+(`cell :hits, initial: 0` + `set :hits, …` in rules, every set journaled as
+a write-ahead `fact_set` entry before it is applied), and
+**planner-driven worlds** — `/done` now also emits the world as a
+`.fleet.rb` file from the goal session, validated fail-closed by the real
+loader before it is written to `worlds/` (`RUNES_FLEET_EMIT=0` opts out).
+
 ## 🤖 The contracted LFM3 team (Cycle 43)
 
 A small-model team where **no model call is anonymous**: every role is a
@@ -487,9 +495,12 @@ A read-only companion app (`runes_observer/`) that watches the fabric:
 fleet (running / stale / LWT-ended agents), workflow runs as timelines,
 fleet topology (delegation edges: width = volume, colour = failure rate),
 trace waterfalls (the *gaps* between packets), a live packet feed with raw
-JSON, per-agent interactions grouped by `request_id`, and a Mermaid kanban
+JSON, per-agent interactions grouped by `request_id`, a Mermaid kanban
 fleet board at `/board` (`GET /board.mmd` hands the same text to an agent —
-a board a program cannot read is a screenshot). Ingest goes through
+a board a program cannot read is a screenshot), **alerts** at `/alerts`
+(deduped, counted, ackable — impersonation and signature-failure detectors
+run in ingest, with a nav badge), and the **plugin catalog** at `/plugins`
+(the seven runes rendered straight from the registry). Ingest goes through
 `Runes::Transport`, so `inproc` mode needs no broker at all.
 
 ```bash

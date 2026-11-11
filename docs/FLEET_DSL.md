@@ -493,15 +493,22 @@ end
 
 1. **First-match vs all-match** (§5.3) — settled as all-match for v0.1;
    revisit after real fleet files exist.
-2. **Rule priorities** — not in v0.1; if fan-out ordering becomes a problem,
-   prefer an explicit `priority:` clause over declaration order.
-3. **Mutable cells** — deferred to v0.2; interaction with determinism
-   (§5.3.5) needs a write-ahead journal before it can ship.
+2. **Rule priorities** — ✅ landed (v0.2): `on :x, priority: N do … end`;
+   higher priority fires first, ties keep declaration order (stable sort on
+   `[-priority, index]`).
+3. **Mutable cells** — ✅ landed (v0.2): `cell :name, initial: v` declares a
+   mutable fact; rules `set :name, value`; every set is journaled
+   (`fact_set` WAL entry) before it is applied, so a dispatch's entries are
+   its determinism certificate. `fact` stays read-only.
 4. **Nested fleets** (a fleet importing another fleet as a sub-topology) —
-   deferred; import would be lexical and analyzable, never dynamic.
+   still deferred; import would be lexical and analyzable, never dynamic.
 5. **Spinel gap tracking** — §6's forbidden list must be reconciled against
    Spinel's `docs/limitations.md` as both projects evolve; a conformance CI
    job is the mechanism.
+
+**Planner-driven worlds** (§1.1) — ✅ landed: `/done` now also emits the
+world as Fleet DSL from the same session, validated fail-closed through the
+real loader before it is written to `worlds/` (opt out: `RUNES_FLEET_EMIT=0`).
 
 ---
 

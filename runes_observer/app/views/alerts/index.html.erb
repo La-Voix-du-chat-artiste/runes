@@ -1,0 +1,34 @@
+<%# O1.5 — alerts: deduped, counted, ackable "abnormal" events. %>
+<div class="page-head">
+  <h1>Alerts</h1>
+  <span class="sub"><%= @unacked %> unacknowledged — detectors run in ingest and dedupe by kind + subject</span>
+</div>
+
+<% if @alerts.empty? %>
+  <p class="sub">Nothing abnormal in the last 24 hours.</p>
+<% else %>
+  <table class="table">
+    <thead>
+      <tr><th>Kind</th><th>Severity</th><th>Subject</th><th>Count</th><th>First seen</th><th>Last seen</th><th></th></tr>
+    </thead>
+    <tbody>
+      <% @alerts.each do |alert| %>
+        <tr class="<%= "row--acked" if alert.acknowledged %>">
+          <td class="mono"><%= alert.kind %></td>
+          <td><span class="badge badge--<%= alert.severity %>"><%= alert.severity %></span></td>
+          <td class="mono"><%= alert.subject %></td>
+          <td><%= alert.count %></td>
+          <td class="sub"><%= alert.first_seen_at&.strftime("%Y-%m-%d %H:%M") %></td>
+          <td class="sub"><%= alert.last_seen_at&.strftime("%Y-%m-%d %H:%M") %></td>
+          <td>
+            <% unless alert.acknowledged %>
+              <%= button_to "Ack", ack_alert_path(alert), method: :post, class: "btn btn--small" %>
+            <% else %>
+              <span class="sub">acked</span>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

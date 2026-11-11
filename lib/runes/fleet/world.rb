@@ -19,7 +19,11 @@ module Runes
       # One directed edge. `when` is the raw guard expression (rules phase
       # compiles it); nil = unconditional.
       Edge = Struct.new(:from, :to, :when, keyword_init: true)
-      Fact = Struct.new(:id, :value, keyword_init: true)
+      # A fact is read-only inside rules (§6); a cell (v0.2, §14.3) is a
+      # mutable fact — rules may `set` it, and every set is written to the
+      # journal (WAL) before it is applied, so a dispatch's entries are its
+      # determinism certificate.
+      Fact = Struct.new(:id, :value, :mutable, keyword_init: true)
       Schedule = Struct.new(:id, :cron, keyword_init: true)
       # A declared payload contract (spec §4.3). The spec is a literal
       # hash — data, not code: "fields" maps field names to one of

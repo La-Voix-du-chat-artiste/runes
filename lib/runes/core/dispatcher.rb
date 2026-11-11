@@ -666,6 +666,20 @@ module Runes
         Fill only from what was discussed; mark unknowns as TBD.
       PROMPT
 
+      # Fleet v0.2 planner-driven worlds (FLEET_DSL.md §1.1): /done also
+      # emits the world as Fleet DSL — the canonical output the loader
+      # validates fail-closed before anything is written. Opt out with
+      # RUNES_FLEET_EMIT=0.
+      FLEET_RENDER_INSTRUCTION = <<~PROMPT.freeze
+        Based on our whole conversation, render the fleet world for this
+        epic as a single .fleet.rb file, in a ```ruby fence, no preamble.
+        Use ONLY the restricted subset: fleet/transport/channel/agent/route/
+        fact/cell/schedule/on with task/publish/notify/set actions. Declare
+        the agents, channels and routes this epic needs; one rule per event.
+        Start the file with the `# fleet-spec: 0.1` header comment.
+        Do not use spawn, interval, or any method outside the subset.
+      PROMPT
+
       def handle_goal_turn(publisher, env, reply_topic)
         request_id = env[:request_id]
         progress_topic = "runes/prompts/#{request_id}/progress"
@@ -759,13 +773,61 @@ module Runes
           end
 
           @latest_epic = path
+          fleet_path = emit_fleet_world(publisher, session, progress_topic, title_hint)
           close_session(sid)
 
           publisher.publish(progress_topic, JSON.generate(event: 'epic_written', session_id: sid, path: path))
-          publish_result(publisher, reply_topic, "Epic written to #{path}\n\n#{epic_md[0, 800]}")
+          reply = "Epic written to #{path}"
+          reply += "\nFleet world written to #{fleet_path}" if fleet_path
+          publish_result(publisher, reply_topic, "#{reply}\n\n#{epic_md[0, 800]}")
           record_prompt_log(publisher, request_id, title_hint[0, 200], status: 'epic_written', summary: path)
           log "Epic written: #{path}"
+          log "Fleet world written: #{fleet_path}" if fleet_path
         end
+      end
+
+      # Render the world as Fleet DSL from the same session, validate it
+      # fail-closed through the real loader, and write it only if it loads.
+      # Returns the path, or nil (with a progress event) when emission is
+      # off, the render is unusable, or the file refuses to load.
+      def emit_fleet_world(publisher, session, progress_topic, title_hint)
+        return nil if %w[0 false no off].include?(ENV['RUNES_FLEET_EMIT'].to_s.downcase)
+
+        session[:messages] << { 'role' => 'user', 'content' => FLEET_RENDER_INSTRUCTION }
+        res = goal_chat(session[:messages])
+        session[:messages].pop
+        unless res[:ok]
+          publisher.publish(progress_topic, JSON.generate(event: 'fleet_render_error', error: res[:error]))
+          return nil
+        end
+
+        src = res[:content].to_s[/```ruby\s*\n(.*?)\n```/m, 1] || res[:content].to_s
+        src = "# fleet-spec: 0.1\n#{src}" unless src.include?('fleet-spec:')
+        begin
+          Runes::Fleet.load(src, path: '(planner-emitted)')
+        rescue Runes::Fleet::LoadError => e
+          publisher.publish(progress_topic, JSON.generate(event: 'fleet_invalid', error: e.message, raw: src[0, 400]))
+          return nil
+        end
+
+        path = write_fleet_artifact(src, title_hint)
+        publisher.publish(progress_topic, JSON.generate(event: 'fleet_written', path: path))
+        path
+      rescue StandardError => e
+        publisher.publish(progress_topic, JSON.generate(event: 'fleet_render_error', error: "#{e.class}: #{e.message}"))
+        nil
+      end
+
+      def write_fleet_artifact(src, title_hint)
+        dir = File.join(@settings.root, 'worlds')
+        FileUtils.mkdir_p(dir)
+        base = "#{Time.now.strftime('%Y%m%d-%H%M%S')}-#{SecureRandom.hex(3)}-#{slugify(title_hint)}"
+        path = File.join(dir, "#{base}.fleet.rb")
+        atomic_write(path, src)
+        path
+      rescue StandardError => e
+        log "Fleet artifact write failed: #{e.message}"
+        nil
       end
 
       def valid_epic_markdown?(md)

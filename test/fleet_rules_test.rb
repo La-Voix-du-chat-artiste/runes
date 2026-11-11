@@ -74,7 +74,8 @@ class FleetRulesTest < Minitest::Test
     assert_equal :found, rule.source
     assert_kind_of Proc, rule.block
     topo = world.topology
-    assert_equal [{ "id" => "found-0", "source" => "channel:found", "line" => topo["rules"].first["line"] }], topo["rules"]
+    assert_equal [{ "id" => "found-0", "source" => "channel:found", "line" => topo["rules"].first["line"],
+                    "priority" => 0, "index" => 0 }], topo["rules"]
     assert_match(/\A[0-9a-f]{64}\z/, world.fingerprint)
   end
 
@@ -407,5 +408,90 @@ class FleetRulesTest < Minitest::Test
     err = assert_raises(Runes::Fleet::LoadError, &block)
     assert_match(pattern, err.message)
     err
+  end
+
+  # ---- v0.2 §14.2: explicit rule priorities over declaration order ----
+
+  def test_priority_orders_firing_over_declaration_order
+    rules = <<~'RUBY'
+      on :found, priority: 10 do |e|
+        notify "high", level: :info
+      end
+      on :found do |e|
+        notify "low", level: :info
+      end
+      on :found, priority: 5 do |e|
+        notify "mid", level: :info
+      end
+    RUBY
+    world = fleet(fleet_source(rules: rules))
+    engine, transport = setup_engine(world)
+    notices = []
+    engine = Runes::Fleet::Engine.new(world, transport: transport, notifier: ->(n) { notices << n })
+    engine.start
+    transport.publish("runes/events/found", Runes::Json.generate("name" => "x", "score" => 0.9))
+    engine.stop
+
+    assert_equal %w[high mid low], notices.map { |n| n["text"] },
+                 "higher priority fires first; ties keep declaration order"
+  end
+
+  def test_priority_must_be_an_integer
+    err = assert_raises(Runes::Fleet::LoadError) do
+      fleet(fleet_source(rules: "on :found, priority: \"high\" do |e|\n  notify \"x\"\nend\n"))
+    end
+    assert_match(/priority.*Integer/, err.message)
+  end
+
+  # ---- v0.2 §14.3: mutable cells with a write-ahead journal entry ----
+
+  def test_cell_set_is_journaled_wal_before_apply_and_visible_to_later_rules
+    rules = <<~'RUBY'
+      on :found, priority: 10 do |e|
+        set :hits, fact(:hits) + 1
+      end
+      on :found do |e|
+        notify "hits=#{fact(:hits)}", level: :info
+      end
+    RUBY
+    src = fleet_source(rules: rules).sub('fact :tone, "professional"',
+                                          'fact :tone, "professional"\n        cell :hits, initial: 0')
+    world = fleet(src)
+    engine, transport = setup_engine(world)
+    notices = []
+    journal = []
+    engine = Runes::Fleet::Engine.new(world, transport: transport,
+                                      notifier: ->(n) { notices << n },
+                                      journal_sink: ->(entries) { journal.concat(entries) })
+    engine.start
+    transport.publish("runes/events/found", Runes::Json.generate("name" => "x", "score" => 0.9))
+    transport.publish("runes/events/found", Runes::Json.generate("name" => "y", "score" => 0.8))
+    engine.stop
+
+    assert_equal 2, world.facts[:hits].value, "two events incremented the cell"
+    assert_equal %w[hits=1 hits=2], notices.map { |n| n["text"] },
+                 "the later (lower-priority) rule sees the value the earlier rule set"
+    wal = journal.select { |e| e["kind"] == "fact_set" }
+    assert_equal 2, wal.size
+    assert_equal [0, 1], wal.map { |e| e["old"] }
+    assert_equal [1, 2], wal.map { |e| e["new"] }
+    # WAL order: the fact_set entry precedes the action entry of the same rule
+    first_set = journal.index { |e| e["kind"] == "fact_set" }
+    first_action = journal.index { |e| e["kind"] == "action" }
+    assert_operator first_set, :<, first_action, "write-ahead: the set is journaled before the action"
+  end
+
+  def test_set_on_a_readonly_fact_is_a_load_error
+    err = assert_raises(Runes::Fleet::LoadError) do
+      fleet(fleet_source(rules: "on :found do |e|\n  set :tone, \"casual\"\nend\n"))
+    end
+    assert_match(/not a declared mutable cell/, err.message)
+  end
+
+  def test_set_on_unknown_cell_is_a_load_error
+    err = assert_raises(Runes::Fleet::LoadError) do
+      fleet(fleet_source(rules: "on :found do |e|\n  set :nope, 1\nend\n"))
+    end
+    assert_match(/not a declared mutable cell/, err.message)
   end
 end

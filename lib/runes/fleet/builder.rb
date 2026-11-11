@@ -218,7 +218,16 @@ module Runes
           id = validate_id(id, "fact id")
           raise LoadError, "fleet: duplicate fact #{id.inspect} (spec §4.5)" if @facts.key?(id)
 
-          @facts[id] = World::Fact.new(id: id, value: value)
+          @facts[id] = World::Fact.new(id: id, value: value, mutable: false)
+        end
+
+        # v0.2 §14.3: a mutable cell. Rules may `set` it; every set is
+        # journaled (write-ahead) before it is applied.
+        def cell(id, initial:)
+          id = validate_id(id, "cell id")
+          raise LoadError, "fleet: duplicate cell #{id.inspect} (spec §4.5)" if @facts.key?(id)
+
+          @facts[id] = World::Fact.new(id: id, value: initial, mutable: true)
         end
 
         def schedule(id, cron: nil, interval: nil)
@@ -240,7 +249,7 @@ module Runes
         # finalize pass dry-runs the block once to validate whatever is
         # statically reachable, and the engine re-validates every action
         # at run time (fail closed, §10).
-        def on(source, guard: nil, &block)
+        def on(source, guard: nil, priority: nil, &block)
           raise LoadError, "fleet: `on` needs a block (spec §5.1)" unless block
 
           params = block.parameters
@@ -250,8 +259,11 @@ module Runes
           if guard && !(guard.respond_to?(:call) && guard_lambda_arity(guard) == 1)
             raise LoadError, "fleet: `guard:` must be a ->(e) { ... } lambda (spec §5.1)"
           end
+          unless priority.nil? || (priority.is_a?(Integer) && !priority.is_a?(bool))
+            raise LoadError, "fleet: `priority:` must be an Integer (got #{priority.inspect})"
+          end
 
-          @raw_rules << [source.to_sym, guard, block]
+          @raw_rules << [source.to_sym, guard, block, priority || 0]
         end
 
         def finalize
@@ -285,11 +297,12 @@ module Runes
           @facts.each { |id, f| world.facts[id] = f }
           @schedules.each { |id, s| world.schedules[id] = s }
           @schemas.each { |id, s| world.schemas[id] = s }
-          @raw_rules.each_with_index do |(source, guard, block), index|
+          @raw_rules.each_with_index do |(source, guard, block, priority), index|
             kind, name = Rule.classify(source, world)
             rule = Rule.new(
               id: "#{name}-#{index}", source_kind: kind, source: name,
-              guard: guard, block: block, line: block.source_location&.last
+              guard: guard, block: block, line: block.source_location&.last,
+              priority: priority, index: index
             )
             actions = validate_rule_actions!(rule, world, edges)
             world.rules << rule
@@ -387,6 +400,12 @@ module Runes
               unless RuleContext::NOTIFY_LEVELS.include?(action[:level])
                 raise LoadError,
                       "fleet: rule #{rule.id} notify level #{action[:level].inspect} (expected info/warn/error)"
+              end
+            when :set_fact
+              cell = world.facts[action[:cell]]
+              unless cell&.mutable
+                raise LoadError,
+                      "fleet: rule #{rule.id} sets #{action[:cell].inspect}, which is not a declared mutable cell (§14.3)"
               end
             end
           end

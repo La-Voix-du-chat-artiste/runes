@@ -26,21 +26,21 @@ module Runes
     class Walker
       # Declaration vocabulary of spec §4, as bare method calls. Placement
       # is enforced by the builders; the walker only proves the file uses
-      # nothing else. `spawn` / `cell` / `interval` are RESERVED keywords
-      # (spec §13): allowed past the walker so the builder can reject them
-      # with the precise "reserved for v0.2" error instead of a generic
-      # "forbidden construct".
+      # nothing else. `spawn` / `interval` are RESERVED keywords (spec §13):
+      # allowed past the walker so the builder can reject them with the
+      # precise "reserved" error instead of a generic "forbidden construct".
+      # `cell` is a real v0.2 declaration (mutable cells, §14.3).
       ALLOWED_METHODS = %w[
         fleet config description transport group
         agent model tools workspace identity concurrency
-        channel schema route fact schedule
-        spawn cell interval
+        channel schema route fact cell schedule
+        spawn interval
       ].freeze
 
       # Bare calls that only exist inside rule bodies (spec §5/§6). In
       # world contexts they pass the walker and die in the builders as
       # misplaced declarations (P3).
-      RULE_BARE_METHODS = %w[on next! task publish notify fact].freeze
+      RULE_BARE_METHODS = %w[on next! task publish notify fact set].freeze
 
       # The declarations that take a block in spec v0.1. `on` blocks bind
       # exactly one parameter (`|e|`); fleet/agent blocks bind none.

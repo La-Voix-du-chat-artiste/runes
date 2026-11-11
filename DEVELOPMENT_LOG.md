@@ -268,6 +268,33 @@ Suite: **1132 runs, 6743 assertions, 0 failures, 3 skips**.
 README now surfaces the discovery phase: quick-start step 6 (the
 `discover_codebase.rb` run command), project layout, and next-steps item 9
 (the three-arm benchmark). Commit a418056.
+
+## Fleet v0.2 + planner-driven worlds + observatory P1 (2026-11-11)
+
+- **Rule priorities** (FLEET_DSL §14.2): `on :x, priority: N` — engine sorts
+  matching rules by `[-priority, index]` (stable); builder validates the
+  kwarg is an Integer; golden extract regenerated intentionally.
+- **Mutable cells** (§14.3): `cell :name, initial: v` declares a mutable
+  fact (was a reserved keyword); rules `set :name, value`; the engine
+  records a `fact_set` WAL entry before applying, so a dispatch's journal
+  entries are its determinism certificate; `fact` stays read-only and
+  `set` on it is a load error. Tests cover priority ordering, WAL order,
+  and both refusal paths.
+- **Planner-driven worlds** (§1.1): `/done` now also emits the world as
+  Fleet DSL from the goal session (`FLEET_RENDER_INSTRUCTION`), validated
+  fail-closed through the real loader before being written to `worlds/`
+  (`RUNES_FLEET_EMIT=0` opts out); invalid renders keep the epic and
+  report `fleet_invalid`. Tested with a stub planner (valid + invalid).
+- **Observatory O1.5 alerts**: `alerts` table + `Alert` model (dedupe by
+  kind+subject, count, ack), `AlertDetector` running impersonation +
+  signature-failure detectors in ingest, `/alerts` page with ack and a nav
+  badge. **O1.6 plugin catalog**: `/plugins` renders the seven runes from
+  `Runes::Plugin` (cannot go stale). Observer suite 240 runs / 0 failures.
+- **Compiled fleet runtime**: blocked on toolchain — `wasi-sdk` is not
+  installed and `/spinel` is not checked out here (noted in
+  ENHANCEMENT §1); kernel-side subset work can proceed without it.
+
+Harness suite: **1135 runs, 6755 assertions, 0 failures, 3 skips**.
 ---
 
 ## Objective

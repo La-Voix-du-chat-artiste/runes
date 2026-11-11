@@ -5,6 +5,11 @@ Rails.application.routes.draw do
   resources :packets, only: %i[index show]
   resources :runs, only: %i[index show], param: :run_id
   get "topology", to: "topology#show", as: :topology
+  # O1.6: the plugin/rune catalog, generated from the registry.
+  get "plugins", to: "plugins#index", as: :plugins
+  # O1.5: alerts — list plus the one operator write (ack).
+  get "alerts", to: "alerts#index", as: :alerts
+  post "alerts/:id/ack", to: "alerts#ack", as: :ack_alert
   # What was refused, next to the dashboard's "who published what" (doc5.md O2.3).
   get "security", to: "security#show", as: :security
   # The fleet board: planned / working / done, as a Mermaid kanban plus the
