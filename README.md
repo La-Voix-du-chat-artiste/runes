@@ -279,6 +279,13 @@ RUNES_TRANSPORT=mqtt5 ./bin/runes-daemon &   # shared-subscription agent
 
 # 5) declarative workflows (Roast DSL)
 ./bin/runes-workflow execute examples/analyze_codebase.rb
+
+# 6) discovery phase: brief + repo -> verified discovery.v1 card (anchors
+#    resolved by Ruby, loop detector on) — needs a provider key for the
+#    chat calls; the suite runs it offline (test/discovery_test.rb)
+RUNES_DISCOVERY_BRIEF="Add a kanban board to the observatory" \
+RUNES_DISCOVERY_REPO=$PWD RUNES_DISCOVERY_OUT=tmp/discovery \
+  ./bin/runes-workflow execute examples/discover_codebase.rb
 ```
 
 ## 🏭 A real pipeline, as a workflow
@@ -590,6 +597,14 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    records:
    [`2026-11-04-pilot.md`](bench/swarm/results/2026-11-04-pilot.md),
    [`2026-11-11-rerun2-decision.md`](bench/swarm/results/2026-11-11-rerun2-decision.md).
+9. **The discovery phase's three-arm benchmark** — full discovery vs
+   repo-map-only control vs one external call, with **mission acceptance in
+   `/build`** as the downstream metric (the exploration-modality lift the
+   pilots could not produce). Prototype shipped:
+   `examples/discover_codebase.rb` + `Runes::Discovery`; the d1
+   sufficiency judge and ideate A‖B fan-out still belong to the contracted
+   layer. Design:
+   [`docs/runes-pre-swarm-discovery-phase-for-lfm3-1-7b.md`](docs/runes-pre-swarm-discovery-phase-for-lfm3-1-7b.md).
 
 ## 📦 Project Layout
 
@@ -625,7 +640,9 @@ config/              .env, .env.example, policy.json
 config/agents/       the swarm role manifests (agent_id, capacities, models)
 docs/epics|missions/ artifacts of /goal, /plan, /build
 tools/               tool manifests (card.json + capabilities.json [+ run.rb])
-examples/            runnable sample workflows (Roast-compatible)
+examples/            runnable sample workflows (Roast-compatible):
+                     prospect_pipeline.rb (CRM kanban), discover_codebase.rb
+                     (pre-swarm discovery card), analyze_codebase.rb
 spin/                the Spinel kernel entry (compile to a native binary)
 scripts/spinel_build.rb  compile + native self-check (SPINEL=/path/to/spinel)
 scripts/demo_pipeline_run.rb  run the prospect pipeline demo (scripted: RUNES_DEMO_SCRIPTED=1)
@@ -644,6 +661,7 @@ docs/SMALL_MODEL_HARNESS_PRD.md   the LFM3 team PRD (Cycle 43) + pilot results
 docs/SMALL_MODEL_HARNESS_PLAN.md  the coding plan (phases 0–8)
 docs/LFM3_TEAM_DISCOVERY.md       the design source of truth
 docs/GETTING_STARTED.md|.pdf      the newcomer's guide (setup + scripted kanban demo)
+docs/runes-pre-swarm-discovery-phase-for-lfm3-1-7b.md  the discovery-phase design
 ```
 
 ## 📜 License
