@@ -264,6 +264,10 @@ workflow layer, per the design's "prototype first, graduate second":
   and the d1 sufficiency judge + ideate A‖B fan-out in the contracted layer.
 
 Suite: **1132 runs, 6743 assertions, 0 failures, 3 skips**.
+
+README now surfaces the discovery phase: quick-start step 6 (the
+`discover_codebase.rb` run command), project layout, and next-steps item 9
+(the three-arm benchmark). Commit a418056.
 ---
 
 ## Objective
