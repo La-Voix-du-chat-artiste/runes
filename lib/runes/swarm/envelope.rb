@@ -251,9 +251,13 @@ module Runes
         out = {}
         out['status'] = string_value(hash['status'])&.downcase if hash.key?('status')
         reason = hash.key?('reason_code') ? hash['reason_code'] : hash['reason']
-        # Models write N/A / none / null for "no reason"; that is :ok.
+        # Models write N/A / none / null for "no reason"; on an accept that is
+        # :ok. On a decline/escalate it stays as written so the guard flags it
+        # (a decline with reason `ok` is invalid, not silently accepted).
         reason_text = string_value(reason)&.downcase
-        reason_text = 'ok' if reason_text&.match?(/\A(n\/?a|none|null|-|)\z/)
+        if reason_text&.match?(/\A(n\/?a|none|null|-|)\z/) && out['status'] == 'accept'
+          reason_text = 'ok'
+        end
         out['reason_code'] = reason_text unless reason.nil?
         hop = hash.key?('next_hop') ? hash['next_hop'] : hash['next']
         out['next_hop'] = nullish_to_nil(hop)&.downcase unless hop.nil?

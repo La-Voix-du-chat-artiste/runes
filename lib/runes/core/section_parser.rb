@@ -12,6 +12,14 @@ module Runes
       MAX_INPUT_BYTES = 1_048_576
 
       HEADING = /\A\s*(?:#{'#'}{1,6}\s+(.+?)\s*:?|\*\*(.+?)\*\*\s*:?|<([A-Z][A-Z0-9 _-]{1,40})>\s*:?|([A-Z][A-Z0-9 _-]{1,40})\s*:?)\s*\z/
+      # A bare ALL-CAPS line is only a heading when it names a protocol
+      # section — models echo `IDENTITY` without `###`, but a plain reply
+      # like `OK` must stay body text, not become an empty section.
+      KNOWN_SECTIONS = %w[
+        IDENTITY CAPACITIES CAPACITY DECISION BODY
+        ANSWER REPONSE_CANDIDATE CITATIONS
+        CRITIQUE CLAIMS UNSUPPORTED VERDICT VIOLATIONS ISSUES FINDINGS
+      ].freeze
       FENCE = /\A\s*(```|~~~)/
       THINK = /<think(?:ing)?>.*?<\/think(?:ing)?>/mi
       CITATIONS = /Citations?\s*:\s*(.+?)\s*$/i
@@ -80,7 +88,12 @@ module Runes
         raw_name = match[1] || match[2] || match[3] || match[4]
         return nil if raw_name.nil?
 
-        normalize(raw_name)
+        name = normalize(raw_name)
+        # The bare ALL-CAPS alternative (match[4]) is restricted to known
+        # protocol sections; the marked forms (#, **, <>, :) stay generic.
+        return nil if match[4] && !KNOWN_SECTIONS.include?(name.to_s)
+
+        name
       end
 
       def normalize(name)

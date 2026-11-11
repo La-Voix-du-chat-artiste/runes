@@ -113,4 +113,24 @@ class SectionParserTest < Minitest::Test
     assert_equal [], parsed[:citations]
     refute parsed[:had_sections]
   end
+
+  def test_bare_all_caps_protocol_word_is_a_heading_but_a_plain_reply_is_not
+    # Models echo `IDENTITY` without `###`; a short reply like `OK` must stay
+    # body text instead of becoming an empty section.
+    parsed = @parser.parse("IDENTITY\nagent_id: a\n\nDECISION\nstatus: accept")
+    assert parsed[:had_sections]
+    assert_equal "agent_id: a", parsed[:sections]["IDENTITY"]
+    assert_equal "status: accept", parsed[:sections]["DECISION"]
+
+    reply = @parser.parse("OK")
+    refute reply[:had_sections]
+    assert_equal "OK", reply[:body]
+    assert_equal "OK", reply[:answer]
+  end
+
+  def test_angle_bracket_heading_is_recognized
+    parsed = @parser.parse("<IDENTITY>\nagent_id: a")
+
+    assert_equal "agent_id: a", parsed[:sections]["IDENTITY"]
+  end
 end

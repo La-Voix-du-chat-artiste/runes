@@ -12,7 +12,7 @@ evidence and media are frozen in `cases.json` + `fixtures/` (see
 
 - Ruby >= 3.3 (stdlib only for the harness itself).
 - One interpreter with `mlx-vlm` (Apple Silicon) for the MLX packs, e.g.:
-  `uv venv .venv-swarm && .venv-swarm/bin/pip install mlx-vlm huggingface_hub`
+  `uv venv tmp/venv-swarm && tmp/venv-swarm/bin/pip install mlx-vlm huggingface_hub`
 - The checkpoints (official MLX 4-bit packs, ~8–10 GB together):
   `LiquidAI/LFM3-1.7B-MLX-4bit`, `LiquidAI/LFM3-VL-2B-MLX-4bit`,
   `LiquidAI/LFM3-Audio-2B-MLX-4bit`, `LiquidAI/LFM3-Omni-2B-MLX-4bit`,
@@ -45,7 +45,7 @@ ruby bench/swarm/runner.rb \
   --omni-model LiquidAI/LFM3-Omni-2B-MLX-4bit \
   --d1-model LiquidAI/d1-2B-MLX-8bit \
   --d1-omni-model LiquidAI/d1-Omni-2B-MLX-8bit \
-  --python .venv-swarm/bin/python \
+  --python tmp/venv-swarm/bin/python \
   --calibration bench/swarm/calibration.json \
   --out bench/swarm/results/2026-11-04-team-full.md \
   --json bench/swarm/results/2026-11-04-team-full.json
