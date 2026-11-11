@@ -2,6 +2,8 @@
 
 require_relative "test_helper"
 require_relative "../lib/runes/kanban"
+require "open3"
+require "tmpdir"
 
 # The Kanban format is the contract between a Runes workflow, an external
 # harness with `$EDITOR`, and `pipeline_prospect`'s Rails index. The fixture
@@ -233,6 +235,29 @@ class KanbanTest < Minitest::Test
       assert_empty Runes::Kanban.validate(text)
       done = Runes::Kanban.tasks(text, column: "done").map(&:title)
       assert_equal 3, done.size, "both moves plus the fixture's own done task: #{done.inspect}"
+    end
+  end
+
+  def test_the_cli_validates_a_whole_tree_and_fails_loudly
+    root = File.expand_path("..", __dir__)
+    cli = File.join(root, "bin", "runes-kanban")
+    Dir.mktmpdir("runes-kanban-cli") do |dir|
+      good = File.join(dir, "missions")
+      FileUtils.mkdir_p(good)
+      File.write(File.join(good, "ok.mmd"), SAMPLE)
+      File.write(File.join(dir, "bad.mmd"), "kanban\n  Bogus:\n")
+
+      out, err, status = Open3.capture3("ruby", cli, "--tree", dir)
+      assert_equal 1, status.exitstatus
+      assert_includes out, "ok   "
+      assert_includes out, "FAIL "
+      assert_includes out, "unknown column"
+      assert_includes out, "1/2 kanban files valid"
+      assert_empty err
+
+      out, _err, status = Open3.capture3("ruby", cli, "--tree", good)
+      assert_equal 0, status.exitstatus
+      assert_includes out, "1/1 kanban files valid"
     end
   end
 end

@@ -11,7 +11,7 @@ require_relative 'lib/runes/version'
 # Local, not a top-level constant: gemspecs are evaluated into the global
 # namespace by `gem build`/Bundler and must not leak names.
 gem_root = File.expand_path(__dir__)
-executables = %w[runes runes-daemon runes-client runes-replay runes-mcp runes-acl runes-workflow]
+executables = %w[runes runes-daemon runes-client runes-replay runes-mcp runes-acl runes-workflow runes-kanban]
 
 Gem::Specification.new do |spec|
   spec.name        = 'runes'

@@ -98,7 +98,7 @@ class PackagingTest < Minitest::Test
   def test_gemspec_has_the_expected_executables
     # Every binstub in bin/ must be listed in the gemspec, or users install
     # the gem and cannot run it (runes-acl shipped nowhere until Phase 17).
-    expected = %w[runes runes-client runes-daemon runes-mcp runes-replay runes-acl runes-workflow]
+    expected = %w[runes runes-client runes-daemon runes-mcp runes-replay runes-acl runes-workflow runes-kanban]
     assert_equal expected.sort, gemspec.executables.sort
     assert_equal Dir.children(File.join(ROOT, 'bin')).reject { |f| f.start_with?('.') }.sort,
                  gemspec.executables.sort,

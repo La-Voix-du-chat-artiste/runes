@@ -579,6 +579,7 @@ bin/runes-replay     journal viewer (+ --replay)
 bin/runes-mcp        MCP server: harness tools over stdio
 bin/runes-acl        fail-closed mosquitto acl_file generator
 bin/runes-workflow   Roast-compatible workflow runner (execute FILE [steps])
+bin/runes-kanban     validate .mmd kanban files (one file or --tree DIR)
 lib/runes/plugin.rb  plugin registry (every rune is a kind: :rune plugin)
 lib/runes/workflow/  workflow engine: DSL, config, execution manager, runes
 lib/runes/plugins/   the seven runes: cmd, ruby, chat, agent, map, repeat, call

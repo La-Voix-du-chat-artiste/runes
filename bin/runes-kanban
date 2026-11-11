@@ -1,0 +1,61 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Validate Mermaid kanban (.mmd) files the way pipeline_prospect's own
+# validate_mermaid.rb does — one file, or a whole tree.
+#
+#   bin/runes-kanban path/to/mission.mmd
+#   bin/runes-kanban --tree path/to/epics/          # every **/*.mmd under it
+#   bin/runes-kanban --tree . --quiet                # exit code only
+#
+# Exit 0 when every file validates, 1 otherwise (and 2 on usage errors).
+# The rules are Runes::Kanban.validate — the same ones the workflow engine
+# writes with, so a file this accepts is a file their tooling accepts.
+require 'optparse'
+
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require 'runes/kanban'
+
+options = { tree: nil, quiet: false }
+parser = OptionParser.new do |opts|
+  opts.banner = 'Usage: bin/runes-kanban FILE | --tree DIR [--quiet]'
+  opts.on('--tree DIR', 'Validate every **/*.mmd under DIR') { |value| options[:tree] = value }
+  opts.on('--quiet', 'Print nothing; the exit code says it all') { options[:quiet] = true }
+  opts.on('-h', '--help', 'Show this help') do
+    puts opts
+    exit 0
+  end
+end
+parser.parse!(ARGV)
+
+files =
+  if options[:tree]
+    dir = options[:tree]
+    abort 'error: not a directory' unless File.directory?(dir)
+
+    Dir.glob(File.join(dir, '**', '*.mmd')).sort
+  else
+    abort 'error: pass a .mmd file or --tree DIR' if ARGV.empty?
+
+    ARGV.map { |path| abort "error: not a file: #{path}" unless File.file?(path); path }
+  end
+
+abort 'error: no .mmd files found' if files.empty?
+
+failures = 0
+files.each do |path|
+  errors = Runes::Kanban.validate(File.read(path))
+  if errors.empty?
+    puts "ok   #{path}" unless options[:quiet]
+  else
+    failures += 1
+    puts "FAIL #{path}"
+    errors.each { |error| puts "     #{error}" }
+  end
+end
+
+unless options[:quiet]
+  puts
+  puts "#{files.size - failures}/#{files.size} kanban files valid"
+end
+exit(failures.zero? ? 0 : 1)

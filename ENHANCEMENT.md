@@ -74,9 +74,11 @@ per-agent rendering are the measured limits). Auth gates `O1.2`
 
 ## 4. Pipeline promotion
 
-An MCP query surface so any harness can ask the CRM kanban mid-task, and
-a `Runes::Kanban` CLI validating a whole `.mmd` tree the way their
-`validate_mermaid.rb` does. Both small; neither blocks the story.
+An MCP query surface so any harness can ask the CRM kanban mid-task — still
+open. **Done 2026-11-11:** `bin/runes-kanban` validates one `.mmd` file or a
+whole `--tree`, with the same rules as their `validate_mermaid.rb`
+(`Runes::Kanban.validate`), exit 1 on any failure; covered by
+`test/kanban_test.rb` and shipped in the gemspec executables.
 
 ## 5. Optional / gated
 
