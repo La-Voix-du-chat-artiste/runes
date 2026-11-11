@@ -167,6 +167,18 @@ real MLX packs. Verdict: **NO-GO** (see the decision record below).
 - `scripts/md_to_pdf.rb`: the cover version now reads `Runes::VERSION`
   (was hardcoded `0.3.0`).
 - README quick start links the guide and the scripted demo.
+
+## Review pass (2026-11-05, commit 239b475)
+
+Re-read everything this session produced and fixed three flaws:
+`SectionParser` bare ALL-CAPS headings are now restricted to known
+protocol sections (a plain reply like `OK` was becoming an empty section
+and emptying `answer`); `Envelope` normalizes `N/A` reason codes to `ok`
+only on accept (a decline with `N/A` is now flagged, not silently ok'd);
+`bench/swarm/README.md` points the venv at `tmp/` (gitignored). Regenerated
+`DSL_POWER.pdf` / `WHY_RUNES_V2.pdf` so their covers read `Runes::VERSION`.
+Suite: **1123 runs, 6658 assertions, 0 failures, 3 skips**; scripted kanban
+demo re-verified end to end.
 ---
 
 ## Objective
