@@ -22,7 +22,10 @@ markdown it describes, so the two cannot drift). The "why" (what we are
 
 > **Status (2026-11-12): 0.4.0 shipped — the fleet layer is real, v0.2
 > features landed (priorities, cells, planner-driven worlds, nested
-> fleets).**
+> fleets), and the compiled fleet runtime is done: a loaded world bakes
+> to pure data and runs inside a native Spinel kernel
+> (`build/runes-fleet-kernel fleet` → `FLEET KERNEL OK`, see *The compiled
+> kernel* below).**
 > (1) **The transport-agnostic series** — the MQTT fabric is one adapter
 > behind `Runes::Transport` (`inproc | mqtt311 | mqtt5`); the claim/lease
 > protocol was *deleted* in favour of MQTT 5 shared subscriptions; agents
@@ -598,12 +601,15 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    model, at the OS level. The first real guest landed instead of S1–S3's
    host imports: the **transport guest** (above) — the same effect through
    the preopen bridge the runtime already grants, proven on ruby.wasm
-   today and reusable by the compiled fleet runtime. Remaining spikes:
-   **S1** Spinel-C → wasi-sdk hello world; **S2** a *compiled* guest
-   publishing a signed heartbeat through the same bridge; **S3** pooled
-   alongside `ruby.wasm` (interpreted guest for untrusted *tools*,
-   compiled guest for *agents*). The gate before any of it — the
-   real-wasm round trip — is now green (`ENHANCEMENT.md` §1,
+   today. And the **compiled fleet runtime landed 2026-11-12** as a native
+   Spinel kernel with a baked world (see *The compiled kernel* above) —
+   the same world-in/events-in/journal-out loop, no CRuby in the guest.
+   Remaining spikes: **S1** Spinel-C → wasi-sdk hello world
+   (`--target=wasm32-wasi`, wasi-sdk 25.0 already in `tmp/`); **S2** a
+   *wasm* compiled guest publishing a signed heartbeat through the same
+   bridge; **S3** pooled alongside `ruby.wasm` (interpreted guest for
+   untrusted *tools*, compiled guest for *agents*). The gate before any
+   of it — the real-wasm round trip — is green (`ENHANCEMENT.md` §1,
    `docs/wasi-transport-guest.md`).
 3. ~~**A plugin catalogue** (`/plugins`)~~ ✅ done 2026-11-11 — renders the
    seven runes straight from the registry.
@@ -643,6 +649,12 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    [`bench/discovery/results/2026-11-12-discovery.md`](bench/discovery/results/2026-11-12-discovery.md).
    Still open from the design: mission acceptance in `/build` downstream,
    and the d1 sufficiency judge + ideate A‖B fan-out in the contracted layer.
+10. ~~**The compiled fleet runtime (baked world in a Spinel kernel)**~~ ✅
+    done 2026-11-12 — `spin/fleet_kernel.rb` compiles to
+    `build/runes-fleet-kernel`; `fleet` reconstructs the baked world from
+    `spin/baked_world.json` in-guest and fires rules from data alone
+    (`FLEET KERNEL OK`, CRuby parity identical). Next: the same bridge in
+    a **wasm** guest (S1/S2 above).
 
 ## 📦 Project Layout
 

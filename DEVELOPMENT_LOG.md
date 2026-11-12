@@ -48,7 +48,9 @@ now compiles into a standalone native binary and *runs* in-guest.
   the compile-and-run test instead.
 
 Harness suite: **1148 runs, 6802 assertions, 0 failures, 3 skips**;
-observer **241 runs, 1220 assertions, 0 failures**.
+observer **241 runs, 1220 assertions, 0 failures**. README status block
+and "Where this goes next" (item 10) plus `STATE.md` (test counts, next
+items) refreshed to match.
 
 ## LFM3 Phase 6 — contracted-team benchmark (2026-11-04)
 

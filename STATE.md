@@ -104,10 +104,16 @@ Where the current goal stands (it stays **active**):
   `docs/wasi-transport-guest.md`); the real-wasm round trip is **closed**
   (2026-10-24: the VM now runs in a child OS process because
   wasmtime-ruby holds the CRuby GVL while guest code runs; the canary is
-  green), so next is the compiled fleet runtime reusing the bridge. Spinel:
-  pin bumped to a2bd89005 (+6411) with both upstream filings (#7213,
-  #6741) fixed and the gate stub's workarounds deleted — see the
-  Phase 40 follow-through in DEVELOPMENT_LOG.md.
+  green). The **compiled fleet runtime landed 2026-11-12**: a loaded
+  world bakes to pure data (`scripts/fleet_bake.rb` →
+  `spin/baked_world.json`) and `spin/fleet_kernel.rb` compiles to a
+  native kernel (`build/runes-fleet-kernel fleet` → `FLEET KERNEL OK`,
+  CRuby parity identical) — what remains on the WASI side is only the S1
+  wasm spike (Spinel-C → wasi-sdk, wasi-sdk 25.0 in `tmp/`). Spinel:
+  checkout in-repo at pin a2bd89005 with a prebuilt `spinel/bin/spinel`
+  (kernel self-check 70/70); both upstream filings (#7213, #6741) fixed
+  and the gate stub's workarounds deleted — see the Phase 40
+  follow-through in DEVELOPMENT_LOG.md.
 - **Next (the pipeline story):** the write-ownership question is answered in
   code (`Runes::Kanban.update_file` locks the read-modify-write), so what is
   left is promotion: an MCP tool surface so any harness can *query* the CRM
@@ -132,8 +138,8 @@ Where the current goal stands (it stays **active**):
 ## Test status
 
 ```
-bundle exec rake test                 # parent harness: 764 runs / 4810 assertions / 0 failures (SPINEL set)
-cd runes_observer && bin/rails test   # observatory: 231 runs / 1148 assertions / 0 failures
+bundle exec rake test                 # parent harness: 1148 runs / 6802 assertions / 0 failures / 3 skips
+cd runes_observer && bin/rails test   # observatory: 241 runs / 1220 assertions / 0 failures
 bundle exec ruby tmp/verify_mqtt5_live.rb   # live mosquitto 2.1.2: ALL CHECKS PASSED
 ```
 
