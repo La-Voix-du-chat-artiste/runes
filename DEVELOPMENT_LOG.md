@@ -323,6 +323,11 @@ files, test 20 056 / 83), `worlds/` added to the layout. Commit follows.
 
 Harness suite: **1144 runs, 6782 assertions, 0 failures, 3 skips**;
 observer **241 runs, 1220 assertions, 0 failures**.
+
+README/DevLog refreshed for the sweep: fleet section now lists nested
+fleets, observatory section lists the plan chain, status block dated
+2026-11-12, `bench/discovery/` in the layout, receipts current. Commit
+dbd1284 + this docs commit.
 ---
 
 ## Objective

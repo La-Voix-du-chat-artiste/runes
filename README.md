@@ -20,7 +20,9 @@ markdown it describes, so the two cannot drift). The "why" (what we are
 [`STRATEGY.md`](STRATEGY.md); the longer pitch is
 [`docs/WHY_RUNES_V2.md`](docs/WHY_RUNES_V2.md).
 
-> **Status (2026-11-11): 0.4.0 shipped — the fleet layer is real.**
+> **Status (2026-11-12): 0.4.0 shipped — the fleet layer is real, v0.2
+> features landed (priorities, cells, planner-driven worlds, nested
+> fleets).**
 > (1) **The transport-agnostic series** — the MQTT fabric is one adapter
 > behind `Runes::Transport` (`inproc | mqtt311 | mqtt5`); the claim/lease
 > protocol was *deleted* in favour of MQTT 5 shared subscriptions; agents
@@ -157,10 +159,12 @@ step-by-step semantics and the L1/L2/L3 conformance levels:
 v0.2 landed: **rule priorities** (`on :x, priority: 10 do … end` — higher
 fires first, ties keep declaration order), **mutable cells**
 (`cell :hits, initial: 0` + `set :hits, …` in rules, every set journaled as
-a write-ahead `fact_set` entry before it is applied), and
+a write-ahead `fact_set` entry before it is applied),
 **planner-driven worlds** — `/done` now also emits the world as a
 `.fleet.rb` file from the goal session, validated fail-closed by the real
-loader before it is written to `worlds/` (`RUNES_FLEET_EMIT=0` opts out).
+loader before it is written to `worlds/` (`RUNES_FLEET_EMIT=0` opts out) —
+and **nested fleets** (`import "sub.fleet.rb"`: lexical, cycle-detected,
+merged under a `sub__` namespace prefix).
 
 ## 🤖 The contracted LFM3 team (Cycle 43)
 
@@ -499,8 +503,10 @@ JSON, per-agent interactions grouped by `request_id`, a Mermaid kanban
 fleet board at `/board` (`GET /board.mmd` hands the same text to an agent —
 a board a program cannot read is a screenshot), **alerts** at `/alerts`
 (deduped, counted, ackable — impersonation and signature-failure detectors
-run in ingest, with a nav badge), and the **plugin catalog** at `/plugins`
-(the seven runes rendered straight from the registry). Ingest goes through
+run in ingest, with a nav badge), the **plugin catalog** at `/plugins`
+(the seven runes rendered straight from the registry), and the **plan
+chain** on each interaction page (prompt → plan → tool calls → verdict).
+Ingest goes through
 `Runes::Transport`, so `inproc` mode needs no broker at all.
 
 ```bash
@@ -651,6 +657,7 @@ lib/runes/llm/       model seams: LFM3/d1/media adapters, role profiles,
                      command + OpenAI-compatible transports
 bench/swarm/         the 24-case contracted-team benchmark (runner, cases,
                      fixtures, report, results, README)
+bench/discovery/     the discovery-phase three-arm benchmark (runner + results)
 config/              .env, .env.example, policy.json
 config/agents/       the swarm role manifests (agent_id, capacities, models)
 docs/epics|missions/ artifacts of /goal, /plan, /build
