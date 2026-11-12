@@ -239,6 +239,31 @@ class SpinelSubsetTest < Minitest::Test
     assert_includes output, 'KERNEL SELFCHECK OK'
   end
 
+  # --- compiled fleet runtime -------------------------------------------
+
+  def test_fleet_kernel_entry_passes_under_cruby
+    output = `#{RbConfig.ruby} -I#{File.join(ROOT, 'lib')} #{File.join(ROOT, 'spin', 'fleet_kernel.rb')} fleet 2>&1`
+    assert $?.success?, "fleet kernel entry failed under CRuby:\n#{output}"
+    assert_includes output, 'FLEET KERNEL OK'
+  end
+
+  def test_fleet_kernel_compiles_and_runs_when_compiler_available
+    spinel = ENV['SPINEL'] || which('spinel') ||
+             (File.executable?(File.join(ROOT, 'spinel', 'bin', 'spinel')) ? File.join(ROOT, 'spinel', 'bin', 'spinel') : nil)
+    skip 'no spinel binary (set SPINEL=/path/to/spinel to enable)' if spinel.nil?
+
+    require 'tmpdir'
+    Dir.mktmpdir do |dir|
+      binary = File.join(dir, 'runes-fleet-kernel')
+      build = `#{spinel} #{File.join(ROOT, 'spin', 'fleet_kernel.rb')} -o #{binary} 2>&1`
+      assert $?.success?, "fleet kernel compile failed:\n#{build}"
+      output = `#{binary} fleet 2>&1`
+      assert $?.success?, "compiled fleet kernel run failed:\n#{output}"
+      assert_includes output, 'FLEET KERNEL OK'
+      assert_includes output, 'baked=true'
+    end
+  end
+
   private
 
   def which(cmd)

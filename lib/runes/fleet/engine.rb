@@ -179,6 +179,22 @@ module Runes
         matching_rules(kind, source).each do |rule|
           next unless guard_passes?(rule, event, entries)
 
+          if rule.block.nil? && rule.baked_actions
+            # Baked rule (compiled fleet runtime): actions are data, no
+            # block to run — execute them directly.
+            rule.baked_actions.each_with_index do |action, ordinal|
+              count += 1
+              if count > @max
+                fanout_exceeded!(event, rule, count, entries)
+                commit(entries)
+                return entries
+              end
+
+              execute(rule, event, action, ordinal + 1, entries)
+            end
+            next
+          end
+
           context = RuleContext.new(world, event)
           rule_failed = false
           catch(:rule_next) do
@@ -437,7 +453,14 @@ module Runes
       end
 
       def stringify(hash)
-        hash.map { |k, v| [k.to_s, v.is_a?(Hash) ? stringify(v) : v] }.to_h
+        hash.map do |k, v|
+          [k.to_s, case v
+                    when Hash then stringify(v)
+                    when Array then v.map { |e| e.is_a?(Hash) ? stringify(e) : e }
+                    when Symbol then v.to_s
+                    else v
+                    end]
+        end.to_h
       end
 
       # 5-field cron (minute hour dom mon dow) with "*", "*/n", exact

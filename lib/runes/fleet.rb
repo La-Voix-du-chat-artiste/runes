@@ -22,6 +22,35 @@ module Runes
       load(File.read(path), path: path, args: args, loading: loading)
     end
 
+    # Bake a fleet file into pure data for the compiled fleet runtime:
+    # load it (fail-closed, as always), probe every rule's actions once
+    # (the block is a proc and cannot cross the compile boundary), and
+    # return the world's baked hash. Guards are dropped in the baked form.
+    def bake_file(path, args: {})
+      bake_file_from_source(File.read(path), path: path, args: args)
+    end
+
+    def bake_file_from_source(source, path:, args: {})
+      world = load(source, path: path, args: args)
+      world.rules.each do |rule|
+        probe = RuleContext.new(world, probe_event_for(rule))
+        catch(:rule_next) { probe.instance_exec(probe_event_for(rule), &rule.block) }
+        rule.instance_variable_set(:@baked_actions, probe.actions)
+      end
+      world.to_baked_h
+    end
+
+    def probe_event_for(_rule)
+      # Same synthesized-fields trick as the loader's dry-run probe (incl.
+      # its plausible values for known fields like score), so guards and
+      # templates resolve at bake time.
+      values = { "email" => "ada@example.fr", "score" => 1.0 }
+      fields = Hash.new { |_h, k| values.fetch(k.to_s, k.to_s) }
+      def fields.key?(_key) = true
+      Event.new(id: "bake-probe", at: Time.at(0).utc, kind: :probe, source: :probe,
+                fields: fields)
+    end
+
     # Load a fleet document from a string. `args` are the load-time
     # parameters of spec §7 (lowest precedence: defaults < config block <
     # args). `loading` is the import stack for cycle detection (§14.4):

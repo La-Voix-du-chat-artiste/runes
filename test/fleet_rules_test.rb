@@ -583,6 +583,58 @@ class FleetRulesTest < Minitest::Test
     end
   end
 
+  # ---- compiled fleet runtime: bake to data, restore, run in-guest ----
+
+  def test_bake_restore_round_trip_runs_baked_rules
+    src = fleet_source(rules: <<~'RUBY')
+      on :found do |e|
+        next! unless e.score > 0.7
+        task :writer, "Redige pour %{name}"
+      end
+    RUBY
+    world = fleet(src)
+    baked = Runes::Fleet.bake_file_from_source(src, path: "(bake-test)")
+    json = Runes::Json.generate(baked)
+    restored = Runes::Fleet::World.from_baked_h(Runes::Json.parse(json))
+
+    assert_equal world.name, restored.name
+    assert_equal world.roles.keys.sort, restored.roles.keys.sort
+    assert_equal world.rules.size, restored.rules.size
+    refute_nil restored.rules.first.baked_actions, "baked rule carries probed actions as data"
+
+    engine, transport = setup_engine(restored)
+    tasks = []
+    transport.subscribe("runes/agents/writer/tasks") { |m| tasks << Runes::Json.parse(m.payload) }
+    engine.start
+    transport.publish("runes/events/found", Runes::Json.generate("name" => "x", "score" => 0.9))
+    engine.stop
+    assert_equal 1, tasks.size, "the baked rule fired from data, no block"
+    assert_equal "Redige pour x", tasks.first["prompt"]
+  end
+
+  # The committed bake artifact (spin/baked_world.json, produced by
+  # scripts/fleet_bake.rb from examples/prospection.fleet.rb) must stay
+  # loadable and runnable — this is what the compiled fleet kernel embeds.
+  def test_committed_baked_world_json_runs
+    path = File.expand_path('../spin/baked_world.json', __dir__)
+    skip "spin/baked_world.json not baked yet" unless File.file?(path)
+    restored = Runes::Fleet::World.from_baked_h(Runes::Json.parse(File.read(path)))
+
+    assert_equal "prospection", restored.name
+    assert restored.rules.all? { |r| r.block.nil? && !r.baked_actions.nil? },
+           "every baked rule carries probed actions as data, no block"
+
+    engine, transport = setup_engine(restored)
+    tasks = []
+    transport.subscribe("runes/agents/scraper/tasks") { |m| tasks << Runes::Json.parse(m.payload) }
+    engine.start
+    transport.publish("runes/events/contacts/found",
+                      Runes::Json.generate("email" => "ada@example.fr", "score" => 1.0, "name" => "Ada"))
+    engine.stop
+    assert_equal 1, tasks.size, "the committed baked world fired its contact_found rule"
+    assert_match(/ada@example\.fr/, tasks.first["prompt"])
+  end
+
   private
 
   def assert_load_error(pattern, &block)

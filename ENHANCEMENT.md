@@ -6,13 +6,12 @@ open, and how to pick it up. For the fleet/observatory split see
 is the enhancement backlog that survives a session close. Nothing here is
 vapour — every item is specified, spiked, or scoped.
 
-Status of the world at the last update (2026-10-24, Phases 40–42):
-parent suite **764 / 4810 / 0 failures** with SPINEL set (pin a2bd89005,
-kernel 70/70, L3 fleet gate green, stub workarounds deleted after
-matz/spinel#7213 + #6741 were fixed upstream); observatory **231 / 1148 /
-0** (`FleetDeclaration` renders the declared fleet on `/topology`; the
-parked 22-error suite batch was one missing
-`require "runes/backends/cruby"`).
+Status of the world at the last update (2026-11-12): parent suite
+**1148 runs / 6802 assertions / 0 failures, 3 skips**; observatory
+**241 / 1220 / 0**. The `/spinel` compiler checkout is now in-repo at pin
+a2bd89005 with a prebuilt `spinel/bin/spinel` (kernel self-check 70/70,
+compiled fleet runtime green — §1 below); `wasi-sdk` 25.0 is in `tmp/`
+for the S1 wasm spike.
 
 ---
 
@@ -35,29 +34,26 @@ WASI preopen, `tmp`+`rename` both directions, acks after apply). 11
 hermetic tests green via a CRuby-spawned guest; `Transport.build(kind:
 "wasi_guest")` wires it.
 
-**Next: the compiled fleet runtime.** Bake a loaded world into a Spinel
-kernel — the workflow pattern — and implement the *same* bridge protocol
-in-guest. The file bridge is the seam; the real-wasm canary was its gate,
-and it is now green. The Spinel kernel itself compiles and self-checks
-70/70 on pin a2bd89005 (verified 2026-10-24), so the compiler side is
-ready; what remains is extending the kernel-subset discipline to the
-loaded-world/fleet code and reusing the guest bridge.
-**Toolchain update 2026-11-12:** `wasi-sdk` 25.0 is now downloaded to
-`tmp/wasi-sdk-25.0-arm64-macos` (clang-19 with the wasm32-wasi target), so
-the S1 spike (Spinel-C → wasi-sdk hello world) is unblocked on that front.
-Still missing: the `/spinel` compiler checkout — clone matz/spinel at pin
-a2bd89005 and run `scripts/spinel_build.rb` (kernel self-check 70/70 was
-green on that pin) before the compiled fleet runtime can be baked. The
-kernel-side work (fleet code into the kernel subset) can proceed without
-the wasm target.
+**Landed 2026-11-12: the compiled fleet runtime.** A loaded world bakes to
+pure data at build time (`Runes::Fleet.bake_file`,
+`scripts/fleet_bake.rb` → `spin/baked_world.json`; actions probed to data,
+guards dropped and recorded) and compiles into `spin/fleet_kernel.rb` —
+`build/runes-fleet-kernel fleet` runs the engine in-guest over the
+in-process transport and prints `FLEET KERNEL OK` (verified natively,
+arm64, pin a2bd89005; CRuby parity prints the identical journal). The
+engine executes baked actions directly (`rule.baked_actions`, no block).
+The `/spinel` checkout now exists in-repo at pin a2bd89005 with a prebuilt
+`spinel/bin/spinel`, and `wasi-sdk` 25.0 sits in
+`tmp/wasi-sdk-25.0-arm64-macos`, so the S1 spike (Spinel-C → wasi-sdk
+hello world, `--target=wasm32-wasi`) is unblocked on both fronts.
 
-**How to pick it up.** Start from `docs/FLEET_DSL.md` §11 and the gate
-stub (`test/fixtures/fleet/spinel_gate_stub.rb`): the stub proves a fleet
-file can compile whole-program, but it does not *run* a world. The next
-step is a minimal compiled guest that boots with a baked world and answers
-the same inbox/outbox frames as `wasm/transport_guest.rb`; the existing
-CRuby-spawned tests are the contract, and the real-wasm canary is the
-runtime check.
+**Remaining in §1:** only the S1 wasm spike itself — compile
+`spin/kernel.rb` to `wasm32-wasi` with the wasi-sdk clang and run it under
+a wasm host (wasmtime), then the same baked-world bridge in a wasm guest
+instead of a native kernel. The native compiled fleet runtime — the item
+this section was tracking — is done; see `DEVELOPMENT_LOG.md` (2026-11-12)
+for the receipts and the one compiler finding (top-level `map(&:sym)`
+miscompiles once `fleet/engine.rb` is in the image; block form used).
 
 ## 2. Fleet — planner-driven worlds and spec v0.2
 

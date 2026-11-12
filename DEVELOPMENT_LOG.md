@@ -6,6 +6,50 @@
 > what each round found. They keep their original filenames on purpose.
 
 
+## Compiled fleet runtime — a baked world runs inside a Spinel kernel (2026-11-12)
+
+The last open item from `ENHANCEMENT.md` §1 is closed: a loaded fleet world
+now compiles into a standalone native binary and *runs* in-guest.
+
+- **Bake = pure data.** Prism is not a Spinel builtin, so the loader cannot
+  run in-guest; instead the world is baked at build time on CRuby with the
+  real fail-closed loader, each rule's actions probed to data
+  (`Runes::Fleet.bake_file` / `bake_file_from_source`,
+  `scripts/fleet_bake.rb`), guards dropped and recorded as such. The bake
+  is `World#to_baked_h` / `World.from_baked_h` + `Rule#to_baked_h` /
+  `Rule.from_baked_h` (`lib/runes/fleet/{world,rule}.rb`) — no procs cross
+  the compile boundary.
+- **Engine baked path.** `Engine#dispatch` executes `rule.baked_actions`
+  directly when the rule has no block (`lib/runes/fleet/engine.rb`);
+  `stringify` is now deep (Hash/Array recursion, Symbol→String) so the
+  journal serializes under JSONPure.
+- **The kernel.** `spin/fleet_kernel.rb` reconstructs the world from the
+  embedded `spin/baked_world.json`, runs the engine over the in-process
+  transport with one synthetic event, prints the journal, and exits 0 on
+  `FLEET KERNEL OK`. Build + run:
+  `spinel/bin/spinel spin/fleet_kernel.rb -o build/runes-fleet-kernel &&
+  ./build/runes-fleet-kernel fleet` — verified natively (arm64): world
+  `prospection`, 3 roles, 5 rules, the `contact_found` rule fires its
+  `task :scraper` action from data alone. CRuby parity: the same entry
+  prints the identical journal under `ruby -Ilib spin/fleet_kernel.rb fleet`.
+- **Compiler finding.** Spinel miscompiles a *top-level* `map(&:sym)`
+  (Symbol#to_proc) once `fleet/engine.rb` is in the image — block form
+  `map { |r| r.source }` is used in the kernel entry instead (noted in a
+  comment there). Inside engine methods the symbol form still works.
+- **Tests.** `test_bake_restore_round_trip_runs_baked_rules` and
+  `test_committed_baked_world_json_runs` (the committed
+  `spin/baked_world.json` must stay loadable and fire) in
+  `test/fleet_rules_test.rb`; `test_fleet_kernel_entry_passes_under_cruby`
+  and `test_fleet_kernel_compiles_and_runs_when_compiler_available`
+  (compiles with the repo's `spinel/bin/spinel` when present) in
+  `test/spinel_subset_test.rb`. The fleet lib files stay OUT of
+  `KERNEL_FILES`: the static subset linter blocks `send`/`&:`/`transform_keys`,
+  which the CRuby loader legitimately uses — the fleet kernel is gated by
+  the compile-and-run test instead.
+
+Harness suite: **1148 runs, 6802 assertions, 0 failures, 3 skips**;
+observer **241 runs, 1220 assertions, 0 failures**.
+
 ## LFM3 Phase 6 — contracted-team benchmark (2026-11-04)
 
 ## Done

@@ -488,6 +488,23 @@ runs under CRuby (Fiddle-bound parity) when no compiler is present.
 SPINEL=/path/to/spinel ruby scripts/spinel_build.rb   # compile + native self-check
 ```
 
+**The compiled fleet runtime (shipped 2026-11-12).** A loaded fleet world
+bakes to pure data at build time (real fail-closed loader on CRuby, each
+rule's actions probed to data, guards dropped and journaled as such) and
+compiles into its own kernel — no Prism, no procs in-guest:
+
+```bash
+ruby scripts/fleet_bake.rb examples/prospection.fleet.rb spin/baked_world.json
+spinel/bin/spinel spin/fleet_kernel.rb -o build/runes-fleet-kernel
+./build/runes-fleet-kernel fleet        # prints the journal, FLEET KERNEL OK
+bundle exec ruby -Ilib spin/fleet_kernel.rb fleet   # CRuby parity, same journal
+```
+
+The engine executes the baked rules' actions directly
+(`rule.baked_actions`, no block) over the in-process transport — world in,
+events in, journal out. Covered by bake/restore round-trip tests plus a
+compile-and-run test in `test/spinel_subset_test.rb`.
+
 Full analysis, tier map (A: pure kernel · B: FFI backends · C: sockets/wasm,
 deliberately deferred) and the compiler findings from the first native
 build: [`docs/spinel-compatibility.md`](docs/spinel-compatibility.md),

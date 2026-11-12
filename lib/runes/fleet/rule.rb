@@ -48,6 +48,63 @@ module Runes
         { "id" => id, "source" => "#{source_kind}:#{source}", "line" => line,
           "priority" => priority, "index" => index }
       end
+
+      # Baked form for the compiled fleet runtime: the rule as pure data.
+      # `actions` are the actions the loader's dry-run probe captured (the
+      # block is a proc and cannot cross the compile boundary); `guard` is
+      # dropped — a baked rule fires unconditionally, and the receipt says so.
+      attr_reader :baked_actions
+
+      def to_baked_h
+        { "id" => id, "source_kind" => source_kind.to_s, "source" => source.to_s,
+          "priority" => priority, "index" => index,
+          "actions" => (@baked_actions || []).map { |a| stringify_action(a) } }
+      end
+
+      def self.from_baked_h(hash, index:)
+        rule = allocate
+        rule.send(:initialize_baked, hash, index)
+        rule
+      end
+
+      def stringify_action(action)
+        case action[:kind]
+        when :task
+          { "kind" => "task", "target" => action[:target].to_s, "prompt" => action[:prompt].to_s }
+        when :publish
+          { "kind" => "publish", "channel" => action[:channel].to_s, "payload" => action[:payload] }
+        when :notify
+          { "kind" => "notify", "text" => action[:text].to_s, "level" => action[:level].to_s }
+        when :set_fact
+          { "kind" => "set_fact", "cell" => action[:cell].to_s, "value" => action[:value] }
+        else
+          { "kind" => action[:kind].to_s }
+        end
+      end
+
+      protected
+
+      def initialize_baked(hash, index)
+        @id = hash["id"]
+        @source_kind = hash["source_kind"].to_sym
+        @source = hash["source"].to_sym
+        @guard = nil
+        @block = nil
+        @line = nil
+        @priority = hash["priority"] || 0
+        @index = hash["index"] || index
+        @baked_actions = Array(hash["actions"]).map { |a| symbolize_action(a) }
+      end
+
+      def symbolize_action(action)
+        case action["kind"]
+        when "task" then { kind: :task, target: action["target"].to_sym, prompt: action["prompt"].to_s, opts: {} }
+        when "publish" then { kind: :publish, channel: action["channel"].to_sym, payload: action["payload"] }
+        when "notify" then { kind: :notify, text: action["text"].to_s, level: action["level"].to_sym }
+        when "set_fact" then { kind: :set_fact, cell: action["cell"].to_sym, value: action["value"] }
+        else { kind: action["kind"].to_sym }
+        end
+      end
     end
 
     # An immutable observation from the fabric (§3), as guards see it:

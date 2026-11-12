@@ -1,0 +1,212 @@
+{
+  "name": "prospection",
+  "description": "CRM pipeline: qualify contacts, draft outreach, review.",
+  "transport": "mqtt5",
+  "group": "prospection-prompts",
+  "config": {
+    "env": "staging",
+    "max_actions_per_event": 16
+  },
+  "roles": {
+    "scraper": {
+      "model": "deepseek-flash",
+      "model_opts": {
+        "variation": "high"
+      },
+      "tools": {
+        "fs_read": "allow",
+        "exec": {
+          "allow": [
+            "curl",
+            "jq"
+          ]
+        }
+      },
+      "workspace": "workspace/scraper",
+      "identity": "config/keys/scraper.pem",
+      "concurrency": 2
+    },
+    "writer": {
+      "model": "glm-5.3-flash",
+      "model_opts": {},
+      "tools": {
+        "fs_write": "allow"
+      },
+      "workspace": null,
+      "identity": null,
+      "concurrency": null
+    },
+    "reviewer": {
+      "model": "deepseek-flash",
+      "model_opts": {},
+      "tools": {},
+      "workspace": null,
+      "identity": null,
+      "concurrency": null
+    }
+  },
+  "channels": {
+    "contact_found": {
+      "topic": "runes/events/contacts/found",
+      "schema": "contact",
+      "retain": false
+    },
+    "contact_qualified": {
+      "topic": "runes/events/contacts/qualified",
+      "schema": "contact",
+      "retain": false
+    },
+    "draft_ready": {
+      "topic": "runes/events/drafts/ready",
+      "schema": "draft",
+      "retain": false
+    },
+    "metrics": {
+      "topic": "runes/events/metrics",
+      "schema": null,
+      "retain": false
+    },
+    "outbox": {
+      "topic": "runes/events/outbox",
+      "schema": null,
+      "retain": false
+    }
+  },
+  "edges": [
+    {
+      "from": "scraper",
+      "to": "writer"
+    },
+    {
+      "from": "writer",
+      "to": "reviewer"
+    },
+    {
+      "from": "reviewer",
+      "to": "outbox"
+    },
+    {
+      "from": "scraper",
+      "to": "metrics"
+    },
+    {
+      "from": "contact_found",
+      "to": "scraper"
+    }
+  ],
+  "facts": {
+    "max_drafts_per_hour": {
+      "value": 20,
+      "mutable": false
+    },
+    "outreach_tone": {
+      "value": "professional",
+      "mutable": false
+    }
+  },
+  "schedules": {
+    "weekly_report": {
+      "cron": "0 9 * * MON"
+    }
+  },
+  "schemas": {
+    "contact": {
+      "fields": {
+        "email": "string",
+        "score": "number",
+        "name": "string"
+      },
+      "required": [
+        "email"
+      ]
+    },
+    "draft": {
+      "fields": {
+        "risk": "string",
+        "contact": "string"
+      },
+      "required": [
+        "risk"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "id": "contact_found-0",
+      "source_kind": "channel",
+      "source": "contact_found",
+      "priority": 0,
+      "index": 0,
+      "actions": [
+        {
+          "kind": "task",
+          "target": "scraper",
+          "prompt": "Enrichis %{email} et publie sur :contact_qualified"
+        }
+      ]
+    },
+    {
+      "id": "contact_qualified-1",
+      "source_kind": "channel",
+      "source": "contact_qualified",
+      "priority": 0,
+      "index": 1,
+      "actions": [
+        {
+          "kind": "task",
+          "target": "writer",
+          "prompt": "Redige l'email pour %{name} (ton: %{outreach_tone})"
+        },
+        {
+          "kind": "publish",
+          "channel": "metrics",
+          "payload": {
+            "kind": "qualified"
+          }
+        }
+      ]
+    },
+    {
+      "id": "draft_ready-2",
+      "source_kind": "channel",
+      "source": "draft_ready",
+      "priority": 0,
+      "index": 2,
+      "actions": [
+        {
+          "kind": "notify",
+          "text": "Brouillon pret pour %{contact}",
+          "level": "info"
+        }
+      ]
+    },
+    {
+      "id": "guard_denied-3",
+      "source_kind": "guard_denied",
+      "source": "guard_denied",
+      "priority": 0,
+      "index": 3,
+      "actions": [
+        {
+          "kind": "notify",
+          "text": "Refus: %{agent} / %{tool} / %{action}",
+          "level": "warn"
+        }
+      ]
+    },
+    {
+      "id": "weekly_report-4",
+      "source_kind": "schedule",
+      "source": "weekly_report",
+      "priority": 0,
+      "index": 4,
+      "actions": [
+        {
+          "kind": "notify",
+          "text": "Rapport hebdo pret",
+          "level": "info"
+        }
+      ]
+    }
+  ]
+}

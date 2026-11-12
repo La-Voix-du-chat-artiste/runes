@@ -149,6 +149,68 @@ module Runes
         )
       end
 
+      # ---- baking (compiled fleet runtime) ----
+      #
+      # A loaded world serializes to pure data — no procs, no transport
+      # handles — so it can be baked into a Spinel kernel at build time and
+      # reconstructed in-guest. Rules carry their PROBED actions as data
+      # (the block itself is a proc and cannot cross the compile boundary);
+      # guards are dropped in the baked form and the receipt says so.
+      def to_baked_h
+        {
+          "name" => name,
+          "description" => description,
+          "transport" => transport.to_s,
+          "group" => group,
+          "config" => config,
+          "roles" => roles.map { |id, r|
+            [id.to_s, { "model" => r.model, "model_opts" => r.model_opts, "tools" => r.tools,
+                        "workspace" => r.workspace, "identity" => r.identity, "concurrency" => r.concurrency }]
+          }.to_h,
+          "channels" => channels.map { |id, c|
+            [id.to_s, { "topic" => c.topic, "schema" => c.schema, "retain" => c.retain }]
+          }.to_h,
+          "edges" => edges.map { |e| { "from" => e.from.to_s, "to" => e.to.to_s } },
+          "facts" => facts.map { |id, f| [id.to_s, { "value" => f.value, "mutable" => f.mutable }] }.to_h,
+          "schedules" => schedules.map { |id, s| [id.to_s, { "cron" => s.cron }] }.to_h,
+          "schemas" => schemas.map { |id, s| [id.to_s, { "fields" => s.fields, "required" => s.required }] }.to_h,
+          "rules" => rules.map(&:to_baked_h)
+        }
+      end
+
+      def self.from_baked_h(hash)
+        world = new(
+          name: hash["name"], description: hash["description"],
+          transport: hash["transport"].to_sym, group: hash["group"],
+          config: hash["config"] || {}
+        )
+        (hash["roles"] || {}).each do |id, r|
+          world.roles[id.to_sym] = Role.new(id: id.to_sym, model: r["model"], model_opts: r["model_opts"],
+                                            tools: r["tools"], workspace: r["workspace"],
+                                            identity: r["identity"], concurrency: r["concurrency"])
+        end
+        (hash["channels"] || {}).each do |id, c|
+          world.channels[id.to_sym] = Channel.new(id: id.to_sym, topic: c["topic"],
+                                                  schema: c["schema"]&.to_sym, retain: c["retain"])
+        end
+        (hash["edges"] || []).each do |e|
+          world.edges << Edge.new(from: e["from"].to_sym, to: e["to"].to_sym, when: nil)
+        end
+        (hash["facts"] || {}).each do |id, f|
+          world.facts[id.to_sym] = Fact.new(id: id.to_sym, value: f["value"], mutable: f["mutable"])
+        end
+        (hash["schedules"] || {}).each do |id, s|
+          world.schedules[id.to_sym] = Schedule.new(id: id.to_sym, cron: s["cron"])
+        end
+        (hash["schemas"] || {}).each do |id, s|
+          world.schemas[id.to_sym] = Schema.new(id: id.to_sym, fields: s["fields"], required: s["required"])
+        end
+        (hash["rules"] || []).each_with_index do |r, index|
+          world.rules << Rule.from_baked_h(r, index: index)
+        end
+        world
+      end
+
       # ---- the fleet runtime's own grants (spec §8.2) ----
 
       # The broker identity a fleet runs under: `fleet-<name>` (see
