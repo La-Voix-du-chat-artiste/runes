@@ -25,7 +25,12 @@ execute do
     brief = ENV.fetch('RUNES_DISCOVERY_BRIEF', 'Describe this codebase and propose one improvement.')
     out_dir = File.expand_path(ENV.fetch('RUNES_DISCOVERY_OUT', File.join(Dir.pwd, 'tmp', 'discovery')))
     renderings = Runes::Discovery::Renderings.build(repo: repo, brief: brief)
-    { repo: repo, brief: brief, out_dir: out_dir, renderings: renderings }
+    # Benchmark control arm: RUNES_DISCOVERY_VIEWS=tree renders only the tree
+    # view and skips exploration entirely (zero finding calls).
+    views = ENV.fetch('RUNES_DISCOVERY_VIEWS', 'all')
+    renderings = renderings.slice('state_id', 'sha', 'tree') if views == 'tree'
+    { repo: repo, brief: brief, out_dir: out_dir, renderings: renderings,
+      tree_only: views == 'tree' }
   end
 
   # ── Phase 1 — brief split (one fresh context, typed JSON) ────────────
@@ -44,7 +49,7 @@ execute do
   end
 
   ruby(:subproblems) do
-    raw = chat!(:brief_split).response.to_s
+    raw = chat!(:brief_split).response.to_s.dup.force_encoding('UTF-8').scrub
     json = begin
       JSON.parse(raw[/\{.*\}/m].to_s)
     rescue JSON::ParserError, TypeError
@@ -63,9 +68,11 @@ execute do
   end
 
   # ── Phase 2 — exploration (one fresh context per subproblem) ────────
+  # Control arm (RUNES_DISCOVERY_VIEWS=tree): no exploration at all.
 
   map(:explore, run: :explore_one) do |my|
-    my.items = ruby!(:subproblems).value
+    world = ruby!(:world).value
+    my.items = world[:tree_only] ? [] : ruby!(:subproblems).value
   end
 
   # ── Phase 3 — anchor verification (authoritative, Ruby) ─────────────
@@ -111,7 +118,7 @@ execute do
     end
 
     problem = {
-      'restatement' => JSON.parse(chat!(:brief_split).response.to_s[/\{.*\}/m].to_s)['restatement'].to_s,
+      'restatement' => JSON.parse(chat!(:brief_split).response.to_s[/\{.*\}/m].to_s.dup.force_encoding("UTF-8").scrub)['restatement'].to_s,
       'success_criteria' => ['every claim in the card has a resolved anchor'],
       'out_of_scope' => []
     }
@@ -122,7 +129,7 @@ execute do
       'loop_events' => loop_events,
       'dropped_findings' => dropped.size,
       'sufficiency' => { 'coverage' => subproblems.empty? ? 0.0 : subproblems.count { |s| s['status'] == 'answered' }.to_f / subproblems.size,
-                         'verdict' => subproblems.empty? || subproblems.all? { |s| s['status'] == 'answered' } ? 'sufficient' : 'insufficient' }
+                         'verdict' => !subproblems.empty? && subproblems.all? { |s| s['status'] == 'answered' } ? 'sufficient' : 'insufficient' }
     }
     Runes::Discovery::Card.assemble(
       state_id: world[:renderings]['state_id'],
@@ -167,7 +174,7 @@ execute(:explore_one) do
     terms = sp['text'].to_s.scan(/[a-z_]{4,}/i).map(&:downcase).uniq.first(5)
     candidates = imports.keys.select do |f|
       content = begin
-        File.read(File.join(repo, f), 50_000)
+        File.read(File.join(repo, f), 50_000).dup.force_encoding("UTF-8").scrub
       rescue StandardError
         next false
       end
@@ -181,7 +188,7 @@ execute(:explore_one) do
     candidates = ruby!(:candidates).value[:candidates]
     span = if candidates.first
              begin
-               File.read(File.join(item['repo'], candidates.first), 4_000)
+               File.read(File.join(item['repo'], candidates.first), 4_000).dup.force_encoding('UTF-8').scrub
              rescue StandardError
                'unreadable'
              end
@@ -194,18 +201,19 @@ execute(:explore_one) do
       #{span}
 
       State what this code does that answers the subproblem, with an anchor
-      "path:start-end". Symbols must match defined names exactly. If the span
-      does not answer it, output {"finding": null, "unknown": "..."}.
-      Never invent an anchor. Max 200 tokens.
-      Output JSON only:
-      {"subproblem_id": "#{item['sp']['id']}", "finding": "...", "anchors": ["path:1-10"], "confidence": "grounded|partial|guess", "unknowns": []}
+      "<real file path>:<start>-<end>" pointing INTO the file shown above.
+      Symbols must match defined names exactly. If the span does not answer
+      it, output {"finding": null, "unknown": "..."}.
+      Never invent an anchor — an anchor that does not resolve is dropped.
+      Max 200 tokens. Output JSON only:
+      {"subproblem_id": "#{item['sp']['id']}", "finding": "...", "anchors": ["#{candidates.first || 'file.rb'}:1-10"], "confidence": "grounded|partial|guess", "unknowns": []}
     PROMPT
   end
 
   ruby(:parsed) do
-    raw = chat!(:finding).response.to_s
+    raw = chat!(:finding).response.to_s.dup.force_encoding("UTF-8").scrub
     json = begin
-      JSON.parse(raw[/\{.*\}/m].to_s)
+      JSON.parse(raw[/\{.*\}/m].to_s.dup.force_encoding("UTF-8").scrub)
     rescue JSON::ParserError, TypeError
       nil
     end

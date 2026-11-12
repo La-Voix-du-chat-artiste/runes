@@ -42,12 +42,14 @@ and it is now green. The Spinel kernel itself compiles and self-checks
 70/70 on pin a2bd89005 (verified 2026-10-24), so the compiler side is
 ready; what remains is extending the kernel-subset discipline to the
 loaded-world/fleet code and reusing the guest bridge.
-**Blocked 2026-11-11 on toolchain:** the S1 spike (Spinel-C → wasi-sdk
-hello world) needs `wasi-sdk`, which is not installed in this
-environment (`/spinel` checkout also absent — clone
-matz/spinel at pin a2bd89005 and `scripts/spinel_build.rb` first). The
+**Toolchain update 2026-11-12:** `wasi-sdk` 25.0 is now downloaded to
+`tmp/wasi-sdk-25.0-arm64-macos` (clang-19 with the wasm32-wasi target), so
+the S1 spike (Spinel-C → wasi-sdk hello world) is unblocked on that front.
+Still missing: the `/spinel` compiler checkout — clone matz/spinel at pin
+a2bd89005 and run `scripts/spinel_build.rb` (kernel self-check 70/70 was
+green on that pin) before the compiled fleet runtime can be baked. The
 kernel-side work (fleet code into the kernel subset) can proceed without
-it; the wasm target cannot.
+the wasm target.
 
 **How to pick it up.** Start from `docs/FLEET_DSL.md` §11 and the gate
 stub (`test/fixtures/fleet/spinel_gate_stub.rb`): the stub proves a fleet
@@ -65,10 +67,15 @@ is written to `worlds/`; `RUNES_FLEET_EMIT=0` opts out), **rule
 priorities** (`on :x, priority: N` — higher first, ties in declaration
 order), and **mutable cells** (`cell :name, initial: v` + `set` in rules,
 every set journaled as a `fact_set` WAL entry before it is applied).
-Still open from `docs/FLEET_DSL.md` §14: **nested fleets** (lexical,
-analyzable import). The Phase-40 review fixes (whole-rule refusal on
-raise, boot-first journaling, reserved-word interception incl. the
-`Kernel#spawn` bypass) are the ground these build on.
+**Nested fleets landed 2026-11-12** (lexical, analyzable import):
+`import "sub.fleet.rb"` loads the sub-world through the same fail-closed
+loader (cycle-detected) and merges it under a `sub__` namespace prefix —
+roles/channels/facts/schedules/schemas prefixed, edges re-pointed, imported
+rules wrapped in a prefixing context so their action targets resolve in the
+merged world. Tests cover merge, firing with prefixed targets, cycles, and
+missing files. The Phase-40 review fixes (whole-rule refusal on raise,
+boot-first journaling, reserved-word interception incl. the `Kernel#spawn`
+bypass) are the ground these build on.
 
 ## 3. Observatory — the remaining P1 views
 
@@ -76,8 +83,9 @@ raise, boot-first journaling, reserved-word interception incl. the
 kind+subject, count, ack — plus detectors for impersonation and signature
 failure running in ingest, `/alerts` page with ack and a nav badge) and
 `O1.6` the plugin catalog (`/plugins` renders the seven runes straight
-from the registry). Still open: `O1.7` the plan chain
-(prompt → plan → tool calls → evidence → verdict), then `O0.4`
+from the registry). **O1.7 landed 2026-11-12:** the plan chain on the
+interaction page (`PlanChain` joins prompt → plan → tool calls → verdict
+from the request's packets). Still open: `O0.4`
 retention/rollups at real volume (`/feed` payload bytes and unbounded
 per-agent rendering are the measured limits). Auth gates `O1.2`
 (launch-from-UI is remote execution).
@@ -101,10 +109,14 @@ prototype `examples/discover_codebase.rb` + `Runes::Discovery`
 swarm-layer contract diff (`discovery.v1`/`finding.v1` in
 `Capacity::SCHEMAS`, `discovery_insufficient`/`anchor_unresolved`/
 `loop_detected` in `Decision::REASONS`, `discoverer` hop). Offline-tested
-end to end in `test/discovery_test.rb`. **Still open from the design:** the
-three-arm benchmark (full discovery vs repo-map-only vs one external call)
-with mission-acceptance as the downstream metric, and the d1
-sufficiency-judge + ideate A‖B fan-out in the contracted layer.
+end to end in `test/discovery_test.rb`. **Three-arm benchmark done
+2026-11-12** (`bench/discovery/results/2026-11-12-discovery.md`): full
+discovery answers 4/4 subproblems with resolved anchors (anchor_pass 1.00,
+0 loop events, 5 calls) vs the tree-only control at 0/4 — the
+exploration-modality lift the swarm pilots could not produce; the external
+arm is infra (no endpoint). Still open from the design: mission acceptance
+in `/build` as the downstream metric, and the d1 sufficiency-judge +
+ideate A‖B fan-out in the contracted layer.
 
 **Done 2026-11-11:** `bin/runes-kanban` validates one `.mmd` file or a
 whole `--tree`, with the same rules as their `validate_mermaid.rb`

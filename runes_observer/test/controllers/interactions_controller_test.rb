@@ -52,4 +52,37 @@ class InteractionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_match "No packet carries this id", response.body
   end
+
+  # O1.7: a seeded mission renders the plan chain — prompt → plan → tool
+  # calls → verdict — with the verifier's verdict visible.
+  test "renders the plan chain with the verdict" do
+    Packet.delete_all
+    base = 10.seconds.ago
+    rid = "chain-1"
+    mk = lambda do |topic, kind, event, tool, payload, at|
+      Packet.create!(topic: topic, kind: kind, request_id: rid, agent_id: "runes-alpha",
+                     event: event, tool: tool, payload: payload,
+                     occurred_at: at, received_at: at, payload_bytes: payload.to_s.bytesize)
+    end
+    mk.call("runes/prompts", "prompt", nil, nil, JSON.generate("prompt" => "write a file"), base)
+    mk.call("runes/prompts/#{rid}/progress", "progress", "plan_ready", nil,
+            JSON.generate("event" => "plan_ready", "plan" => { "steps" => 1 }), base + 1)
+    mk.call("runes/tools/write_file/request", "tool_request", nil, "write_file",
+            JSON.generate("path" => "a.txt"), base + 2)
+    mk.call("runes/tools/write_file/response", "tool_response", nil, "write_file",
+            JSON.generate("ok" => true), base + 3)
+    mk.call("runes/prompts/#{rid}/progress", "progress", "prompt_complete", nil,
+            JSON.generate("event" => "prompt_complete", "verdict" => "pass"), base + 4)
+    mk.call("runes/prompts/#{rid}/response", "response", nil, nil, "done", base + 4.5)
+
+    get interaction_path(rid)
+
+    assert_response :success
+    assert_match "Plan chain", response.body
+    assert_match "badge--prompt", response.body
+    assert_match "badge--plan", response.body
+    assert_match "Tool: write_file", response.body
+    assert_match "badge--tool_response", response.body
+    assert_match "Verdict: prompt_complete", response.body
+  end
 end

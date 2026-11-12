@@ -402,14 +402,6 @@ class FleetRulesTest < Minitest::Test
     assert_equal ["contact acme (tone: professional)"], notices.map { |n| n["text"] }
   end
 
-  private
-
-  def assert_load_error(pattern, &block)
-    err = assert_raises(Runes::Fleet::LoadError, &block)
-    assert_match(pattern, err.message)
-    err
-  end
-
   # ---- v0.2 §14.2: explicit rule priorities over declaration order ----
 
   def test_priority_orders_firing_over_declaration_order
@@ -455,7 +447,7 @@ class FleetRulesTest < Minitest::Test
       end
     RUBY
     src = fleet_source(rules: rules).sub('fact :tone, "professional"',
-                                          'fact :tone, "professional"\n        cell :hits, initial: 0')
+                                          "fact :tone, \"professional\"\n        cell :hits, initial: 0")
     world = fleet(src)
     engine, transport = setup_engine(world)
     notices = []
@@ -493,5 +485,109 @@ class FleetRulesTest < Minitest::Test
       fleet(fleet_source(rules: "on :found do |e|\n  set :nope, 1\nend\n"))
     end
     assert_match(/not a declared mutable cell/, err.message)
+  end
+
+  # ---- v0.2 §14.4: nested fleets (lexical import, namespaced merge) ----
+
+  SUB_FLEET = <<~'RUBY'.freeze
+    # fleet-spec: 0.1
+    fleet "sub" do
+      transport :inproc
+      channel :sub_events, "runes/events/sub"
+      agent :sub_worker do
+        model "m"
+        tools fs_read: :allow
+      end
+      route :sub_events, :sub_worker
+      on :sub_events do |e|
+        task :sub_worker, "handle %{name}"
+      end
+    end
+  RUBY
+
+  def write_sub_fleet(dir)
+    path = File.join(dir, "sub.fleet.rb")
+    File.write(path, SUB_FLEET)
+    path
+  end
+
+  def test_import_merges_the_sub_world_under_a_prefix
+    Dir.mktmpdir("fleet-import") do |dir|
+      write_sub_fleet(dir)
+      src = header + <<~RUBY
+        fleet "parent" do
+          transport :inproc
+          channel :found, "runes/events/found"
+          agent :writer do
+            model "m"
+            tools fs_write: :allow
+          end
+          route :writer, :sub__sub_worker
+          import "sub.fleet.rb"
+        end
+      RUBY
+      world = Runes::Fleet.load(src, path: File.join(dir, "parent.fleet.rb"))
+      assert world.role?(:sub__sub_worker), "imported agent is namespaced"
+      assert world.channel?(:sub__sub_events)
+      assert world.edges.any? { |e| e.to == :sub__sub_worker }, "parent can route to the imported agent"
+      rule = world.rules.find { |r| r.source == :sub__sub_events }
+      refute_nil rule, "imported rule merged with prefixed source"
+    end
+  end
+
+  def test_imported_rule_fires_with_prefixed_action_targets
+    Dir.mktmpdir("fleet-import-run") do |dir|
+      write_sub_fleet(dir)
+      src = header + <<~RUBY
+        fleet "parent" do
+          transport :inproc
+          channel :found, "runes/events/found"
+          agent :writer do
+            model "m"
+            tools fs_write: :allow
+          end
+          route :writer, :sub__sub_worker
+          import "sub.fleet.rb"
+        end
+      RUBY
+      world = Runes::Fleet.load(src, path: File.join(dir, "parent.fleet.rb"))
+      engine, transport = setup_engine(world)
+      tasks = []
+      transport.subscribe("runes/agents/sub__sub_worker/tasks") { |m| tasks << Runes::Json.parse(m.payload) }
+      engine.start
+      transport.publish("runes/events/sub", Runes::Json.generate("name" => "x"))
+      engine.stop
+      assert_equal 1, tasks.size, "the imported rule fired"
+      assert_equal "handle x", tasks.first["prompt"], "template rendered, target prefixed"
+    end
+  end
+
+  def test_import_cycle_is_a_load_error
+    Dir.mktmpdir("fleet-cycle") do |dir|
+      File.write(File.join(dir, "a.fleet.rb"), "# fleet-spec: 0.1\nfleet \"a\" do\n  transport :inproc\n  import \"b.fleet.rb\"\nend\n")
+      File.write(File.join(dir, "b.fleet.rb"), "# fleet-spec: 0.1\nfleet \"b\" do\n  transport :inproc\n  import \"a.fleet.rb\"\nend\n")
+      err = assert_raises(Runes::Fleet::LoadError) do
+        Runes::Fleet.load_file(File.join(dir, "a.fleet.rb"))
+      end
+      assert_match(/import cycle/, err.message)
+    end
+  end
+
+  def test_import_missing_file_is_a_load_error
+    Dir.mktmpdir("fleet-missing") do |dir|
+      err = assert_raises(Runes::Fleet::LoadError) do
+        Runes::Fleet.load(header + "fleet \"p\" do\n  transport :inproc\n  import \"nope.fleet.rb\"\nend\n",
+                          path: File.join(dir, "p.fleet.rb"))
+      end
+      assert_match(/import target not found/, err.message)
+    end
+  end
+
+  private
+
+  def assert_load_error(pattern, &block)
+    err = assert_raises(Runes::Fleet::LoadError, &block)
+    assert_match(pattern, err.message)
+    err
   end
 end

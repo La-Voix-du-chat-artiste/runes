@@ -18,14 +18,18 @@ module Runes
 
     module_function
 
-    def load_file(path, args: {})
-      load(File.read(path), path: path, args: args)
+    def load_file(path, args: {}, loading: [])
+      load(File.read(path), path: path, args: args, loading: loading)
     end
 
     # Load a fleet document from a string. `args` are the load-time
     # parameters of spec §7 (lowest precedence: defaults < config block <
-    # args).
-    def load(source, path: "(fleet)", args: {})
+    # args). `loading` is the import stack for cycle detection (§14.4):
+    # a file that imports itself, directly or transitively, refuses to load.
+    def load(source, path: "(fleet)", args: {}, loading: [])
+      abs = File.expand_path(path.to_s)
+      raise LoadError, "fleet #{path}: import cycle detected (#{abs} is already being loaded)" if loading.include?(abs)
+
       check_header!(source, path)
       result = Prism.parse(source)
       unless result.errors.empty?
@@ -33,7 +37,7 @@ module Runes
         raise LoadError, "fleet #{path}: syntax error at line #{err.location.start_line}: #{err.message}"
       end
       Walker.new(path).verify!(result.value)
-      Builder.build(source, path: path, args: args)
+      Builder.build(source, path: path, args: args, loading: loading + [abs])
     end
 
     # The spec version is declared in a leading comment (§13) so it is

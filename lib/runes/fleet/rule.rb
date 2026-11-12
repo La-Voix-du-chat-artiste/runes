@@ -141,5 +141,48 @@ module Runes
         @actions << { kind: :notify, text: text.to_s, level: level.to_sym }
       end
     end
+
+    # v0.2 §14.4: the context a merged (imported) rule body runs in. Every
+    # id the body names — task target, publish channel, set cell, fact read —
+    # is prefixed with the import's namespace, so the imported rules operate
+    # on the imported world's merged declarations. Everything else delegates.
+    class PrefixingRuleContext
+      def initialize(inner, prefix)
+        @inner = inner
+        @prefix = prefix.to_s
+      end
+
+      def actions
+        @inner.actions
+      end
+
+      def next!
+        @inner.next!
+      end
+
+      def fact(name)
+        @inner.fact("#{@prefix}__#{name}")
+      end
+
+      def task(target, prompt, **opts)
+        @inner.task("#{@prefix}__#{target}", prompt, **opts)
+      end
+
+      def publish(channel, payload)
+        @inner.publish("#{@prefix}__#{channel}", payload)
+      end
+
+      def set(name, value)
+        @inner.set("#{@prefix}__#{name}", value)
+      end
+
+      def method_missing(name, *args, &block)
+        @inner.send(name, *args, &block)
+      end
+
+      def respond_to_missing?(name, include_private = false)
+        @inner.respond_to?(name, include_private) || super
+      end
+    end
   end
 end

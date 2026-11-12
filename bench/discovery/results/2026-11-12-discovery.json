@@ -1,0 +1,34 @@
+{
+  "benchmark": "discovery-phase-v1",
+  "date": "2026-11-12",
+  "repo": "/Users/lavoixduchatartiste/Boxes/runic",
+  "brief": "Add a kanban board to the observatory: where would it plug in, what would it read, what would it write?",
+  "model": "LiquidAI/LFM3-1.7B-MLX-4bit",
+  "arms": {
+    "full": {
+      "arm": "full",
+      "anchor_pass_rate": 1.0,
+      "loop_events": 0,
+      "text_calls": 5,
+      "subproblems": 4,
+      "coverage": 1.0,
+      "sufficiency_verdict": "sufficient",
+      "json_path": "/var/folders/2r/s70_ywm10wj5zk0f6b4650p00000gn/T/discovery-full-20261112-13525-fqon1l/out/discovery.json"
+    },
+    "tree-only": {
+      "arm": "tree-only",
+      "anchor_pass_rate": 0.0,
+      "loop_events": 0,
+      "text_calls": 1,
+      "subproblems": 0,
+      "coverage": 0.0,
+      "sufficiency_verdict": "insufficient",
+      "json_path": "/var/folders/2r/s70_ywm10wj5zk0f6b4650p00000gn/T/discovery-tree-only-20261112-13525-t0ewnb/out/discovery.json"
+    },
+    "external": {
+      "arm": "external",
+      "infra": true,
+      "error": "no endpoint configured (RUNES_DISCOVERY_EXTERNAL_BASE_URL/_MODEL)"
+    }
+  }
+}

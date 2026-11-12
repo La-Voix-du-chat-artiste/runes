@@ -300,6 +300,29 @@ README updated for the fleet v0.2 + observatory P1 landing: next-steps
 item 1 (fleet) and items 3–4 (plugin catalog, alerts) marked done, receipts
 table refreshed (1135 runs harness / 240 observer, lib 30 029 lines / 132
 files, test 20 056 / 83), `worlds/` added to the layout. Commit follows.
+
+## Remaining-table sweep (2026-11-12)
+
+- **Nested fleets** (FLEET_DSL §14.4): `import "sub.fleet.rb"` — lexical,
+  cycle-detected, merged under a `sub__` prefix; imported rules wrapped in
+  a `PrefixingRuleContext` so action targets resolve in the merged world.
+  Tests: merge, firing with prefixed targets, cycle, missing file. (Also
+  fixed a latent test bug: a `private` mid-class had been hiding the last
+  9 fleet tests from minitest.)
+- **O1.7 plan chain**: `PlanChain` service + a chain panel on the
+  interaction page (prompt → plan → tool calls → verdict), controller-tested.
+- **Discovery three-arm benchmark** (`bench/discovery/run.rb`, results
+  `bench/discovery/results/2026-11-12-discovery.{json,md}`): full discovery
+  4/4 subproblems answered, anchor_pass 1.00, 0 loop events, 5 calls vs
+  tree-only control 0/4; external arm infra (no endpoint). Fixed along the
+  way: BINARY/UTF-8 encoding crashes in the example, and the model copying
+  the literal placeholder anchor.
+- **Toolchain**: wasi-sdk 25.0 downloaded to `tmp/` (S1 spike unblocked on
+  that front); `/spinel` checkout + kernel build still needed for the
+  compiled fleet runtime.
+
+Harness suite: **1144 runs, 6782 assertions, 0 failures, 3 skips**;
+observer **241 runs, 1220 assertions, 0 failures**.
 ---
 
 ## Objective

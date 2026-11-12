@@ -500,8 +500,11 @@ end
    mutable fact; rules `set :name, value`; every set is journaled
    (`fact_set` WAL entry) before it is applied, so a dispatch's entries are
    its determinism certificate. `fact` stays read-only.
-4. **Nested fleets** (a fleet importing another fleet as a sub-topology) —
-   still deferred; import would be lexical and analyzable, never dynamic.
+4. **Nested fleets** — ✅ landed (v0.2): `import "sub.fleet.rb"` is lexical
+   and analyzable — the sub-world loads through the same fail-closed loader
+   (cycle-detected) and merges under a `sub__` namespace prefix; imported
+   rules run wrapped in a prefixing context so their action targets resolve
+   in the merged world. Never dynamic.
 5. **Spinel gap tracking** — §6's forbidden list must be reconciled against
    Spinel's `docs/limitations.md` as both projects evolve; a conformance CI
    job is the mechanism.

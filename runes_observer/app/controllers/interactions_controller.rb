@@ -10,5 +10,6 @@ class InteractionsController < ApplicationController
     @agents = @packets.filter_map(&:agent_id).uniq
     @prompt = @packets.find { |packet| packet.kind == "prompt" }&.parsed&.dig("prompt")
     @timeline = InteractionTimeline.build(@packets)
+    @plan_chain = PlanChain.build(@packets)
   end
 end

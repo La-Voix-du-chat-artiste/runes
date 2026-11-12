@@ -36,8 +36,8 @@ module Runes
         end
       end
 
-      def self.build(source, path:, args: {})
-        top = TopBuilder.new(args)
+      def self.build(source, path:, args: {}, loading: [])
+        top = TopBuilder.new(args, loading: loading, base_dir: File.dirname(File.expand_path(path.to_s)))
         begin
           top.instance_eval(source, path.to_s, 1)
         rescue LoadError
@@ -59,15 +59,17 @@ module Runes
         extend Reserves
         reserves :spawn, :cell, :interval
 
-        def initialize(args)
+        def initialize(args, loading: [], base_dir: Dir.pwd)
           @args = args.transform_keys(&:to_s)
+          @loading = loading
+          @base_dir = base_dir
           @world_builder = nil
         end
 
         def fleet(name, &block)
           raise LoadError, "fleet: exactly one fleet block per file (spec §4.1)" if @world_builder
 
-          @world_builder = WorldBuilder.new(name, @args)
+          @world_builder = WorldBuilder.new(name, @args, loading: @loading, base_dir: @base_dir)
           @world_builder.instance_eval(&block) if block
         end
 
@@ -100,9 +102,11 @@ module Runes
 
         attr_reader :name
 
-        def initialize(name, args)
+        def initialize(name, args, loading: [], base_dir: Dir.pwd)
           @name = validate_id(name, "fleet name").to_s
           @args = args
+          @loading = loading
+          @base_dir = base_dir
           @description = nil
           @transport = nil
           @group = nil
@@ -114,7 +118,70 @@ module Runes
           @schedules = {}
           @raw_rules = []
           @schemas = {}
+          @imports = []
         end
+
+        # v0.2 §14.4: nested fleets — a LEXICAL import. The imported file is
+        # loaded by the same fail-closed loader (cycle-detected via the
+        # loading stack) and merged under a namespace prefix derived from
+        # its basename: `import "sub.fleet.rb"` exposes `sub__agent`,
+        # `sub__channel`, … Rules from the import keep their own source but
+        # their action targets are prefixed by a wrapping context, so the
+        # merged world is still pure data — nothing is evaluated twice.
+        def import(rel)
+          raise LoadError, "fleet: `import` takes a relative .fleet.rb path (got #{rel.inspect})" unless rel.is_a?(String) && rel.end_with?(".fleet.rb")
+
+          abs = File.expand_path(rel, @base_dir)
+          raise LoadError, "fleet: import target not found: #{rel.inspect} (resolved #{abs})" unless File.file?(abs)
+
+          prefix = File.basename(abs, ".fleet.rb").gsub(/[^a-z0-9_]/i, "_")
+          prefix = validate_id(prefix, "import prefix").to_s
+          raise LoadError, "fleet: duplicate import prefix #{prefix.inspect}" if @imports.include?(prefix)
+
+          sub = Runes::Fleet.load_file(abs, loading: @loading)
+          merge_import!(sub, prefix)
+          @imports << prefix
+        end
+
+        # Merge a loaded sub-world under `prefix__`. Ids are prefixed, edges
+        # are re-pointed, and rules get a prefixing context wrapped around
+        # their block and guard — the merged world stays pure data.
+        def merge_import!(sub, prefix)
+          p = "#{prefix}__"
+          take = lambda do |table, id, value|
+            new_id = "#{p}#{id}".to_sym
+            raise LoadError, "fleet: import #{prefix.inspect} collides on #{new_id.inspect}" if table.key?(new_id)
+
+            table[new_id] = value
+          end
+
+          sub.roles.each { |id, role| take.call(@roles, id, role.dup.tap { |r| r.id = "#{p}#{id}".to_sym }) }
+          sub.channels.each { |id, ch| take.call(@channels, id, ch.dup.tap { |c| c.id = "#{p}#{id}".to_sym }) }
+          sub.facts.each { |id, f| take.call(@facts, id, f.dup.tap { |x| x.id = "#{p}#{id}".to_sym }) }
+          sub.schedules.each { |id, s| take.call(@schedules, id, s.dup.tap { |x| x.id = "#{p}#{id}".to_sym }) }
+          sub.schemas.each { |id, s| take.call(@schemas, id, s.dup.tap { |x| x.id = "#{p}#{id}".to_sym }) }
+
+          sub.edges.each do |edge|
+            from = sub.roles.key?(edge.from) || sub.channels.key?(edge.from) ? "#{p}#{edge.from}" : edge.from
+            to = sub.roles.key?(edge.to) || sub.channels.key?(edge.to) ? "#{p}#{edge.to}" : edge.to
+            @raw_edges << [from.to_sym, to.to_sym, edge.when]
+          end
+
+          sub.rules.each do |rule|
+            source = rule.source
+            if rule.source_kind == :channel || rule.source_kind == :schedule
+              source = "#{p}#{source}".to_sym
+            end
+            wrapped_block = proc do |event|
+              PrefixingRuleContext.new(self, prefix).instance_exec(event, &rule.block)
+            end
+            wrapped_guard = rule.guard && proc do |event|
+              PrefixingRuleContext.new(RuleContext.new(nil, event), prefix).instance_exec(event, &rule.guard)
+            end
+            @raw_rules << [source, wrapped_guard, wrapped_block, rule.priority]
+          end
+        end
+        private :merge_import!
 
         def description(text)
           @description = text.to_s
@@ -259,7 +326,7 @@ module Runes
           if guard && !(guard.respond_to?(:call) && guard_lambda_arity(guard) == 1)
             raise LoadError, "fleet: `guard:` must be a ->(e) { ... } lambda (spec §5.1)"
           end
-          unless priority.nil? || (priority.is_a?(Integer) && !priority.is_a?(bool))
+          unless priority.nil? || (priority.is_a?(Integer) && !priority.equal?(true) && !priority.equal?(false))
             raise LoadError, "fleet: `priority:` must be an Integer (got #{priority.inspect})"
           end
 

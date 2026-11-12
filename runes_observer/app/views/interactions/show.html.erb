@@ -19,6 +19,28 @@
   </div>
 <% end %>
 
+<% if @plan_chain[:links].any? { |l| %w[plan tool_call verdict].include?(l.kind) } %>
+  <div class="panel" style="margin-bottom:14px">
+    <div class="panel__head">
+      <span class="panel__title">Plan chain</span>
+      <span class="panel__count"><%= @plan_chain[:links].size %> links</span>
+    </div>
+    <div class="panel__body">
+      <ol class="chain">
+        <% @plan_chain[:links].each do |link| %>
+          <li class="chain__link chain__link--<%= link.kind %>">
+            <span class="badge badge--<%= link.kind %>"><%= link.kind %></span>
+            <span class="mono"><%= link.label %></span>
+            <% if link.packet %>
+              <%= link_to "packet", packet_path(link.packet), class: "sub" %>
+            <% end %>
+          </li>
+        <% end %>
+      </ol>
+    </div>
+  </div>
+<% end %>
+
 <div class="panel" style="margin-bottom:14px">
   <div class="panel__head">
     <span class="panel__title">Participants</span>

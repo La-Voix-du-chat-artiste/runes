@@ -514,9 +514,9 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 
 | | |
 | --- | --- |
-| `lib/` | **30 029 lines** across 132 files |
-| `test/` | **20 056 lines** across 83 files |
-| Suite | **1 135 runs, 6 755 assertions, 0 failures, 3 skips** — no keys, no network (observer: 240 / 0) |
+| `lib/` | **30 143 lines** across 132 files |
+| `test/` | **20 152 lines** across 83 files |
+| Suite | **1 144 runs, 6 782 assertions, 0 failures, 3 skips** — no keys, no network (observer: 241 / 0) |
 | Executables | **8**: TUI, daemon, client, MCP, replay, ACL, workflow, kanban |
 | The seven runes | `agent` 728, `chat` 503, `repeat` 203, `cmd` 207, `map` 183, `ruby` 78, `call` 68 |
 | MQTT 5 adapter | **1 148 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects* |
@@ -561,8 +561,9 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    exactly what the loaded rules publish). **v0.2 landed 2026-11-11:** rule
    priorities (`priority:`), mutable cells with a write-ahead journal
    (`cell` + `set`), and planner-driven worlds (`/done` emits a validated
-   `.fleet.rb` into `worlds/`). Still open: **nested fleets** (lexical,
-   analyzable import) and observatory `/topology` consuming fleet extracts:
+   `.fleet.rb` into `worlds/`), and **nested fleets** (`import "sub.fleet.rb"`
+   — lexical, cycle-detected, merged under a `sub__` namespace). Still open:
+   observatory `/topology` consuming fleet extracts:
    [`docs/FLEET_DSL.md`](docs/FLEET_DSL.md).
 2. **WASI guests (spikes)** — Spinel emits C for a Ruby agent; compile that
    C to `wasm32-wasi` instead of a native `.exe`: **one signed artifact,
@@ -586,9 +587,10 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
 4. ~~**Alerts**~~ ✅ done 2026-11-11 — `/alerts`: deduped, counted, ackable
    rows from the impersonation and signature-failure detectors, with a nav
    badge.
-5. **The plan chain on one page** (O1.7) — prompt → plan → tool calls →
-   evidence → verifier verdict; then **runs diffed and replayed**
-   ("re-run just the step that failed").
+5. ~~**The plan chain on one page** (O1.7)~~ ✅ done 2026-11-12 — the
+   interaction page renders the chain prompt → plan → tool calls → verdict.
+   Next: **runs diffed and replayed** ("re-run just the step that failed"),
+   then O0.4 retention/rollups at real volume.
 6. **An observatory that is an agent** — its own A2A card and MCP server, so
    any agent can ask *"what happened on the bus?"* mid-task.
 7. **The Spinel conformance gate** — both halves run today: kernel files
@@ -611,14 +613,13 @@ Ordered, and each item is either specified, spiked or scoped — not vapour:
    records:
    [`2026-11-04-pilot.md`](bench/swarm/results/2026-11-04-pilot.md),
    [`2026-11-11-rerun2-decision.md`](bench/swarm/results/2026-11-11-rerun2-decision.md).
-9. **The discovery phase's three-arm benchmark** — full discovery vs
-   repo-map-only control vs one external call, with **mission acceptance in
-   `/build`** as the downstream metric (the exploration-modality lift the
-   pilots could not produce). Prototype shipped:
-   `examples/discover_codebase.rb` + `Runes::Discovery`; the d1
-   sufficiency judge and ideate A‖B fan-out still belong to the contracted
-   layer. Design:
-   [`docs/runes-pre-swarm-discovery-phase-for-lfm3-1-7b.md`](docs/runes-pre-swarm-discovery-phase-for-lfm3-1-7b.md).
+9. ~~**The discovery phase's three-arm benchmark**~~ ✅ done 2026-11-12 —
+   full discovery answered **4/4 subproblems with resolved anchors**
+   (anchor_pass 1.00, 0 loop events) vs the tree-only control at 0/4; the
+   external arm is infra (no endpoint). Report:
+   [`bench/discovery/results/2026-11-12-discovery.md`](bench/discovery/results/2026-11-12-discovery.md).
+   Still open from the design: mission acceptance in `/build` downstream,
+   and the d1 sufficiency judge + ideate A‖B fan-out in the contracted layer.
 
 ## 📦 Project Layout
 
