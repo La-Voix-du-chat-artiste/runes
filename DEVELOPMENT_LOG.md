@@ -2974,3 +2974,47 @@ Packaging now ships `wasm/*.rb` (the guest and its host); `ruby.wasm`
 stays out of the gem.
 
 Next: the compiled fleet runtime over the same bridge (`ENHANCEMENT.md` §1).
+
+## Phase 43 — The observatory becomes a workspace (0.4.x, 2026-11-13)
+
+Discovery: `docs/WORKSPACE_DISCOVERY.md` (from the Workday-style reference —
+communication / tools / workflow / tasks in one space). Plan:
+`docs/WORKSPACE_PLAN.md`. Platform first: Rails 8.1.3.1 → **8.1.4.1**,
+sqlite3 2.10.2, puma 8.0.3 on **Ruby 4.0.4** (`json` stays pinned `~> 2.21`);
+baseline green before any feature.
+
+- **Slice 1 — shell:** `/` is `WorkspaceController#index` embedding the live
+  feed, board columns, online agents and recent runs; the dashboard moved to
+  `/dashboard`.
+- **Slice 2A — documents:** `documents` table + `DocStoreService` over the
+  harness `Runes::DocStore`; upload announces `runes/docs/added` through the
+  new `FabricPublisher` (best-effort, never 500s); serve re-validates
+  sha+ext, `nosniff`, HTML under `CSP: sandbox`; packet pages link stored
+  shas. Classifier kind `doc_added`.
+- **Slice 2B — connectors:** `connectors` table (secrets via env refs only),
+  `ConnectorManager.probe` (retained `$a2a` cards) and `activate!` (bumps
+  `ingest_statuses.connector_epoch`); `FabricIngest` polls the epoch in its
+  wait loop and rebuilds onto the new broker without backoff. One subtlety
+  that cost a debugging round: connector settings are **cached** and refreshed
+  only after the subscription is live — a DB read before the subscribe blocks
+  on a locked database and loses messages (`FabricIngestLockTest` caught it).
+- **Slice 2C — plan read:** `MissionStore` over `RUNES_OBSERVER_WORKSPACE`
+  `docs/epics` + `docs/missions` (+ `.mmd` via `Runes::Kanban`); `/plan`,
+  `/plan/missions/:id`.
+- **Slice 2D — theatre:** `Theatre::Graph` = `FleetTopology` (observed, 30
+  min) + `FleetDeclaration` (dashed silent roles/routes), SVG server-side,
+  particles animated by a Stimulus controller from `/feed?fields=1` (new
+  structured feed fields); `/wall` kiosk layout.
+- **Slice 3 — writes behind the gate:** `RUNES_OBSERVER_TOKEN` on every
+  non-GET route (Bearer or Basic; GET open). Epic composer →
+  `docs/epics/E-<n>-<slug>.md`; "plan" publishes the TUI-shaped
+  `mode: "plan"` envelope to `runes/prompts`; board card moves parse →
+  mutate → re-render the mission `.mmd` through `Runes::Kanban` (validate
+  after write, atomic rename), append a journal line, publish
+  `runes/board/moved`; drag-and-drop via `mission_board_controller.js`.
+  Classifier kinds `board_moved`, `observer_control`.
+
+Observer suite: **326 runs / 1 633 assertions / 0 failures** (run twice for
+the ingest-thread flake hunt). Demo seeder now also seeds a connector profile,
+a `doc_added` and a `board_moved` packet (files only when the env vars point
+at scratch dirs — the demo never writes into the checkout).

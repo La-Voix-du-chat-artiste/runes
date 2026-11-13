@@ -1,13 +1,17 @@
 # Runes Observatory
 
-A **Rails 8.1 / Ruby 4** app that watches the Runes MQTT fabric and shows
-what the fleet is doing:
+A **Rails 8.1 / Ruby 4.0.4** app that watches the Runes MQTT fabric and
+shows what the fleet is doing — and, since the workspace update
+(`docs/WORKSPACE_PLAN.md`), acts on it:
 
+- **Workspace** (`/`) — one page with the live feed, the fleet board, the
+  running agents and the recent runs together.
 - **Fleet** — which agents are running, which are stale, and which have
   ended (Last Will), with their tools, workspace and last-seen age.
 - **Live packet feed** — every PUBLISH on `runes/#`, newest first,
   expandable to the raw JSON payload (a bounded summary inline; the full
-  body at `/packets/:id`).
+  body at `/packets/:id`). `?fields=1` adds structured columns for
+  non-DOM consumers (the theatre).
 - **Agent view** — click an agent for its card, its **interactions**
   (grouped by `request_id`, with the whole prompt → progress → response →
   journal timeline, paginated), and its recent packet history.
@@ -15,9 +19,31 @@ what the fleet is doing:
   or by recency.
 - **Interaction view** — one screen per request.
 - **Ingest health** — is anything actually watching the bus?
+- **Board** (`/board`, `/board.mmd`) — planned / working / done, folded
+  from packets.
+- **Plan** (`/plan`) — epics and missions from the workspace `docs/` dir
+  (the files the TUI's `/plan` writes), each mission with its `.mmd` board.
+  Write actions: new epic, "plan this epic" (publishes the `mode: "plan"`
+  envelope to `runes/prompts`), and drag-and-drop card moves that re-render
+  the mission `.mmd` through `Runes::Kanban`, journal the move and announce
+  `runes/board/moved`.
+- **Documents** (`/documents`) — content-addressed uploads (SHA-256
+  addressed, the harness `Runes::DocStore` layout), served with the address
+  re-validated, HTML sandboxed; announced on the fabric as
+  `runes/docs/added`. Packets referencing a stored sha link to the doc.
+- **Connectors** (`/connectors`) — named MQTT broker profiles: probe (reads
+  retained `$a2a` cards) and activate. Activating bumps
+  `ingest_statuses.connector_epoch`; the ingest process rebuilds its
+  transport onto the new broker without a restart. One active broker per
+  observer; with no active profile the `RUNES_MQTT_*` env vars are used.
+- **Theatre** (`/theatre`, `/wall`) — all agents in one live SVG graph
+  (observed fleet + declared fleet as dashed), with message particles
+  animated from `/feed`.
 
-The observer is **read-only**: it subscribes and records, and never
-publishes to the fabric.
+**Write paths are gated**: when `RUNES_OBSERVER_TOKEN` is set, every non-GET
+route requires it (`Authorization: Bearer <token>`, or HTTP Basic with the
+token as password). GET stays open. Without the env var the app is read-only
+as before.
 
 ## Quick start
 
@@ -193,12 +219,17 @@ bin/rails runes:reset                # delete every observed packet and agent
 | `RUNES_OBSERVER_REQUIRE_SIGNATURES` | unset | `1` makes the dashboard shout about unsigned traffic in the last hour |
 | `RUNES_OBSERVER_RETENTION_DAYS` | `7` | Prune packets older than this |
 | `RUNES_OBSERVER_MAX_PACKETS` | `200000` | Hard cap on stored packets; `0` or less (or non-numeric) means no cap |
+| `RUNES_OBSERVER_TOKEN` | unset | When set, every non-GET route requires it (Bearer or Basic password); GET stays open |
+| `RUNES_OBSERVER_DOCSTORE` | `<harness>/docs/store` | Root of the content-addressed document store |
+| `RUNES_OBSERVER_WORKSPACE` | harness root (`RUNES_ROOT` aware) | Workspace whose `docs/epics` + `docs/missions` the `/plan` pages read and write |
+| `RUNES_OBSERVER_PUBLISH` | `on` | `off` disables the web process's fabric announcements (`runes/docs/added`, `runes/board/moved`, plan prompts) |
+| `RUNES_CONNECTOR_PROBE_SECONDS` | `5` | How long a connector probe reads retained `$a2a` cards |
 | `RAILS_MAX_THREADS` | `5` | Puma/DB pool size |
 
 ## Tests
 
 ```bash
-bin/rails test     # 231 runs, 1 148 assertions
+bin/rails test     # 326 runs, 1 633 assertions
 ```
 
 Covers the topic classifier (every Runes topic shape, including the A2A
@@ -225,5 +256,7 @@ filtered log.
 - `json` is pinned to `~> 2.21`: the `json 3.0.0` gem on this machine
   changed `JSON.parse`'s signature, which breaks Rails 8.1's
   ActiveSupport::JSON decoding of flash/cookie metadata.
-- The app is a viewer, not a controller: there is no "send prompt" button
-  yet (that would be the natural next step).
+- The app is a viewer by default; the write paths (epic composer, plan
+  trigger, board moves, connector activation, document upload) exist but are
+  gated behind `RUNES_OBSERVER_TOKEN` — set it before pointing the app at a
+  shared broker.

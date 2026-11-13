@@ -184,14 +184,16 @@ class PacketClassifierTest < ActiveSupport::TestCase
   end
 
   # Workspace slice 2A: a stored document announces itself on the fabric.
-  test "a document announcement classifies as doc_added with its uploader" do
+  # The uploader stays in the payload; the packet is unattributed so it does
+  # not invent an agent row.
+  test "a document announcement classifies as doc_added, unattributed" do
     result = classify("runes/docs/added",
                       JSON.generate("sha" => "a" * 64, "ext" => "md",
                                     "bytes" => 12, "name" => "hello.md",
                                     "uploaded_by" => "operator"))
 
     assert_equal "doc_added", result.kind
-    assert_equal "operator", result.agent_id
+    assert_nil result.agent_id
     assert_includes Packet::KINDS, "doc_added"
   end
 
@@ -201,14 +203,14 @@ class PacketClassifierTest < ActiveSupport::TestCase
   end
 
   # Workspace slice 3: a card moved on a mission board announces itself.
-  test "a board move classifies as board_moved with the mission as request" do
+  test "a board move classifies as board_moved, unattributed" do
     result = classify("runes/board/moved",
                       JSON.generate("mission" => "m1", "card" => "Call",
                                     "from" => "todo", "to" => "done", "by" => "observatory-ui"))
 
     assert_equal "board_moved", result.kind
-    assert_equal "m1", result.request_id
-    assert_equal "observatory-ui", result.agent_id
+    assert_nil result.agent_id
+    assert_nil result.request_id
     assert_includes Packet::KINDS, "board_moved"
   end
 

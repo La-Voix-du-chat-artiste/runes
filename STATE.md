@@ -89,6 +89,19 @@ Where the current goal stands (it stays **active**):
   `FleetDeclaration` loads a `.fleet.rb` and `/topology` renders the declared
   fleet beside the observed one with the drift between them (silent roles,
   undeclared agents/links) — `RUNES_OBSERVER_FLEET`, `off` in tests.
+  **Phase 43 landed the workspace** (`docs/WORKSPACE_DISCOVERY.md` →
+  `docs/WORKSPACE_PLAN.md`, observer on Rails 8.1.4.1 / Ruby 4.0.4): `/` is
+  now a workspace shell (feed + board + agents + runs); `/documents`
+  content-addressed uploads over the harness `Runes::DocStore` (sha-validated
+  on serve, HTML sandboxed, announced as `runes/docs/added`); `/connectors`
+  named MQTT profiles with probe + activate (epoch bump → the ingest rebuilds
+  its transport live); `/plan` reads epics/missions from the workspace docs
+  and writes them (epic composer, `mode: "plan"` envelope to `runes/prompts`,
+  drag-and-drop card moves re-rendered through `Runes::Kanban` + journaled +
+  `runes/board/moved`); `/theatre` + `/wall` live agent graph with particles
+  from `/feed?fields=1`. All non-GET routes are gated by
+  `RUNES_OBSERVER_TOKEN` when set (PR-3). Observer suite: **326 runs /
+  1 633 assertions green**.
 - **Next, in order:** the durable, scoped backlog is **`ENHANCEMENT.md`**
   (WASI round-trip diagnosis, fleet v0.2 + planner worlds, observatory P1,
   pipeline promotion, gated optional). In short: (1) fleet — chat-driven

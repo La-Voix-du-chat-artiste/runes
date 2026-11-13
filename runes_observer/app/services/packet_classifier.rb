@@ -116,10 +116,13 @@ module PacketClassifier
       Result.new(kind: "a2a_task", agent_id: $3,
                  request_id: dig(data, "request_id") || dig(data, "taskId"))
     when DOC_ADDED
-      Result.new(kind: "doc_added", agent_id: dig(data, "uploaded_by"))
+      # An operator/observer announcement, not agent traffic: the uploader
+      # stays in the payload (`uploaded_by`), the packet is unattributed so it
+      # does not invent an agent row.
+      Result.new(kind: "doc_added")
     when BOARD_MOVED
-      Result.new(kind: "board_moved", agent_id: dig(data, "by"),
-                 request_id: dig(data, "mission"))
+      # Same: the mission id and mover stay in the payload.
+      Result.new(kind: "board_moved")
     when OBSERVER_CONTROL
       Result.new(kind: "observer_control")
     else

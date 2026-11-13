@@ -10,10 +10,13 @@ class DemoFabricTest < ActiveSupport::TestCase
     assert_operator Packet.count, :>, 20
 
     kinds = Packet.distinct.pluck(:kind)
-    %w[card status prompt progress response response_global journal tool_request].each do |kind|
+    %w[card status prompt progress response response_global journal tool_request doc_added board_moved].each do |kind|
       assert_includes kinds, kind
     end
     assert_equal 3, Packet.of_kind("prompt").count
+    # Workspace slice seeds: a connector profile is present.
+    assert_equal 1, Connector.active.count
+    assert_equal "demo-inproc", Connector.active.first.name
   end
 
   test "the demo invents none of the deleted claim/lease protocol" do

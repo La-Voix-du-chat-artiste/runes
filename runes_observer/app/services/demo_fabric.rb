@@ -52,6 +52,7 @@ class DemoFabric
 
     emit_tool_rpc
     emit_goal_flow
+    emit_workspace_artifacts
     # Last Will: the second agent ends while the first keeps running.
     emit_status(ENDED_AGENT, "offline")
     true
@@ -63,6 +64,63 @@ class DemoFabric
     Packet.delete_all
     Agent.delete_all
     IngestStatus.delete_all
+    Connector.delete_all
+    Document.delete_all
+  end
+
+  # Workspace slice seeds (docs/WORKSPACE_PLAN.md): a connector profile, a
+  # document announcement and a board move, so /workspace, /connectors,
+  # /documents and /plan look alive. Files are only written when the matching
+  # env var points at a scratch location — the demo must never drop files
+  # into the developer's real checkout.
+  def emit_workspace_artifacts
+    Connector.find_or_create_by!(name: "demo-inproc") do |c|
+      c.host = "inproc"
+      c.port = 1883
+      c.transport = "inproc"
+      c.active = true
+      c.last_probe_state = "ok"
+      c.last_probe_detail = "demo seed"
+      c.last_probe_at = @clock
+    end
+
+    if ENV["RUNES_OBSERVER_DOCSTORE"].present?
+      DocStoreService.reset_cache!
+      doc = DocStoreService.put_string("# Demo brief\n\nSeeded by runes:demo.\n",
+                                       ext: "md", name: "demo-brief.md", uploaded_by: "runes:demo")
+      emit("runes/docs/added", { "sha" => doc.sha, "ext" => doc.ext, "bytes" => doc.bytes,
+                                 "name" => doc.name, "uploaded_by" => "runes:demo" })
+    else
+      emit("runes/docs/added", { "sha" => "d" * 64, "ext" => "md", "bytes" => 42,
+                                 "name" => "demo-brief.md", "uploaded_by" => "runes:demo" })
+    end
+
+    if ENV["RUNES_OBSERVER_WORKSPACE"].present?
+      MissionStore.reset_cache!
+      epic_path = MissionStore.write_epic("# Demo launch\n\nSeeded by runes:demo.")
+      mission_id = "demo-mission"
+      dir = File.join(MissionStore.root, "docs", "missions")
+      FileUtils.mkdir_p(dir)
+      File.write(File.join(dir, "#{mission_id}.md"), "# Demo mission\n\nSeeded by runes:demo.\n")
+      File.write(File.join(dir, "#{mission_id}.json"),
+                 JSON.generate("mission_title" => "Demo mission", "source" => "epic:demo",
+                               "source_path" => epic_path, "todos" => ["Seed the board", "Watch the theatre"]))
+      File.write(File.join(dir, "#{mission_id}.mmd"), <<~MMD)
+        %% Mission: Demo mission
+        kanban
+          Todo:
+            - [ ] Watch the theatre
+          In Progress:
+            - [ ] Seed the board
+          Done:
+          Blocked:
+      MMD
+      emit("runes/board/moved", { "mission" => mission_id, "card" => "Seed the board",
+                                  "from" => "todo", "to" => "in_progress", "by" => "runes:demo" })
+    else
+      emit("runes/board/moved", { "mission" => "demo-mission", "card" => "Seed the board",
+                                  "from" => "todo", "to" => "in_progress", "by" => "runes:demo" })
+    end
   end
 
   def tick(seconds = 1 + rand(3))
