@@ -34,6 +34,11 @@ Rails.application.routes.draw do
   post "connectors/:id/test", to: "connectors#test", as: :test_connector
   post "connectors/:id/activate", to: "connectors#activate", as: :activate_connector
 
+  # Workspace slice 2C: the plan read view — epics and missions from the
+  # workspace docs dir (the files the TUI's /plan writes).
+  get "plan", to: "plan#index", as: :plan
+  get "plan/missions/:id", to: "plan#show", as: :plan_mission
+
   # JSON feed used by the Stimulus poller (?after_id=&agent_id=&kind=&request_id=).
   # /feed/stats was dead (no caller ever fetched it) and has been removed.
   get "feed", to: "packets#feed", as: :feed

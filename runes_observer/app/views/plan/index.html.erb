@@ -1,0 +1,52 @@
+<% content_for :title, "Plan — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Plan</h1>
+  <span class="sub">epics &amp; missions from <code><%= @workspace_root %>/docs</code> — the files the TUI's <code>/plan</code> writes</span>
+  <%= link_to "board →", board_path, class: "sub" %>
+</div>
+
+<div class="grid grid--dash">
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Epics</span>
+      <span class="panel__count"><%= @epics.size %></span>
+    </div>
+    <% if @epics.empty? %>
+      <div class="panel__empty">No epic yet — <code>/goal</code> in the TUI writes one to <code>docs/epics/</code>.</div>
+    <% else %>
+      <ul class="runs-list">
+        <% @epics.each do |epic| %>
+          <li class="runs-list__item">
+            <span class="mono"><%= epic.title %></span>
+            <span class="faint small mono"><%= epic.id[0, 24] %></span>
+            <span class="faint small"><%= ago_in_words_short(epic.mtime) %> ago</span>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Missions</span>
+      <span class="panel__count"><%= @missions.size %></span>
+    </div>
+    <% if @missions.empty? %>
+      <div class="panel__empty">No mission yet — <code>/plan</code> in the TUI writes one to <code>docs/missions/</code>.</div>
+    <% else %>
+      <ul class="runs-list">
+        <% @missions.each do |mission| %>
+          <% board = @boards[mission.id] %>
+          <% total = board[:columns].values.map(&:size).sum %>
+          <% done = board[:columns]["done"].size + board[:columns]["todo"].count { |c| c[:done] } %>
+          <li class="runs-list__item">
+            <%= link_to mission.title, plan_mission_path(mission.id), class: "mono" %>
+            <span class="pill pill--<%= board[:source] == :file ? "online" : "connected" %>"><%= board[:source] == :file ? "mmd board" : "todos" %></span>
+            <span class="faint small"><%= done %>/<%= total %> done · <%= mission.todos.size %> todos · <%= ago_in_words_short(mission.mtime) %> ago</span>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+</div>

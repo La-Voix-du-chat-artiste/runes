@@ -1,0 +1,75 @@
+<% content_for :title, "#{@mission.title} — Runes Observatory" %>
+
+<div class="page-head">
+  <h1><%= @mission.title %></h1>
+  <span class="sub mono"><%= @mission.id %></span>
+  <%= link_to "← Plan", plan_path, class: "sub" %>
+  <%= link_to "packets mentioning it →", packets_path(q: @mission.id), class: "sub" %>
+</div>
+
+<div class="grid grid--dash">
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Board — <%= @board[:source] == :file ? "mission .mmd" : "derived from todos" %></span>
+      <span class="panel__count"><%= @board[:columns].values.map(&:size).sum %> cards</span>
+    </div>
+    <div class="kanban-board">
+      <% { "todo" => "Todo", "in_progress" => "In Progress", "done" => "Done", "blocked" => "Blocked" }.each do |key, label| %>
+        <% cards = @board[:columns][key] || [] %>
+        <section class="kanban-col" data-column="<%= key %>">
+          <div class="kanban-col__head">
+            <span class="kanban-col__title"><%= label %></span>
+            <span class="kanban-col__count"><%= cards.size %></span>
+          </div>
+          <% if cards.empty? %>
+            <p class="kanban-col__empty">—</p>
+          <% else %>
+            <% cards.each do |card| %>
+              <article class="kanban-card kanban-card--<%= key %>">
+                <div class="kanban-card__title">
+                  <span class="<%= card[:done] ? "faint" : "" %>"><%= card[:title] %></span>
+                </div>
+                <div class="kanban-card__meta">
+                  <span class="kanban-card__agent faint"><%= card[:assignee].presence || "unassigned" %></span>
+                  <% if card[:done] %><span class="pill pill--online">done</span><% end %>
+                </div>
+              </article>
+            <% end %>
+          <% end %>
+        </section>
+      <% end %>
+    </div>
+    <% if @board[:path].present? %>
+      <div class="panel__body">
+        <span class="faint small mono"><%= @board[:path] %></span>
+      </div>
+    <% end %>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <span class="panel__title">Mission file</span>
+      <span class="panel__count mono small"><%= File.basename(@mission.path) %></span>
+    </div>
+    <div class="panel__body">
+      <dl class="kv">
+        <% if @mission.source.present? %><dt>source</dt><dd><%= @mission.source %><%= " (#{@mission.source_path})" if @mission.source_path.present? %></dd><% end %>
+        <dt>todos</dt><dd><%= @mission.todos.size %></dd>
+        <dt>modified</dt><dd><%= @mission.mtime.strftime("%Y-%m-%d %H:%M:%S") %></dd>
+      </dl>
+      <pre class="payload__body"><%= @body %></pre>
+    </div>
+  </section>
+</div>
+
+<% if @packets.any? %>
+  <section class="panel" style="margin-top:14px">
+    <div class="panel__head">
+      <span class="panel__title">Packets mentioning this mission</span>
+      <span class="panel__count"><%= @packets.size %></span>
+    </div>
+    <div class="feed">
+      <%= render partial: "packets/packet", collection: @packets, as: :packet, locals: { show_agent: true } %>
+    </div>
+  </section>
+<% end %>
