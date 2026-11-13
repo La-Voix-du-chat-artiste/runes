@@ -3018,3 +3018,13 @@ Observer suite: **326 runs / 1 633 assertions / 0 failures** (run twice for
 the ingest-thread flake hunt). Demo seeder now also seeds a connector profile,
 a `doc_added` and a `board_moved` packet (files only when the env vars point
 at scratch dirs — the demo never writes into the checkout).
+
+### Phase 43 addendum — screenshots (2026-11-13)
+
+Two screenshots captured from the running app (headless Chrome, 1600×1000,
+`runes:demo` seed) and referenced from both READMEs:
+`docs/images/workspace.png` (the `/` workspace: feed + board + agents +
+runs) and `docs/images/theatre.png` (`/theatre`: two agents, one delegation
+edge, a live particle mid-edge). Main README's observatory section now
+describes the workspace surfaces and embeds both; the observer README shows
+them under the feature list; the receipts line reads observer 326 / 0.

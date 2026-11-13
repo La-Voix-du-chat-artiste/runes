@@ -45,6 +45,13 @@ route requires it (`Authorization: Bearer <token>`, or HTTP Basic with the
 token as password). GET stays open. Without the env var the app is read-only
 as before.
 
+![The workspace: live feed, board, agents and runs in one page](../docs/images/workspace.png)
+
+![The theatre: all agents in one live graph, particles from the feed](../docs/images/theatre.png)
+
+*Both captured from a `runes:demo` seed (headless Chrome, 1600×1000). The
+workspace is `/`; the theatre is `/theatre` (`/wall` for the kiosk).*
+
 ## Quick start
 
 ```bash

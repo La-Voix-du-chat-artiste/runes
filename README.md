@@ -515,24 +515,44 @@ plan and specs in [`docs/spinel/`](docs/spinel/PRD.md).
 
 ## 🔭 Runes Observatory (Rails 8.1)
 
-A read-only companion app (`runes_observer/`) that watches the fabric:
+A companion app (`runes_observer/`) that watches the fabric — and since
+Phase 43, **works in it**. `/` is a **workspace**: the live packet feed, the
+fleet board, the running agents and the recent runs in one page. Around it:
 fleet (running / stale / LWT-ended agents), workflow runs as timelines,
 fleet topology (delegation edges: width = volume, colour = failure rate),
-trace waterfalls (the *gaps* between packets), a live packet feed with raw
-JSON, per-agent interactions grouped by `request_id`, a Mermaid kanban
-fleet board at `/board` (`GET /board.mmd` hands the same text to an agent —
-a board a program cannot read is a screenshot), **alerts** at `/alerts`
-(deduped, counted, ackable — impersonation and signature-failure detectors
-run in ingest, with a nav badge), the **plugin catalog** at `/plugins`
-(the seven runes rendered straight from the registry), and the **plan
-chain** on each interaction page (prompt → plan → tool calls → verdict).
-Ingest goes through
+trace waterfalls (the *gaps* between packets), per-agent interactions
+grouped by `request_id`, a Mermaid kanban fleet board at `/board`
+(`GET /board.mmd` hands the same text to an agent — a board a program
+cannot read is a screenshot), **alerts** at `/alerts` (deduped, counted,
+ackable — impersonation and signature-failure detectors run in ingest, with
+a nav badge), the **plugin catalog** at `/plugins` (the seven runes rendered
+straight from the registry), the **plan chain** on each interaction page
+(prompt → plan → tool calls → verdict), plus the workspace surfaces:
+**documents** at `/documents` (content-addressed uploads, SHA-256
+addressed, announced on the fabric), **connectors** at `/connectors`
+(named MQTT broker profiles — probe and activate, the ingest rebuilds live),
+**plan** at `/plan` (epics and missions from the workspace `docs/`, with
+drag-and-drop card moves written back through `Runes::Kanban`), and the
+**theatre** at `/theatre` (all agents in one live graph, message particles
+animated from the feed; `/wall` is the kiosk). Write paths are gated by
+`RUNES_OBSERVER_TOKEN`. Ingest goes through
 `Runes::Transport`, so `inproc` mode needs no broker at all.
 
 ```bash
 cd runes_observer && bin/rails db:prepare
 mosquitto -p 1883 &  bin/runes-ingest  bin/rails server -p 3100
 ```
+
+![The workspace: live feed, fleet board, agents and runs in one page](docs/images/workspace.png)
+
+*The workspace after a demo seed: the communication feed (including
+`doc_added` / `board_moved` announcements), the board, the agents and the
+runs.*
+
+![The theatre: all agents in one live graph](docs/images/theatre.png)
+
+*The theatre: observed agents as nodes, delegation edges as wires, message
+particles animated from `/feed` (the dot mid-edge is a live packet).*
 
 ## 🧾 Receipts
 
@@ -542,7 +562,7 @@ Measured, not remembered — `ruby scripts/receipts.rb` prints all of them.
 | --- | --- |
 | `lib/` | **30 143 lines** across 132 files |
 | `test/` | **20 152 lines** across 83 files |
-| Suite | **1 144 runs, 6 782 assertions, 0 failures, 3 skips** — no keys, no network (observer: 241 / 0) |
+| Suite | **1 144 runs, 6 782 assertions, 0 failures, 3 skips** — no keys, no network (observer: 326 / 0) |
 | Executables | **8**: TUI, daemon, client, MCP, replay, ACL, workflow, kanban |
 | The seven runes | `agent` 728, `chat` 503, `repeat` 203, `cmd` 207, `map` 183, `ruby` 78, `call` 68 |
 | MQTT 5 adapter | **1 148 lines**, hand-rolled, live-verified against mosquitto 2.1.2 — and it *reconnects* |
