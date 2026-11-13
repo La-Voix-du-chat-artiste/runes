@@ -6,6 +6,21 @@
   <%= link_to "board →", board_path, class: "sub" %>
 </div>
 
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel__head">
+    <span class="panel__title">New epic</span>
+    <span class="panel__count">written to <code>docs/epics/</code> and announced on the fabric</span>
+  </div>
+  <div class="panel__body">
+    <%= form_with url: plan_epics_path, method: :post do |form| %>
+      <div class="field" style="width:100%">
+        <%= form.text_area :body, rows: 4, required: true, placeholder: "# Epic title\n\nWhat should the fleet achieve?", style: "width:100%" %>
+      </div>
+      <%= form.submit "Write epic", class: "btn" %>
+    <% end %>
+  </div>
+</div>
+
 <div class="grid grid--dash">
   <section class="panel">
     <div class="panel__head">
@@ -13,7 +28,7 @@
       <span class="panel__count"><%= @epics.size %></span>
     </div>
     <% if @epics.empty? %>
-      <div class="panel__empty">No epic yet — <code>/goal</code> in the TUI writes one to <code>docs/epics/</code>.</div>
+      <div class="panel__empty">No epic yet — write one above, or <code>/goal</code> in the TUI.</div>
     <% else %>
       <ul class="runs-list">
         <% @epics.each do |epic| %>
@@ -21,6 +36,7 @@
             <span class="mono"><%= epic.title %></span>
             <span class="faint small mono"><%= epic.id[0, 24] %></span>
             <span class="faint small"><%= ago_in_words_short(epic.mtime) %> ago</span>
+            <%= button_to "plan →", plan_epic_path(epic.id), class: "btn btn--ghost", form: { style: "display:inline" }, title: "Publish the plan prompt for this epic to runes/prompts" %>
           </li>
         <% end %>
       </ul>

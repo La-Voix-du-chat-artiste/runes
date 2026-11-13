@@ -5,11 +5,35 @@ class ApplicationController < ActionController::Base
   # Changes to the importmap will invalidate the etag for HTML responses
   stale_when_importmap_changes
 
+  # PR-3 (OBSERVATORY_ROADMAP.md): the observer is read-only unless
+  # RUNES_OBSERVER_TOKEN is set, and then every non-GET route requires it —
+  # as `Authorization: Bearer <token>` or HTTP Basic with the token as the
+  # password. GET/HEAD stay open so the pages remain readable without it.
+  before_action :require_observer_token
+
   # Shared by controllers (stats) and views (the top-bar pill); memoized per
   # request on the same ivar the view helper used to use.
   helper_method :ingest_status, :observed_packet_count, :observed_agent_count
 
   private
+
+  def require_observer_token
+    token = ENV["RUNES_OBSERVER_TOKEN"].to_s
+    return if token.empty?
+    return if request.get? || request.head?
+
+    auth = request.headers["Authorization"].to_s
+    ok = auth == "Bearer #{token}"
+    if !ok && auth.start_with?("Basic ")
+      require "base64"
+      _user, pass = Base64.decode64(auth.sub(/\ABasic /, "")).split(":", 2)
+      ok = (pass == token)
+    end
+    return if ok
+
+    response.headers["WWW-Authenticate"] = 'Bearer realm="runes-observer"'
+    render plain: "unauthorized: set RUNES_OBSERVER_TOKEN and send it as a bearer token", status: :unauthorized
+  end
 
   def ingest_status
     @ingest_status ||= IngestStatus.current

@@ -74,4 +74,110 @@ class PlanControllerTest < ActionDispatch::IntegrationTest
     get "/plan/missions/..%2F..%2Fetc"
     assert_response :not_found
   end
+
+  # --- slice 3 write actions ------------------------------------------------
+
+  test "create_epic writes the file and redirects" do
+    assert_difference -> { MissionStore.epics.size }, 1 do
+      post plan_epics_path, params: { body: "# From the UI\n\nDo the thing." }
+    end
+
+    assert_redirected_to plan_path
+    epic = MissionStore.epics.first
+    assert_equal "From the UI", epic.title
+    assert_match(/E-1-from-the-ui\.md\z/, epic.path)
+  end
+
+  test "create_epic with an empty body redirects with an alert" do
+    post plan_epics_path, params: { body: "  " }
+    assert_redirected_to plan_path
+    assert_match "empty", flash[:alert]
+  end
+
+  test "plan_epic publishes the plan envelope to runes/prompts" do
+    old_transport = ENV["RUNES_TRANSPORT"]
+    old_publish = ENV["RUNES_OBSERVER_PUBLISH"]
+    ENV["RUNES_TRANSPORT"] = "inproc"
+    ENV["RUNES_OBSERVER_PUBLISH"] = "on"
+    FabricPublisher.reset!
+    Runes::Transport::InProcess.reset!
+
+    received = Queue.new
+    listener = Runes::Transport.build(kind: "inproc")
+    listener.connect
+    listener.subscribe("runes/prompts") { |msg| received << JSON.parse(msg.payload) }
+
+    post plan_epic_path("e1-launch")
+
+    assert_redirected_to plan_path
+    envelope = received.pop
+    assert_equal "plan", envelope["mode"]
+    assert_match(%r{docs/epics/e1-launch\.md\z}, envelope["epic_path"])
+    assert envelope["request_id"].present?
+  ensure
+    listener&.disconnect
+    FabricPublisher.reset!
+    Runes::Transport::InProcess.reset!
+    ENV["RUNES_TRANSPORT"] = old_transport
+    ENV["RUNES_OBSERVER_PUBLISH"] = old_publish
+  end
+
+  test "plan_epic 404s on unknown epics" do
+    post plan_epic_path("nope")
+    assert_response :not_found
+  end
+
+  test "move_card moves the card, journals it and announces it on the fabric" do
+    old_transport = ENV["RUNES_TRANSPORT"]
+    old_publish = ENV["RUNES_OBSERVER_PUBLISH"]
+    old_journal = ENV["RUNES_OBSERVER_JOURNAL"]
+    journal = File.join(@tmp, "journal.jsonl")
+    ENV["RUNES_TRANSPORT"] = "inproc"
+    ENV["RUNES_OBSERVER_PUBLISH"] = "on"
+    ENV["RUNES_OBSERVER_JOURNAL"] = journal
+    FabricPublisher.reset!
+    Runes::Transport::InProcess.reset!
+
+    moved = Queue.new
+    listener = Runes::Transport.build(kind: "inproc")
+    listener.connect
+    listener.subscribe("runes/board/moved") { |msg| moved << JSON.parse(msg.payload) }
+
+    post move_plan_card_path("m1-contact", index: 0), params: { to: "done" }, as: :json
+
+    assert_response :success
+    body = JSON.parse(response.body)
+    assert_equal "todo", body["from"]
+    assert_equal "done", body["to"]
+    assert_equal "Call", body["title"]
+
+    reparsed = Runes::Kanban.parse(File.read(File.join(@tmp, "docs", "missions", "m1-contact.mmd")))
+    assert_equal 2, reparsed[:columns]["done"].size
+    assert_equal "Call", reparsed[:columns]["done"].last.title
+
+    announcement = moved.pop
+    assert_equal "m1-contact", announcement["mission"]
+    assert_equal "done", announcement["to"]
+
+    entry = JSON.parse(File.readlines(journal).last)
+    assert_equal "board_card_moved", entry["event"]
+    assert_equal "m1-contact", entry["mission"]
+  ensure
+    listener&.disconnect
+    FabricPublisher.reset!
+    Runes::Transport::InProcess.reset!
+    ENV["RUNES_TRANSPORT"] = old_transport
+    ENV["RUNES_OBSERVER_PUBLISH"] = old_publish
+    ENV["RUNES_OBSERVER_JOURNAL"] = old_journal
+  end
+
+  test "move_card with a bad column is 422" do
+    post move_plan_card_path("m1-contact", index: 0), params: { to: "sideways" }, as: :json
+    assert_response :unprocessable_entity
+  end
+
+  test "move_card 404s on unknown missions" do
+    post move_plan_card_path("nope", index: 0), params: { to: "done" }, as: :json
+    assert_response :not_found
+  end
 end

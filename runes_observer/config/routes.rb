@@ -35,9 +35,13 @@ Rails.application.routes.draw do
   post "connectors/:id/activate", to: "connectors#activate", as: :activate_connector
 
   # Workspace slice 2C: the plan read view — epics and missions from the
-  # workspace docs dir (the files the TUI's /plan writes).
+  # workspace docs dir (the files the TUI's /plan writes). Slice 3 adds the
+  # write actions (all non-GET, so all behind the token gate when set).
   get "plan", to: "plan#index", as: :plan
   get "plan/missions/:id", to: "plan#show", as: :plan_mission
+  post "plan/epics", to: "plan#create_epic", as: :plan_epics
+  post "plan/epics/:id/plan", to: "plan#plan_epic", as: :plan_epic
+  post "plan/missions/:id/board/cards/:index/move", to: "plan#move_card", as: :move_plan_card
 
   # Workspace slice 2D: the theatre — all agents in one live picture — and the
   # /wall kiosk (no nav, meta refresh).

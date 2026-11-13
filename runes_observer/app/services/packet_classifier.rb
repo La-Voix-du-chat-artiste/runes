@@ -29,7 +29,7 @@ module PacketClassifier
     card status task task_response a2a_card a2a_task
     prompt progress response response_global
     tool_request tool_response tool_error
-    journal workflow_event guard_denied doc_added other
+    journal workflow_event guard_denied doc_added board_moved observer_control other
   ].freeze
 
   Result = Struct.new(:kind, :agent_id, :request_id, :event, :tool, :run_id,
@@ -63,6 +63,11 @@ module PacketClassifier
   # Workspace announcements (docs/WORKSPACE_PLAN.md): a document was stored
   # in the content-addressed store; the payload carries the sha address.
   DOC_ADDED         = %r{\Arunes/docs/added\z}
+  # A card moved on a mission board (slice 3): the payload carries the
+  # mission id, card index, from/to columns.
+  BOARD_MOVED       = %r{\Arunes/board/moved\z}
+  # Observer control channel (reserved for ingest signaling).
+  OBSERVER_CONTROL  = %r{\Arunes/observer/control\z}
 
   module_function
 
@@ -112,6 +117,11 @@ module PacketClassifier
                  request_id: dig(data, "request_id") || dig(data, "taskId"))
     when DOC_ADDED
       Result.new(kind: "doc_added", agent_id: dig(data, "uploaded_by"))
+    when BOARD_MOVED
+      Result.new(kind: "board_moved", agent_id: dig(data, "by"),
+                 request_id: dig(data, "mission"))
+    when OBSERVER_CONTROL
+      Result.new(kind: "observer_control")
     else
       Result.new(kind: "other")
     end

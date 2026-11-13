@@ -199,4 +199,22 @@ class PacketClassifierTest < ActiveSupport::TestCase
     assert_equal "other", classify("runes/docs/added/extra").kind
     assert_equal "other", classify("runes/docs/removed").kind
   end
+
+  # Workspace slice 3: a card moved on a mission board announces itself.
+  test "a board move classifies as board_moved with the mission as request" do
+    result = classify("runes/board/moved",
+                      JSON.generate("mission" => "m1", "card" => "Call",
+                                    "from" => "todo", "to" => "done", "by" => "observatory-ui"))
+
+    assert_equal "board_moved", result.kind
+    assert_equal "m1", result.request_id
+    assert_equal "observatory-ui", result.agent_id
+    assert_includes Packet::KINDS, "board_moved"
+  end
+
+  test "the observer control topic classifies" do
+    assert_equal "observer_control", classify("runes/observer/control", "{}").kind
+    assert_equal "other", classify("runes/observer/control/extra").kind
+    assert_includes Packet::KINDS, "observer_control"
+  end
 end

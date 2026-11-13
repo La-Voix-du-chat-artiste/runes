@@ -13,10 +13,14 @@
       <span class="panel__title">Board — <%= @board[:source] == :file ? "mission .mmd" : "derived from todos" %></span>
       <span class="panel__count"><%= @board[:columns].values.map(&:size).sum %> cards</span>
     </div>
-    <div class="kanban-board">
+    <div class="kanban-board"
+         data-controller="mission-board"
+         data-mission-board-id-value="<%= @mission.id %>"
+         data-mission-board-move-url-value="<%= move_plan_card_path(@mission.id, index: "__INDEX__") %>">
+      <% global_index = -1 %>
       <% { "todo" => "Todo", "in_progress" => "In Progress", "done" => "Done", "blocked" => "Blocked" }.each do |key, label| %>
         <% cards = @board[:columns][key] || [] %>
-        <section class="kanban-col" data-column="<%= key %>">
+        <section class="kanban-col" data-column="<%= key %>" data-mission-board-target="column">
           <div class="kanban-col__head">
             <span class="kanban-col__title"><%= label %></span>
             <span class="kanban-col__count"><%= cards.size %></span>
@@ -25,7 +29,11 @@
             <p class="kanban-col__empty">—</p>
           <% else %>
             <% cards.each do |card| %>
-              <article class="kanban-card kanban-card--<%= key %>">
+              <% global_index += 1 %>
+              <article class="kanban-card kanban-card--<%= key %>"
+                       draggable="true"
+                       data-mission-board-target="card"
+                       data-card-index="<%= global_index %>">
                 <div class="kanban-card__title">
                   <span class="<%= card[:done] ? "faint" : "" %>"><%= card[:title] %></span>
                 </div>

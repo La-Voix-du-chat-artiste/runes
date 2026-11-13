@@ -477,3 +477,8 @@ pre.payload__body--raw { color: var(--text-dim); }
 
 .app--kiosk .topbar, .app--kiosk .footer { display: none; }
 .app--kiosk .main { max-width: none; }
+
+/* --- mission board drag-and-drop (slice 3) ------------------------------- */
+
+.kanban-col--drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.kanban-card[draggable="true"] { cursor: grab; }

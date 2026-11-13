@@ -90,4 +90,89 @@ class MissionStoreTest < ActiveSupport::TestCase
     assert_equal [], MissionStore.epics
     assert_equal [], MissionStore.missions
   end
+
+  # --- slice 3 write paths -------------------------------------------------
+
+  test "write_epic sanitizes, numbers and writes atomically" do
+    path = MissionStore.write_epic("Launch the thing\n\nbody without heading")
+    assert_match(%r{docs/epics/E-1-launch-the-thing\.md\z}, path)
+    content = File.read(path)
+    assert content.start_with?("# "), "a heading is guaranteed"
+    assert_match "Launch the thing", content
+
+    path2 = MissionStore.write_epic("# Second\n")
+    assert_match(/E-2-second\.md\z/, path2)
+  end
+
+  test "write_epic refuses empty and oversize bodies" do
+    assert_raises(MissionStore::Error) { MissionStore.write_epic("   ") }
+    assert_raises(MissionStore::Error) { MissionStore.write_epic("x" * (MissionStore::MAX_EPIC_BYTES + 1)) }
+  end
+
+  test "epic_path is containment-checked" do
+    path = MissionStore.write_epic("# T\n")
+    id = File.basename(path, ".md")
+    assert_equal path, MissionStore.epic_path(id)
+    assert_nil MissionStore.epic_path("../missions/x")
+    assert_nil MissionStore.epic_path("nope")
+  end
+
+  test "move_card moves a card through Runes::Kanban and round-trips" do
+    m = MissionStore.find_mission("20261112-100000-def-contact")
+    result = MissionStore.move_card(m, index: 0, to: "done")
+
+    assert_equal "todo", result[:from]
+    assert_equal "done", result[:to]
+    assert_equal "Appeler Jean", result[:title]
+
+    reparsed = Runes::Kanban.parse(File.read(result[:path]))
+    assert_equal 0, reparsed[:columns]["todo"].size
+    assert_equal 2, reparsed[:columns]["done"].size
+    assert reparsed[:columns]["done"].last.done
+    assert_equal [], Runes::Kanban.validate(File.read(result[:path]))
+  end
+
+  test "move_card refuses unknown columns and bad indexes" do
+    m = MissionStore.find_mission("20261112-100000-def-contact")
+    assert_match(/unknown column/, MissionStore.move_card(m, index: 0, to: "sideways")[:error])
+    assert_match(/no card at index/, MissionStore.move_card(m, index: 99, to: "done")[:error])
+    assert_match(/already/, MissionStore.move_card(m, index: 0, to: "todo")[:error])
+  end
+
+  test "move_card creates the .mmd from sidecar todos when none exists" do
+    File.delete(File.join(@tmp, "docs", "missions", "20261112-100000-def-contact.mmd"))
+    m = MissionStore.find_mission("20261112-100000-def-contact")
+
+    result = MissionStore.move_card(m, index: 0, to: "in_progress")
+
+    assert_equal "todo", result[:from]
+    assert File.file?(result[:path])
+    reparsed = Runes::Kanban.parse(File.read(result[:path]))
+    assert_equal 1, reparsed[:columns]["in_progress"].size
+    assert_equal "Appeler Jean", reparsed[:columns]["in_progress"].first.title
+  end
+
+  test "append_journal writes one JSONL line with a timestamp" do
+    journal = File.join(@tmp, "journal.jsonl")
+    old = ENV["RUNES_OBSERVER_JOURNAL"]
+    ENV["RUNES_OBSERVER_JOURNAL"] = journal
+
+    assert MissionStore.append_journal("event" => "board_card_moved", "mission" => "m1")
+
+    lines = File.readlines(journal)
+    assert_equal 1, lines.size
+    entry = JSON.parse(lines.first)
+    assert_equal "board_card_moved", entry["event"]
+    assert entry["at"].present?
+  ensure
+    ENV["RUNES_OBSERVER_JOURNAL"] = old
+  end
+
+  test "append_journal is a no-op when off" do
+    old = ENV["RUNES_OBSERVER_JOURNAL"]
+    ENV["RUNES_OBSERVER_JOURNAL"] = "off"
+    assert_not MissionStore.append_journal("event" => "x")
+  ensure
+    ENV["RUNES_OBSERVER_JOURNAL"] = old
+  end
 end

@@ -29,6 +29,7 @@ class MissionStore
                        keyword_init: true)
 
   ID_RE = /\A[a-zA-Z0-9][a-zA-Z0-9._-]*\z/
+  MAX_EPIC_BYTES = 20_000
 
   class << self
     def root
@@ -103,12 +104,131 @@ class MissionStore
       ""
     end
 
+    # --- write paths (slice 3, behind the token gate) -----------------------
+
+    # Write an epic to docs/epics/E-<n>-<slug>.md, atomically, with the same
+    # naming the dispatcher's write_artifact uses. The body is sanitized: size
+    # cap, no CR, and a markdown heading is guaranteed so the listing's
+    # heading_of finds a title.
+    def write_epic(body)
+      text = sanitize_body(body)
+      dir = File.join(root, "docs", "epics")
+      FileUtils.mkdir_p(dir)
+      n = next_epic_number(dir)
+      title = heading_of_text(text)
+      path = File.join(dir, "E-#{n}-#{slugify(title)}.md")
+      atomic_write(path, text)
+      path
+    end
+
+    def epic_path(id)
+      return nil unless id.to_s.match?(ID_RE) && !id.to_s.include?("..")
+
+      path = File.join(root, "docs", "epics", "#{id}.md")
+      File.file?(path) ? path : nil
+    end
+
+    # Move card `index` (global index across columns in STATUSES order) to
+    # column `to` in the mission's .mmd, through the harness's Runes::Kanban
+    # so the file stays valid for every other reader (agents, runes-kanban).
+    # Creates the .mmd from the sidecar todos when the mission has none yet.
+    # Returns { from:, to:, title:, path: } or { error: }.
+    def move_card(mission, index:, to:)
+      unless kanban_available?
+        return { error: "harness Runes::Kanban is not on the load path" }
+      end
+      unless Runes::Kanban::STATUSES.include?(to)
+        return { error: "unknown column #{to.inspect} (expected one of #{Runes::Kanban::STATUSES.join(', ')})" }
+      end
+
+      mmd = mmd_path(mission.id)
+      unless File.file?(mmd)
+        board = board_for(mission)
+        text = Runes::Kanban.render(
+          columns: board[:columns].transform_values { |cards| cards.map { |c| c[:title] } },
+          mission: mission.title
+        )
+        atomic_write(mmd, text)
+      end
+
+      parsed = Runes::Kanban.parse(File.read(mmd))
+      all = Runes::Kanban::STATUSES.flat_map { |c| parsed[:columns][c].map { |t| [c, t] } }
+      entry = all[index]
+      return { error: "no card at index #{index}" } unless entry
+
+      from, task = entry
+      return { error: "card is already in #{to}" } if from == to
+
+      parsed[:columns][from].delete(task)
+      task.column = to
+      task.done = (to == "done")
+      parsed[:columns][to] << task
+      new_text = Runes::Kanban.render(columns: parsed[:columns], header: parsed[:header])
+      errors = Runes::Kanban.validate(new_text)
+      return { error: "rendered board failed validation: #{errors.join('; ')}" } if errors.any?
+
+      atomic_write(mmd, new_text)
+      { from: from, to: to, title: task.title, path: mmd }
+    end
+
+    # Append one JSONL line to the harness journal (the file JournalTail
+    # reads), so a UI move is auditable next to the agents' own events.
+    def append_journal(entry)
+      configured = ENV.fetch("RUNES_OBSERVER_JOURNAL", "").strip
+      return false if configured.casecmp("off").zero?
+
+      path = configured.empty? ? File.join(harness_default_root, "log", "journal.jsonl") : configured
+      FileUtils.mkdir_p(File.dirname(path))
+      File.open(path, "a") { |f| f.puts(JSON.generate(entry.merge("at" => Time.current.utc.iso8601))) }
+      true
+    end
+
     # Tests point RUNES_OBSERVER_WORKSPACE at a tmpdir.
     def reset_cache!
       @root = nil
     end
 
     private
+
+    def mmd_path(id)
+      File.join(root, "docs", "missions", "#{id}.mmd")
+    end
+
+    def sanitize_body(body)
+      text = body.to_s.gsub(/\r\n?/, "\n").strip
+      raise Error, "epic body is empty" if text.empty?
+      raise Error, "epic body exceeds #{MAX_EPIC_BYTES} bytes" if text.bytesize > MAX_EPIC_BYTES
+
+      # Guarantee a markdown heading: without one the first line becomes it.
+      unless text.start_with?("#")
+        first, rest = text.split("\n", 2)
+        text = "# #{first.strip}\n\n#{rest}"
+      end
+      text
+    end
+
+    def heading_of_text(text)
+      text.each_line do |line|
+        return line.sub(/\A#+\s*/, "").strip if line.start_with?("#")
+      end
+      "Untitled epic"
+    end
+
+    def next_epic_number(dir)
+      existing = Dir.glob(File.join(dir, "E-*.md")).filter_map { |p| File.basename(p).match(/\AE-(\d+)-/)&.[](1)&.to_i }
+      (existing.max || 0) + 1
+    end
+
+    def slugify(text)
+      s = text.to_s.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")[0, 40].gsub(/-+\z/, "")
+      s.empty? ? "untitled" : s
+    end
+
+    def atomic_write(path, content)
+      tmp = "#{path}.tmp-#{Process.pid}"
+      File.open(tmp, "w") { |f| f.write(content) }
+      File.rename(tmp, path)
+    end
 
     def mission_for(path)
       id = File.basename(path, ".md")
