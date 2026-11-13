@@ -42,6 +42,15 @@
         <% end %>
         <div class="faint small"><%= @packet.signature_tooltip %></div>
       </dd>
+      <% doc_chips = document_chips(@packet.payload) %>
+      <% if doc_chips.any? %>
+        <dt>documents</dt>
+        <dd>
+          <% doc_chips.each do |doc| %>
+            <%= link_to "#{doc.name} (#{doc.short_sha}…)", document_path(sha: doc.sha, ext: doc.ext), class: "mono small" %>
+          <% end %>
+        </dd>
+      <% end %>
     </dl>
     <pre class="payload__body<%= " payload__body--raw" if @packet.parsed.nil? %>"><%= json_pretty(@packet.payload) %></pre>
   </div>

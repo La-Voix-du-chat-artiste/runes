@@ -1,0 +1,63 @@
+<% content_for :title, "Documents — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Documents</h1>
+  <span class="sub">content-addressed — the address is the SHA-256 of the bytes · store at <code><%= @store_root %></code></span>
+</div>
+
+<div class="panel" style="margin-bottom:14px">
+  <div class="panel__head">
+    <span class="panel__title">Upload</span>
+    <span class="panel__count">max <%= number_to_human_size(DocStoreService::MAX_BYTES) %> · ext in <%= Document::EXTS.join(", ") %></span>
+  </div>
+  <div class="panel__body">
+    <% if @store_available %>
+      <%= form_with url: documents_path, method: :post, multipart: true, class: "filters" do |form| %>
+        <div class="field">
+          <%= form.label :file, "File" %>
+          <%= form.file_field :file, required: true %>
+        </div>
+        <div class="field">
+          <%= form.label :name, "Name (optional)" %>
+          <%= form.text_field :name, placeholder: "original filename is used when empty" %>
+        </div>
+        <div class="field">
+          <%= form.label :uploaded_by, "Uploaded by" %>
+          <%= form.text_field :uploaded_by, placeholder: "operator" %>
+        </div>
+        <%= form.submit "Upload", class: "btn" %>
+      <% end %>
+    <% else %>
+      <p class="faint small">The harness document store is not on the load path — uploads are disabled (the UI still lists what the ingest recorded).</p>
+    <% end %>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">Stored documents</span>
+    <span class="panel__count"><%= @documents.size %></span>
+  </div>
+  <% if @documents.empty? %>
+    <div class="panel__empty">No document stored yet — upload one above, or publish <code>runes/docs/added</code> on the fabric.</div>
+  <% else %>
+    <table class="table">
+      <thead>
+        <tr><th>name</th><th>address</th><th>ext</th><th class="num">bytes</th><th>uploaded by</th><th>age</th><th></th></tr>
+      </thead>
+      <tbody>
+        <% @documents.each do |doc| %>
+          <tr>
+            <td><%= doc.name %></td>
+            <td class="mono small" title="<%= doc.sha %>"><%= doc.short_sha %>…</td>
+            <td><%= doc.ext %></td>
+            <td class="num"><%= byte_size_label(doc.bytes) %></td>
+            <td class="faint"><%= doc.uploaded_by.presence || "—" %></td>
+            <td class="faint small"><%= ago_in_words_short(doc.created_at) %> ago</td>
+            <td><%= link_to "open →", document_path(sha: doc.sha, ext: doc.ext), class: "small" %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</section>

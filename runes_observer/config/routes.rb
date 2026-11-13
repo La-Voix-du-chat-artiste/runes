@@ -24,6 +24,11 @@ Rails.application.routes.draw do
   get "board", to: "board#show", as: :board
   resources :interactions, only: %i[show], param: :id
 
+  # Workspace slice 2A: content-addressed documents. The serve route must
+  # keep `format: false` so `/documents/<sha>.md` is not parsed as format=md.
+  resources :documents, only: %i[index create]
+  get "documents/:sha.:ext", to: "documents#serve", as: :document, format: false
+
   # JSON feed used by the Stimulus poller (?after_id=&agent_id=&kind=&request_id=).
   # /feed/stats was dead (no caller ever fetched it) and has been removed.
   get "feed", to: "packets#feed", as: :feed

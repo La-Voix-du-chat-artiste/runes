@@ -29,7 +29,7 @@ module PacketClassifier
     card status task task_response a2a_card a2a_task
     prompt progress response response_global
     tool_request tool_response tool_error
-    journal workflow_event guard_denied other
+    journal workflow_event guard_denied doc_added other
   ].freeze
 
   Result = Struct.new(:kind, :agent_id, :request_id, :event, :tool, :run_id,
@@ -59,6 +59,10 @@ module PacketClassifier
   # `other` instead of raising or half-matching.
   A2A_CARD          = %r{\A\$a2a/v1/discovery/([^/]+)/([^/]+)/([^/]+)\z}
   A2A_TASK          = %r{\A\$a2a/v1/tasks/([^/]+)/([^/]+)/([^/]+)\z}
+
+  # Workspace announcements (docs/WORKSPACE_PLAN.md): a document was stored
+  # in the content-addressed store; the payload carries the sha address.
+  DOC_ADDED         = %r{\Arunes/docs/added\z}
 
   module_function
 
@@ -106,6 +110,8 @@ module PacketClassifier
     when A2A_TASK
       Result.new(kind: "a2a_task", agent_id: $3,
                  request_id: dig(data, "request_id") || dig(data, "taskId"))
+    when DOC_ADDED
+      Result.new(kind: "doc_added", agent_id: dig(data, "uploaded_by"))
     else
       Result.new(kind: "other")
     end

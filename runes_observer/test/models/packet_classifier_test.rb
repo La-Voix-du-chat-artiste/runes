@@ -182,4 +182,21 @@ class PacketClassifierTest < ActiveSupport::TestCase
     assert_equal "other", classify("runes/guard/denied/extra").kind
     assert_equal "other", classify("runes/guard/allowed").kind
   end
+
+  # Workspace slice 2A: a stored document announces itself on the fabric.
+  test "a document announcement classifies as doc_added with its uploader" do
+    result = classify("runes/docs/added",
+                      JSON.generate("sha" => "a" * 64, "ext" => "md",
+                                    "bytes" => 12, "name" => "hello.md",
+                                    "uploaded_by" => "operator"))
+
+    assert_equal "doc_added", result.kind
+    assert_equal "operator", result.agent_id
+    assert_includes Packet::KINDS, "doc_added"
+  end
+
+  test "the docs topic is exact: a deeper topic is not an announcement" do
+    assert_equal "other", classify("runes/docs/added/extra").kind
+    assert_equal "other", classify("runes/docs/removed").kind
+  end
 end

@@ -76,4 +76,14 @@ module ApplicationHelper
 
     "#{value[0, limit - 1]}…"
   end
+
+  # Workspace slice 2A: a packet payload may reference stored documents by
+  # their SHA-256 address. Returns the Document rows for every 64-hex token
+  # in the payload that is actually stored, so the packet page can link them.
+  def document_chips(payload_text)
+    shas = payload_text.to_s.scan(/[0-9a-f]{64}/).uniq
+    return [] if shas.empty?
+
+    Document.where(sha: shas).index_by(&:sha).values_at(*shas).compact
+  end
 end
