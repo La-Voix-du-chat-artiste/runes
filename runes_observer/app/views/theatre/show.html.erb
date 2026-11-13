@@ -1,0 +1,64 @@
+<% content_for :title, "Theatre — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Theatre</h1>
+  <span class="sub">all agents working together · observed last <%= @graph[:window_minutes] %> min + declared fleet (dashed)</span>
+  <%= link_to "topology →", topology_path, class: "sub" %>
+  <%= link_to "wall (kiosk) →", wall_path, class: "sub" %>
+</div>
+
+<section class="panel"
+         data-controller="theatre"
+         data-theatre-data-value="<%= @graph.to_json %>"
+         data-theatre-feed-url-value="<%= feed_path(fields: 1) %>"
+         data-theatre-interval-value="2500">
+  <div class="panel__head">
+    <span class="panel__title">Live fleet</span>
+    <span class="panel__count">
+      <%= @graph[:nodes].size %> agents · <%= @graph[:edges].size %> links ·
+      <span data-theatre-target="pulseCount">0</span> packets animated
+    </span>
+  </div>
+  <div class="panel__body panel__body--flush">
+    <% if @graph[:nodes].empty? %>
+      <p class="panel__empty">
+        No agents observed yet. Seed a demo with <code>bin/rails runes:demo</code> and the theatre comes alive.
+      </p>
+    <% else %>
+      <svg class="topo theatre" viewBox="0 0 <%= FleetTopology::Layout::WIDTH %> <%= FleetTopology::Layout::HEIGHT %>"
+           role="img" aria-label="Live agent graph" data-theatre-target="canvas">
+        <defs>
+          <marker id="theatre-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="arrow arrow--ok" />
+          </marker>
+        </defs>
+
+        <% @graph[:edges].each do |edge| %>
+          <path class="wire <%= edge[:declared] ? "wire--declared" : "wire--ok" %>"
+                stroke-width="<%= [1.0 + Math.log2(edge[:tasks] + 1) * 1.6, 1.0].max.round(2) %>"
+                marker-end="url(#theatre-arrow)"
+                data-edge-from="<%= edge[:from] %>" data-edge-to="<%= edge[:to] %>"
+                d="M <%= edge[:x1] %> <%= edge[:y1] %> Q <%= edge[:cx] %> <%= edge[:cy] %> <%= edge[:x2] %> <%= edge[:y2] %>">
+            <title><%= edge[:from] %> → <%= edge[:to] %><%= " (declared)" if edge[:declared] %>: <%= edge[:tasks] %> task(s)</title>
+          </path>
+        <% end %>
+
+        <% @graph[:nodes].each do |node| %>
+          <g class="topo-node topo-node--<%= node[:state] %> <%= "topo-node--declared" if node[:declared] %>"
+             data-node-id="<%= node[:id] %>"
+             transform="translate(<%= node[:x] %>, <%= node[:y] %>)">
+            <circle r="<%= node[:r] %>" class="topo-node__circle"></circle>
+            <text class="topo-node__label" y="<%= node[:r] + 12 %>" text-anchor="middle"><%= node[:id] %></text>
+          </g>
+        <% end %>
+
+        <g data-theatre-target="particles"></g>
+      </svg>
+    <% end %>
+  </div>
+</section>
+
+<p class="faint small">
+  Particles are real packets from <code>/feed</code>: a delegation animates along its edge, anything else pulses the
+  publishing agent. Declared-but-unobserved roles and routes render dashed — the drift, drawn.
+</p>

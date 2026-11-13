@@ -25,9 +25,20 @@ class PacketsController < ApplicationController
   # The partial serves a bounded summary, never the whole 256 KiB payload.
   def feed
     packets = filtered.after_id(params[:after_id] || 0).chronological.limit(PER_PAGE).to_a
+    # `fields=1` adds structured columns per packet (topic/kind/agent/from) so
+    # non-DOM consumers — the theatre's particle poller — can read the feed
+    # without parsing the rendered row HTML.
+    fields = params[:fields] == "1"
     render json: {
       last_id: packets.map(&:id).max || params[:after_id].to_i,
-      packets: packets.map { |packet| { id: packet.id, html: packet_html(packet) } },
+      packets: packets.map do |packet|
+        entry = { id: packet.id, html: packet_html(packet) }
+        if fields
+          entry.merge!(topic: packet.topic, kind: packet.kind, agent_id: packet.agent_id,
+                       request_id: packet.request_id, from: packet.parsed&.dig("from"))
+        end
+        entry
+      end,
       stats: { total: Packet.count, online: Agent.online.count, offline: Agent.ended.count }
     }
   end

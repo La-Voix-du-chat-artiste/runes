@@ -39,6 +39,11 @@ Rails.application.routes.draw do
   get "plan", to: "plan#index", as: :plan
   get "plan/missions/:id", to: "plan#show", as: :plan_mission
 
+  # Workspace slice 2D: the theatre — all agents in one live picture — and the
+  # /wall kiosk (no nav, meta refresh).
+  get "theatre", to: "theatre#show", as: :theatre
+  get "wall", to: "theatre#wall", as: :wall
+
   # JSON feed used by the Stimulus poller (?after_id=&agent_id=&kind=&request_id=).
   # /feed/stats was dead (no caller ever fetched it) and has been removed.
   get "feed", to: "packets#feed", as: :feed
