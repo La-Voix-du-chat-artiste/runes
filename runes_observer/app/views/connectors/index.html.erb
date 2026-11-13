@@ -1,0 +1,59 @@
+<% content_for :title, "Connectors — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Connectors</h1>
+  <span class="sub">named MQTT broker profiles · one active at a time · env fallback <code><%= @env_target %></code> when none is active</span>
+  <%= link_to "New connector", new_connector_path, class: "btn" %>
+</div>
+
+<section class="panel">
+  <div class="panel__head">
+    <span class="panel__title">Broker profiles</span>
+    <span class="panel__count"><%= @connectors.size %></span>
+  </div>
+  <% if @connectors.empty? %>
+    <div class="panel__empty">
+      No connector profiles yet — the ingest is using the <code>RUNES_MQTT_HOST</code>/<code>RUNES_MQTT_PORT</code>
+      env vars. Add a profile to make the broker switchable from here.
+    </div>
+  <% else %>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>name</th><th>broker</th><th>transport</th><th>tls</th><th>auth</th>
+          <th>probe</th><th>state</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @connectors.each do |connector| %>
+          <tr>
+            <td>
+              <%= connector.name %>
+              <% if connector.active? %><span class="pill pill--online">active</span><% end %>
+            </td>
+            <td class="mono"><%= connector.host %>:<%= connector.port %></td>
+            <td><%= connector.transport %></td>
+            <td><%= connector.tls? ? "yes" : "—" %></td>
+            <td class="faint"><%= connector.username.presence ? "#{connector.username} (pw via #{connector.password_env.presence || '—'})" : "—" %></td>
+            <td class="faint small" title="<%= connector.last_probe_detail %>"><%= connector.probe_label %></td>
+            <td>
+              <%= button_to "Test", test_connector_path(connector), class: "btn btn--ghost", form: { style: "display:inline" } %>
+              <% unless connector.active? %>
+                <%= button_to "Activate", activate_connector_path(connector), class: "btn", form: { style: "display:inline" } %>
+              <% end %>
+              <%= link_to "edit", edit_connector_path(connector), class: "small" %>
+              <%= button_to "delete", connector_path(connector), method: :delete, class: "btn btn--ghost", form: { style: "display:inline", data: { turbo_confirm: "Delete #{connector.name}?" } } %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</section>
+
+<p class="faint small">
+  One broker per observer, deliberately (OBSERVATORY_ROADMAP.md §6): activating a connector bumps
+  <code>ingest_statuses.connector_epoch</code> and the ingest process rebuilds its transport onto the new
+  broker — no restart needed. Probing only reads retained <code>$a2a/v1/discovery/#</code> cards; it never
+  subscribes to work.
+</p>

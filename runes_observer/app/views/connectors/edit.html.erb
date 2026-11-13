@@ -1,0 +1,12 @@
+<% content_for :title, "Edit connector — Runes Observatory" %>
+
+<div class="page-head">
+  <h1>Edit <%= @connector.name %></h1>
+  <%= link_to "← Connectors", connectors_path, class: "sub" %>
+</div>
+
+<section class="panel">
+  <div class="panel__body">
+    <%= render "form" %>
+  </div>
+</section>

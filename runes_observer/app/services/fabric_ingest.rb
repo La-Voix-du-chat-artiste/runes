@@ -28,6 +28,12 @@ class FabricIngest
   # config/initializers/runes_transport.rb).
   class MissingTransport < StandardError; end
 
+  # Raised from the wait loop when ingest_statuses.connector_epoch moved:
+  # the operator activated a different MQTT connector from the UI
+  # (ConnectorManager.activate!), so the transport is rebuilt against the new
+  # broker without the outage backoff — a deliberate switch is not a failure.
+  class ConnectorChanged < StandardError; end
+
   DEFAULT_TOPIC = "runes/#"
   # MQTT wildcards never match topics that start with `$`, so the A2A
   # discovery/task space needs its own subscription.
@@ -79,6 +85,17 @@ class FabricIngest
     # :auto reads the environment (see JournalTail.build); nil/false disables.
     @journal_tail = journal_tail == :auto ? JournalTail.build(logger: @logger) : journal_tail
     @attempts = 0
+    # The connector_epoch this transport was built against; nil until the
+    # first connect (see #connect_and_consume).
+    @seen_epoch = nil
+    # Cached active-connector settings. Deliberately NOT read from the DB
+    # before the subscription is registered: under a locked database a read
+    # blocks for the busy timeout and would delay the subscribe past messages
+    # published in the meantime (FabricIngestLockTest). The cache is refreshed
+    # only where a DB read is already safe — in the wait loop's epoch check
+    # and in the ConnectorChanged handler.
+    @connector_settings = nil
+    @pending_connector_settings = nil
   end
 
   def run
@@ -93,6 +110,15 @@ class FabricIngest
         delay = @backoff
       rescue Interrupt
         break
+      rescue ConnectorChanged
+        # A deliberate connector switch: rebuild immediately, no backoff,
+        # and not counted as an outage reconnect. The new settings were read
+        # by the wait loop when it noticed the epoch move.
+        @connector_settings = @pending_connector_settings
+        log "active connector changed (epoch #{current_connector_epoch}): rebuilding transport"
+        @attempts = 0
+        delay = @backoff
+        next
       rescue StandardError, LoadError => e
         # LoadError is a ScriptError, not a StandardError: `mqtt311`'s lazy
         # `require "mqtt"` (a gem this app deliberately does not declare)
@@ -192,7 +218,19 @@ class FabricIngest
   end
 
   def connect_and_consume
-    transport = @transport_factory.call(kind: @transport_kind, host: @host, port: @port,
+    # An active Connector row overrides the constructor/env settings; with no
+    # active row the ingest behaves exactly as before connectors existed. The
+    # settings come from the CACHE (see #initialize), never from a DB read
+    # here: the subscription must register before any database access, or a
+    # locked database would delay the subscribe past messages published in
+    # the meantime (FabricIngestLockTest).
+    connector_settings = @connector_settings
+    host = connector_settings&.dig(:host) || @host
+    port = connector_settings&.dig(:port) || @port
+    kind = connector_settings&.dig(:kind).presence || @transport_kind
+    @host, @port, @transport_kind = host, port, kind
+
+    transport = @transport_factory.call(kind: kind, host: host, port: port,
                                         client_id: "runes-observer-#{Process.pid}")
     @transport = transport
     transport.connect unless transport.connected?
@@ -202,8 +240,11 @@ class FabricIngest
     assert_not_a_worker!(transport)
     PacketRecorder.reset_heartbeat!
     PacketRecorder.begin_session!
-    IngestStatus.mark_connected!(host: @host, port: @port, transport: transport.name)
-    log "subscribed to #{@topic} and #{A2A_TOPIC} on #{@host}:#{@port} via #{transport.describe}"
+    # First DB access happens only now, after the subscription is live — same
+    # ordering the health write always had.
+    @seen_epoch = current_connector_epoch
+    IngestStatus.mark_connected!(host: host, port: port, transport: transport.name)
+    log "subscribed to #{@topic} and #{A2A_TOPIC} on #{host}:#{port} via #{transport.describe}"
 
     wait_until_stopped(transport)
     raise Runes::Transport::Error, "#{transport.describe} disconnected" unless @stopping
@@ -270,6 +311,15 @@ class FabricIngest
   def wait_until_stopped(transport)
     down_since = nil
     until @stopping
+      # A connector activated from the UI bumps the epoch; rebuild the
+      # transport against the new broker instead of waiting out the grace.
+      # The new settings are read HERE (after the subscription is live) and
+      # handed to the rebuild via @pending_connector_settings.
+      if connector_epoch_changed?
+        @pending_connector_settings = safe_active_settings
+        raise ConnectorChanged, "connector epoch moved"
+      end
+
       if transport.connected?
         down_since = nil
       else
@@ -281,6 +331,24 @@ class FabricIngest
       end
       sleep @poll_interval
     end
+  end
+
+  def current_connector_epoch
+    IngestStatus.current.connector_epoch
+  rescue StandardError
+    0
+  end
+
+  def connector_epoch_changed?
+    !@seen_epoch.nil? && current_connector_epoch != @seen_epoch
+  rescue StandardError
+    false
+  end
+
+  def safe_active_settings
+    ConnectorManager.active_settings
+  rescue StandardError
+    nil
   end
 
   # One bad message (non-UTF-8 bytes, a locked DB, a schema surprise) must

@@ -1,0 +1,47 @@
+<%= form_with model: @connector, class: "filters filters--col" do |form| %>
+  <% if @connector.errors.any? %>
+    <div class="flash__item flash__item--alert">
+      <%= @connector.errors.full_messages.join(", ") %>
+    </div>
+  <% end %>
+
+  <div class="field">
+    <%= form.label :name, "Name" %>
+    <%= form.text_field :name, required: true, placeholder: "local-mosquitto" %>
+  </div>
+  <div class="field">
+    <%= form.label :host, "Host" %>
+    <%= form.text_field :host, required: true, placeholder: "127.0.0.1" %>
+  </div>
+  <div class="field">
+    <%= form.label :port, "Port" %>
+    <%= form.number_field :port, required: true, min: 1, max: 65535 %>
+  </div>
+  <div class="field">
+    <%= form.label :transport, "Transport" %>
+    <%= form.select :transport, Connector::TRANSPORTS.map { |t| [t, t] } %>
+  </div>
+  <div class="field">
+    <%= form.label :tls, "TLS" %>
+    <%= form.check_box :tls %>
+  </div>
+  <div class="field">
+    <%= form.label :client_id, "Client id (optional)" %>
+    <%= form.text_field :client_id %>
+  </div>
+  <div class="field">
+    <%= form.label :username, "Username (optional)" %>
+    <%= form.text_field :username %>
+  </div>
+  <div class="field">
+    <%= form.label :password_env, "Password env var (optional)" %>
+    <%= form.text_field :password_env, placeholder: "RUNES_MQTT_PASSWORD — the secret itself is never stored" %>
+  </div>
+  <div class="field">
+    <%= form.label :active, "Active" %>
+    <%= form.check_box :active %>
+  </div>
+
+  <%= form.submit class: "btn" %>
+  <%= link_to "Cancel", connectors_path, class: "btn btn--ghost" %>
+<% end %>

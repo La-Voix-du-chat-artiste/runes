@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_12_090001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_12_090003) do
   create_table "agents", force: :cascade do |t|
     t.string "agent_id", null: false
     t.string "name"
@@ -46,6 +46,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_12_090001) do
     t.index ["kind", "subject"], name: "index_alerts_on_kind_and_subject", unique: true
   end
 
+  create_table "connectors", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "host", null: false
+    t.integer "port", default: 1883, null: false
+    t.string "transport", default: "auto", null: false
+    t.boolean "tls", default: false, null: false
+    t.string "client_id"
+    t.string "username"
+    t.string "password_env"
+    t.boolean "active", default: false, null: false
+    t.datetime "last_probe_at"
+    t.string "last_probe_state"
+    t.text "last_probe_detail"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_connectors_on_active"
+    t.index ["name"], name: "index_connectors_on_name", unique: true
+  end
+
   create_table "documents", force: :cascade do |t|
     t.string "sha", null: false
     t.string "ext", null: false
@@ -73,6 +92,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_12_090001) do
     t.string "transport"
     t.integer "reconnects", default: 0, null: false
     t.integer "last_lag_ms"
+    t.integer "connector_epoch", default: 0, null: false
   end
 
   create_table "packets", force: :cascade do |t|

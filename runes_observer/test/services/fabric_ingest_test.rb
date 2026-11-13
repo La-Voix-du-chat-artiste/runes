@@ -17,6 +17,18 @@ class ScriptedTransport
   def disconnect = nil
 end
 
+# A transport that stays up and answers the witness check, so the ingest
+# reaches its wait loop and only a connector-epoch change can rebuild it.
+class StubbornTransport
+  def name = "Stubborn"
+  def describe = "Stubborn"
+  def connect = self
+  def connected? = true
+  def subscribe(_filter, &_block) = nil
+  def subscriptions = []
+  def disconnect = nil
+end
+
 # The ingest is driven end to end through a REAL `Runes::Transport::InProcess`
 # hub: no broker, no ports, no fake client. Publishing on one transport and
 # reading it on the ingest's own subscription is exactly what the mqtt5 path
@@ -136,6 +148,39 @@ class FabricIngestTest < ActiveSupport::TestCase
   ensure
     ingest&.stop
     thread&.join(5)
+  end
+
+  # Workspace slice 2B: activating a connector from the UI bumps
+  # ingest_statuses.connector_epoch; the running ingest notices on its next
+  # poll and rebuilds the transport against the new broker, without backoff.
+  test "a connector activation rebuilds the transport onto the new broker" do
+    Connector.delete_all
+    built = []
+    factory = lambda do |**kwargs|
+      built << kwargs
+      StubbornTransport.new
+    end
+    ingest = FabricIngest.new(logger: Logger.new(IO::NULL), transport_factory: factory,
+                              poll_interval: 0.01, backoff: 0.01, disconnect_grace: 60)
+
+    thread = Thread.new { ingest.run }
+    Timeout.timeout(10) { sleep 0.02 until built.size >= 1 }
+    assert_equal IngestStatus.default_host, built.last[:host]
+
+    connector = Connector.create!(name: "other-broker", host: "10.9.8.7", port: 1884,
+                                  transport: "mqtt5")
+    ConnectorManager.activate!(connector)
+
+    Timeout.timeout(10) { sleep 0.02 until built.size >= 2 }
+    assert_equal "10.9.8.7", built.last[:host], "the rebuild targets the activated connector"
+    assert_equal 1884, built.last[:port]
+    assert_equal "mqtt5", built.last[:kind]
+    assert_equal 0, IngestStatus.current.reconnects,
+                 "a deliberate switch is not counted as an outage reconnect"
+  ensure
+    ingest&.stop
+    thread&.join(5)
+    Connector.delete_all
   end
 
   # doc5.md O0.6: sharing the transport API with the agents made the observer

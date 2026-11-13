@@ -29,6 +29,11 @@ Rails.application.routes.draw do
   resources :documents, only: %i[index create]
   get "documents/:sha.:ext", to: "documents#serve", as: :document, format: false
 
+  # Workspace slice 2B: named MQTT connector profiles — probe and activate.
+  resources :connectors, only: %i[index new create edit update destroy]
+  post "connectors/:id/test", to: "connectors#test", as: :test_connector
+  post "connectors/:id/activate", to: "connectors#activate", as: :activate_connector
+
   # JSON feed used by the Stimulus poller (?after_id=&agent_id=&kind=&request_id=).
   # /feed/stats was dead (no caller ever fetched it) and has been removed.
   get "feed", to: "packets#feed", as: :feed
