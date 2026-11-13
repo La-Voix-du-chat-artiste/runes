@@ -7,7 +7,7 @@ class ObserverFlowTest < ActionDispatch::IntegrationTest
   test "a recorded interaction is visible on every page" do
     record_interaction
 
-    get root_path
+    get dashboard_path
     assert_response :success
     assert_match "runes-flow", response.body
     assert_match "flow please", response.body
@@ -40,7 +40,7 @@ class ObserverFlowTest < ActionDispatch::IntegrationTest
     record_interaction
     record "runes/agents/runes-flow/status", "offline"
 
-    get root_path
+    get dashboard_path
     assert_response :success
     assert_match "Ended", response.body
 

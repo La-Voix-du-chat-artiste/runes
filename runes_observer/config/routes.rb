@@ -1,5 +1,9 @@
 Rails.application.routes.draw do
-  root "dashboard#index"
+  # The workspace shell (docs/WORKSPACE_PLAN.md slice 1): one page with the
+  # live feed, the board, the agents and the runs. The dashboard stays
+  # reachable at /dashboard.
+  root "workspace#index"
+  get "dashboard", to: "dashboard#index", as: :dashboard
 
   resources :agents, only: %i[index show], param: :agent_id
   resources :packets, only: %i[index show]

@@ -438,3 +438,24 @@ pre.payload__body--raw { color: var(--text-dim); }
 .mix__track { height: 8px; border-radius: 4px; background: var(--bg-elevated-2); border: 1px solid var(--border); overflow: hidden; }
 .mix__bar { display: block; height: 100%; background: var(--accent-2); }
 .mix__num { color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- workspace shell (docs/WORKSPACE_PLAN.md slice 1) ------------------- */
+
+.workspace {
+  display: grid; grid-template-columns: minmax(380px, 6fr) minmax(420px, 6fr);
+  gap: 14px; align-items: start;
+}
+@media (max-width: 1100px) { .workspace { grid-template-columns: 1fr; } }
+.workspace__col { display: grid; gap: 14px; align-content: start; }
+
+/* The board panel on the workspace is a compact preview of /board: same
+   columns and cards, tighter chrome, no diagram toggle. */
+.kanban-board--compact { padding: 10px 12px; }
+.kanban-board--compact .kanban-col { min-height: 80px; padding: 8px; }
+.kanban-board--compact .kanban-card { padding: 6px 8px; margin-bottom: 6px; }
+.kanban-board--compact .kanban-card__detail,
+.kanban-board--compact .kanban-card__flag { display: none; }
+
+.runs-list { list-style: none; margin: 0; padding: 10px 12px; display: grid; gap: 8px; }
+.runs-list__item { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.runs-list__item .mono { font-size: 12.5px; }
